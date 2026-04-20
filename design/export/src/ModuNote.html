@@ -1,0 +1,194 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>ModuNote — Hi-fi design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #f0eee9; overflow: hidden; }
+  * { box-sizing: border-box; }
+  @keyframes mn-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(1.15); }
+  }
+  .design-canvas::-webkit-scrollbar { display: none; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="frames/design-canvas.jsx"></script>
+<script type="text/babel" src="components/tokens.jsx"></script>
+<script type="text/babel" src="components/icons.jsx"></script>
+<script type="text/babel" src="components/frame.jsx"></script>
+<script type="text/babel" src="components/data.jsx"></script>
+<script type="text/babel" src="components/screens-a.jsx"></script>
+<script type="text/babel" src="components/screens-b.jsx"></script>
+</head>
+<body>
+<template id="__bundler_thumbnail">
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100" height="100" fill="#FEFBFF"/>
+  <rect x="30" y="30" width="40" height="40" rx="12" fill="#5B4EFF"/>
+  <rect x="54" y="36" width="12" height="12" rx="3" fill="#F59E0B"/>
+  <rect x="36" y="54" width="8" height="8" rx="2" fill="#FFFFFF"/>
+</svg>
+</template>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+function App() {
+  const themes = ['light', 'dark'];
+
+  const sections = [
+    {
+      title: 'Home · Note list',
+      subtitle: 'Scrollable feed. Pinned notes float to the top with an amber pin. Tag chips in indigo. Amber FAB over a pill bottom nav.',
+      screens: [
+        { label: 'Home · Light', render: (theme) => <ScreenHome theme={theme} /> },
+      ],
+    },
+    {
+      title: 'Note editor',
+      subtitle: 'Full-screen Quill-style editor. Inline title, rich text body, category folder chip, dismissible tags, and a voice-record entry point. Shown idle and mid-recording.',
+      screens: [
+        { label: 'Editor · Idle', render: (theme) => <ScreenEditor theme={theme} /> },
+        { label: 'Editor · Recording', render: (theme) => <ScreenEditor theme={theme} recording /> },
+      ],
+    },
+    {
+      title: 'Explore · Search',
+      subtitle: 'Full-width search, horizontal filter chips seeded with tags, filtered results as note cards. Empty state when nothing matches.',
+      screens: [
+        { label: 'Explore · With results', render: (theme) => <ScreenExplore theme={theme} /> },
+        { label: 'Explore · Empty state', render: (theme) => <ScreenExplore theme={theme} empty /> },
+      ],
+    },
+    {
+      title: 'Tags',
+      subtitle: 'Every tag with a count badge and a subtle density bar. Tapping drills into a filtered note list. Add-tag button in the app bar.',
+      screens: [
+        { label: 'Tags · All', render: (theme) => <ScreenTags theme={theme} /> },
+      ],
+    },
+    {
+      title: 'Category picker',
+      subtitle: 'Modal bottom sheet. Hierarchical folder tree with expand/collapse and a selected-state checkmark. Inline "New category" affordance.',
+      screens: [
+        { label: 'Bottom sheet', render: (theme) => <ScreenCategoryPicker theme={theme} /> },
+      ],
+    },
+    {
+      title: 'Settings',
+      subtitle: 'Appearance, audio storage, about. A visual theme card with mini previews replaces the usual flat switch.',
+      screens: [
+        { label: 'Settings', render: (theme) => <ScreenSettings theme={theme} /> },
+      ],
+    },
+  ];
+
+  return (
+    <DesignCanvas>
+      {/* Title header */}
+      <div style={{ padding: '20px 60px 48px', maxWidth: 1000 }}>
+        <div style={{
+          fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
+          fontSize: 44, fontWeight: 800, letterSpacing: -1.2,
+          color: 'rgba(28,27,46,0.95)',
+          display: 'flex', alignItems: 'center', gap: 16,
+        }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 18,
+            background: '#5B4EFF',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            position: 'relative',
+            boxShadow: '0 10px 24px -8px rgba(91,78,255,0.55)',
+          }}>
+            <div style={{
+              width: 22, height: 22, borderRadius: 6,
+              background: '#F59E0B',
+              position: 'absolute', top: 10, right: 10,
+            }} />
+            <div style={{
+              width: 12, height: 12, borderRadius: 3,
+              background: '#fff',
+              position: 'absolute', bottom: 14, left: 14,
+            }} />
+          </div>
+          moduNote
+        </div>
+        <div style={{
+          fontFamily: '"Inter", system-ui, sans-serif',
+          fontSize: 16, color: 'rgba(60,50,70,0.7)', lineHeight: 1.55, marginTop: 14, maxWidth: 680,
+        }}>
+          Quick-capture ideation for a solo creator. Material 3 / Material You · indigo-violet seed (#5B4EFF) with a warm amber accent (#F59E0B).
+          Plus Jakarta Sans for headings, Inter for body. Flat surfaces, 0.5px hairlines, no decorative gradients.
+          All 6 screens delivered in both themes; the editor is shown idle and mid-recording.
+        </div>
+        <div style={{
+          display: 'flex', gap: 24, marginTop: 28,
+          fontFamily: '"Inter", system-ui, sans-serif', fontSize: 13,
+        }}>
+          {[
+            { s: '#5B4EFF', l: 'Primary · indigo-violet' },
+            { s: '#F59E0B', l: 'Accent · warm amber' },
+            { s: '#FEFBFF', l: 'Light surface', border: true },
+            { s: '#1C1B2E', l: 'Dark surface' },
+          ].map((c, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 26, height: 26, borderRadius: 8,
+                background: c.s,
+                border: c.border ? '0.5px solid rgba(0,0,0,0.12)' : 'none',
+              }} />
+              <div>
+                <div style={{ fontWeight: 600, color: 'rgba(28,27,46,0.85)' }}>{c.s}</div>
+                <div style={{ color: 'rgba(60,50,70,0.55)', fontSize: 11.5 }}>{c.l}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {sections.map((section, si) => (
+        <DCSection key={si} title={section.title} subtitle={section.subtitle} gap={40}>
+          {section.screens.flatMap((s, ssi) =>
+            themes.map(theme => (
+              <div key={`${ssi}-${theme}`}>
+                <MNPhone theme={theme} label={`${s.label} · ${theme === 'light' ? 'Light' : 'Dark'}`}>
+                  {s.render(theme)}
+                </MNPhone>
+              </div>
+            ))
+          )}
+        </DCSection>
+      ))}
+
+      {/* Footer — design system post-its could go here */}
+      <div style={{ padding: '20px 60px 80px', maxWidth: 900 }}>
+        <div style={{
+          fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
+          fontSize: 13, fontWeight: 700, letterSpacing: 1.2,
+          color: 'rgba(60,50,70,0.55)', textTransform: 'uppercase',
+        }}>System notes</div>
+        <div style={{
+          fontFamily: '"Inter", system-ui, sans-serif',
+          fontSize: 14, color: 'rgba(28,27,46,0.75)', lineHeight: 1.6, marginTop: 10, maxWidth: 720,
+        }}>
+          • Pill bottom nav with the floating indicator expanding to show the active label — a small deviation from stock M3 that gives the app a distinct feel without fighting Material conventions.<br/>
+          • Tag chips live in a single indigo family; the filled variant is used for assigned tags, the dashed-outlined ghost variant for "add tag" affordances.<br/>
+          • The editor's mic button doubles as the record-state container — pulsing amber ring on the mic becomes a red stop-button with a live waveform card pinned above the formatting toolbar.<br/>
+          • Settings uses a visual theme-card pattern (mini previews) instead of a flat switch — it takes one more tap's worth of space but removes all ambiguity about what each option does.
+        </div>
+      </div>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

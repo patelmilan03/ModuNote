@@ -1,0 +1,3 @@
+# Drift DAOs go here in Phase 2.
+# Files: notes_dao.dart, tags_dao.dart, categories_dao.dart, audio_records_dao.dart
+# Also: app_database.dart (Drift database class + table definitions)

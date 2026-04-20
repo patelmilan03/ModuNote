@@ -1,0 +1,9 @@
+targets:
+  $default:
+    builders:
+      riverpod_generator:
+        options:
+          riverpod_version: "2"
+      drift_dev:
+        options:
+          generate_connect_constructor: false

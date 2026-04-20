@@ -1,0 +1,2 @@
+# AudioFileStorage goes here in Phase 6.
+# Handles AAC file write/read/delete under AppConstants.audioSubDir.
