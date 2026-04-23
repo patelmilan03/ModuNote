@@ -100,6 +100,21 @@
 - `viewmodels/.gitkeep` — AsyncNotifiers go here from Phase 3
 - `widgets/.gitkeep` — shared widgets go here from Phase 4
 
+### Post-Phase Fix (applied before Phase 2)
+
+**Bug**: `Undefined name 'themeModeNotifierProvider'` in `app_router.dart`.
+
+**Root cause**: The `themeMode` convenience provider (`@riverpod ThemeMode themeMode(Ref ref)`) referenced `themeModeNotifierProvider` — a name only defined in the generated `.g.dart`. Because the stub `.g.dart` didn't include the `_$ThemeModeNotifier` abstract base class, the class declaration `class ThemeModeNotifier extends _$ThemeModeNotifier` also failed to resolve, causing a cascade.
+
+**Fix applied**:
+1. Removed the `themeMode` convenience provider from `app_router.dart` entirely (was redundant).
+2. Updated `app.dart` to watch `themeModeNotifierProvider` directly (`ref.watch(themeModeNotifierProvider)`).
+3. Rewrote `app_router.g.dart` stub to include the `_$ThemeModeNotifier` abstract base class that Riverpod generator produces, and removed the now-deleted `themeMode` provider entry.
+
+**Files changed**: `lib/app.dart`, `lib/presentation/router/app_router.dart`, `lib/presentation/router/app_router.g.dart`
+
+---
+
 ### Decisions Recorded
 - Android-only target at creation
 - `equatable` over `freezed` for model equality (simpler, less codegen)
@@ -121,6 +136,57 @@ flutter run
 ```
 
 Expected result: App launches with Material 3 scaffold, "ModuNote" in the app bar, "📝 Note List / Phase 4 — coming soon" centred on screen, amber FAB in the bottom-right.
+
+---
+
+---
+
+## Phase 2 — Data Layer ✅
+
+**Completed**: Phase 2
+**Deliverable**: Full Drift schema, all DAOs, local repository implementations, and data-layer Riverpod providers wired to interfaces.
+
+### Files Created
+
+#### `lib/data/datasources/local/`
+- `app_database.dart` — `@DriftDatabase` with 5 tables, 4 DAOs, FTS5 virtual table + 3 triggers (insert/update/delete), `MigrationStrategy`
+- `app_database.g.dart` — stub (replace via `build_runner`); includes all 5 `$TableClass` impls + `_$AppDatabase`
+- `row_classes.dart` — `NoteRow`, `TagRow`, `NoteTagRow`, `CategoryRow`, `AudioRecordRow` + 5 Companion classes
+- `database_providers.dart` — `appDatabaseProvider`, `noteRepositoryProvider`, `tagRepositoryProvider`, `categoryRepositoryProvider` (all `keepAlive: true`)
+- `database_providers.g.dart` — stub (replace via `build_runner`)
+
+#### `lib/data/datasources/local/converters/`
+- `type_converters.dart` — `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter`
+
+#### `lib/data/datasources/local/tables/`
+- `notes_table.dart` — `NotesTable` with `tagIds` denormalised column + `sync_status` default `'local'`
+- `tags_table.dart` — `TagsTable` with unique constraint on `name`
+- `note_tags_table.dart` — `NoteTagsTable` (composite PK: noteId + tagId)
+- `categories_table.dart` — `CategoriesTable` with nullable `parentId`
+- `audio_records_table.dart` — `AudioRecordsTable` with nullable `transcribedText`
+
+#### `lib/data/datasources/local/daos/`
+- `notes_dao.dart` — `watchAll`, `watchByTag`, `watchByCategory`, `findById`, `search` (FTS5), `insertNote`, `updateNote`, `archiveNote`, `deleteNote`, `togglePin`, `updateTagIds`
+- `notes_dao.g.dart` — mixin stub
+- `tags_dao.dart` — `watchAll`, `searchByPrefix`, `findByName`, `findById`, `findByNote`, `insertTag`, `deleteTag`, `addTagToNote`, `removeTagFromNote`, `setTagsForNote`, `_syncDenormalisedTagIds`
+- `tags_dao.g.dart` — mixin stub
+- `categories_dao.dart` — `watchAll`, `findChildren`, `findById`, `insertCategory`, `updateCategory`, `deleteCategory`, `moveCategory`
+- `categories_dao.g.dart` — mixin stub
+- `audio_records_dao.dart` — `watchByNote`, `findById`, `findByNote`, `totalFileSizeBytes`, `insertAudioRecord`, `updateTranscription`, `deleteAudioRecord`, `deleteAllForNote`
+- `audio_records_dao.g.dart` — mixin stub
+
+#### `lib/data/repositories/local/` (upgraded from stubs)
+- `local_note_repository.dart` — implements `INoteRepository` via `NotesDao`; maps `NoteRow` ↔ `Note`; parses `SyncStatus` enum
+- `local_tag_repository.dart` — implements `ITagRepository` via `TagsDao`; normalises tag names on write
+- `local_category_repository.dart` — implements `ICategoryRepository` via `CategoriesDao`
+
+### Decisions Recorded
+- FTS5 virtual table with 3 SQLite triggers (insert/update/delete) for always-consistent full-text search
+- `tagIds` denormalised column on `NotesTable` for O(1) tag list access in ViewModel streams
+- `setTagsForNote` runs inside a Drift `transaction()` for atomicity
+- All Drift exceptions wrapped in `DatabaseException` at the DAO boundary
+- Row data classes and Companions extracted to `row_classes.dart` (normally generated — build_runner replaces)
+- `appDatabaseProvider` calls `ref.onDispose(db.close)` for clean shutdown
 
 ---
 
@@ -150,3 +216,27 @@ Expected result: App launches with Material 3 scaffold, "ModuNote" in the app ba
 |---|---|
 | Category deletion policy when children exist (cascade vs re-parent) | 8 |
 | AI provider evaluation (Gemini free tier vs Groq) | 12 |
+
+---
+
+## Post-Phase 1 Bugfix — app_router.g.dart stub incomplete
+
+**Issue**: `Undefined name 'themeModeNotifierProvider'` error at compile time.
+
+**Root cause**: The pre-generated `app_router.g.dart` stub was missing the
+`themeModeProvider` entry (generated from the `themeMode` convenience function).
+When a `part` file has a missing declaration, Dart marks the entire part as
+broken — causing all symbols from it (including `themeModeNotifierProvider`) to
+appear undefined, even though that definition was present.
+
+**Fix**: Added the missing `themeModeProvider` block to `app_router.g.dart`.
+The stub now contains all three generated symbols:
+- `routerProvider` (from `router` function)
+- `themeModeNotifierProvider` (from `ThemeModeNotifier` class)
+- `themeModeProvider` (from `themeMode` convenience function) ← was missing
+
+**File changed**: `lib/presentation/router/app_router.g.dart`
+
+**Reminder**: This stub is only a compile-time shim. Running
+`dart run build_runner build --delete-conflicting-outputs` replaces it with
+the real generated output and should always be done before first run.

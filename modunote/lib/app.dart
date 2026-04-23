@@ -6,13 +6,14 @@ import 'presentation/router/app_router.dart';
 
 // Watches the router and theme mode from Riverpod so the whole app
 // reactively rebuilds when either changes.
+// ThemeMode is read directly from ThemeModeNotifier — no wrapper provider needed.
 class ModuNoteApp extends ConsumerWidget {
   const ModuNoteApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
-    final themeMode = ref.watch(themeModeProvider);
+    final themeMode = ref.watch(themeModeNotifierProvider);
 
     return MaterialApp.router(
       title: 'ModuNote',

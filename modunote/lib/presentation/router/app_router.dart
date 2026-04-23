@@ -85,8 +85,5 @@ class ThemeModeNotifier extends _$ThemeModeNotifier {
   }
 }
 
-/// Convenience provider — exposes [ThemeMode] directly for [MaterialApp.router].
-@riverpod
-ThemeMode themeMode(Ref ref) {
-  return ref.watch(themeModeNotifierProvider);
-}
+// Note: watch ThemeModeNotifier state directly via themeModeNotifierProvider.
+// app.dart does: ref.watch(themeModeNotifierProvider) — no wrapper needed.
