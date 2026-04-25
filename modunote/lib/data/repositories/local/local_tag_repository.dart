@@ -1,10 +1,10 @@
-import '../../../core/errors/app_exception.dart';
-import '../../../core/utils/string_extensions.dart';
+﻿import '../../../core/errors/app_exception.dart';
+import '../../../core/extensions/string_extensions.dart';
 import '../../../core/utils/uuid_generator.dart';
 import '../../models/tag.dart';
 import '../../repositories/interfaces/i_tag_repository.dart';
-import '../datasources/local/app_database.dart';
-import '../datasources/local/daos/tags_dao.dart';
+import '../../datasources/local/app_database.dart';
+import '../../datasources/local/daos/tags_dao.dart';
 
 /// Local Drift implementation of [ITagRepository].
 ///
@@ -35,11 +35,10 @@ class LocalTagRepository implements ITagRepository {
       final normalised = prefix.normalised;
       final rows = await _tagsDao.searchByPrefix(normalised);
       return rows.map(_rowToTag).toList();
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to search tags by prefix: "$prefix"',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -49,11 +48,10 @@ class LocalTagRepository implements ITagRepository {
     try {
       final row = await _tagsDao.findByName(name.normalised);
       return row == null ? null : _rowToTag(row);
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to find tag by name: "$name"',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -63,11 +61,10 @@ class LocalTagRepository implements ITagRepository {
     try {
       final row = await _tagsDao.findById(id);
       return row == null ? null : _rowToTag(row);
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to find tag by id: $id',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -77,11 +74,10 @@ class LocalTagRepository implements ITagRepository {
     try {
       final rows = await _tagsDao.findByNote(noteId);
       return rows.map(_rowToTag).toList();
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to find tags for note: $noteId',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -103,18 +99,17 @@ class LocalTagRepository implements ITagRepository {
         createdAt: now,
       );
       await _tagsDao.insertTag(
-        TagRowCompanion.insert(
+        TagsTableCompanion.insert(
           id: tag.id,
           name: tag.name,
           createdAt: tag.createdAt,
         ),
       );
       return tag;
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to insert tag: "$name"',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -123,11 +118,10 @@ class LocalTagRepository implements ITagRepository {
   Future<void> delete(String id) async {
     try {
       await _tagsDao.deleteTag(id);
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to delete tag: $id',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -136,11 +130,10 @@ class LocalTagRepository implements ITagRepository {
   Future<void> addTagToNote(String noteId, String tagId) async {
     try {
       await _tagsDao.addTagToNote(noteId, tagId);
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to add tag $tagId to note $noteId',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -149,11 +142,10 @@ class LocalTagRepository implements ITagRepository {
   Future<void> removeTagFromNote(String noteId, String tagId) async {
     try {
       await _tagsDao.removeTagFromNote(noteId, tagId);
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to remove tag $tagId from note $noteId',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -162,11 +154,10 @@ class LocalTagRepository implements ITagRepository {
   Future<void> setTagsForNote(String noteId, List<String> tagIds) async {
     try {
       await _tagsDao.setTagsForNote(noteId, tagIds);
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to set tags for note: $noteId',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }

@@ -1,11 +1,11 @@
-import 'package:drift/drift.dart' as drift;
+﻿import 'package:drift/drift.dart' as drift;
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/utils/uuid_generator.dart';
 import '../../models/category.dart';
 import '../../repositories/interfaces/i_category_repository.dart';
-import '../datasources/local/app_database.dart';
-import '../datasources/local/daos/categories_dao.dart';
+import '../../datasources/local/app_database.dart';
+import '../../datasources/local/daos/categories_dao.dart';
 
 /// Local Drift implementation of [ICategoryRepository].
 ///
@@ -42,11 +42,10 @@ class LocalCategoryRepository implements ICategoryRepository {
     try {
       final rows = await _categoriesDao.findChildren(parentId);
       return rows.map(_rowToCategory).toList();
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to find children of category: $parentId',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -56,11 +55,10 @@ class LocalCategoryRepository implements ICategoryRepository {
     try {
       final rows = await _categoriesDao.findRoots();
       return rows.map(_rowToCategory).toList();
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to find root categories',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -70,11 +68,10 @@ class LocalCategoryRepository implements ICategoryRepository {
     try {
       final row = await _categoriesDao.findById(id);
       return row == null ? null : _rowToCategory(row);
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to find category by id: $id',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -105,7 +102,7 @@ class LocalCategoryRepository implements ICategoryRepository {
         createdAt: now,
       );
       await _categoriesDao.insertCategory(
-        CategoryRowCompanion.insert(
+        CategoriesTableCompanion.insert(
           id: category.id,
           name: category.name,
           parentId: parentId != null
@@ -120,11 +117,10 @@ class LocalCategoryRepository implements ICategoryRepository {
       return category;
     } on ValidationException {
       rethrow;
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to insert category: "$name"',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -137,18 +133,17 @@ class LocalCategoryRepository implements ICategoryRepository {
 
     try {
       await _categoriesDao.updateCategory(
-        CategoryRowCompanion(
+        CategoriesTableCompanion(
           id: drift.Value(category.id),
           name: drift.Value(category.name.trim()),
           sortOrder: drift.Value(category.sortOrder),
         ),
       );
       return category;
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to update category: ${category.id}',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -168,11 +163,10 @@ class LocalCategoryRepository implements ICategoryRepository {
       await _categoriesDao.deleteCategory(id);
     } on ValidationException {
       rethrow;
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to delete category: $id',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -188,11 +182,10 @@ class LocalCategoryRepository implements ICategoryRepository {
       await _categoriesDao.moveCategory(id, newParentId);
     } on ValidationException {
       rethrow;
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to move category $id to parent $newParentId',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -201,11 +194,10 @@ class LocalCategoryRepository implements ICategoryRepository {
   Future<void> updateSortOrder(String id, int sortOrder) async {
     try {
       await _categoriesDao.updateSortOrder(id, sortOrder);
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to update sort order for category: $id',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }

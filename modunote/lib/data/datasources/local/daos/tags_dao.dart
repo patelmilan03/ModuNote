@@ -63,7 +63,7 @@ class TagsDao extends DatabaseAccessor<AppDatabase> with _$TagsDaoMixin {
 
   /// Inserts a new tag. The name must already be lowercase-normalised by the
   /// repository layer. Throws on duplicate name (UNIQUE constraint).
-  Future<void> insertTag(TagRowCompanion companion) async {
+  Future<void> insertTag(TagsTableCompanion companion) async {
     await into(tagsTable).insert(companion);
   }
 
@@ -77,7 +77,7 @@ class TagsDao extends DatabaseAccessor<AppDatabase> with _$TagsDaoMixin {
   Future<void> addTagToNote(String noteId, String tagId) async {
     await db.transaction(() async {
       await into(noteTagsTable).insert(
-        NoteTagRowCompanion.insert(noteId: noteId, tagId: tagId),
+        NoteTagsTableCompanion.insert(noteId: noteId, tagId: tagId),
         mode: InsertMode.insertOrIgnore,
       );
       await _syncDenormalisedTagIds(noteId);
@@ -110,7 +110,7 @@ class TagsDao extends DatabaseAccessor<AppDatabase> with _$TagsDaoMixin {
           .go();
       for (final tagId in tagIds) {
         await into(noteTagsTable).insert(
-          NoteTagRowCompanion.insert(noteId: noteId, tagId: tagId),
+          NoteTagsTableCompanion.insert(noteId: noteId, tagId: tagId),
           mode: InsertMode.insertOrIgnore,
         );
       }

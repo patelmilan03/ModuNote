@@ -1,11 +1,10 @@
-import 'package:drift/drift.dart';
+﻿import 'package:drift/drift.dart';
 
 import '../../../core/errors/app_exception.dart';
-import '../../../core/utils/uuid_generator.dart';
 import '../../models/note.dart';
 import '../../repositories/interfaces/i_note_repository.dart';
-import '../datasources/local/app_database.dart';
-import '../datasources/local/daos/notes_dao.dart';
+import '../../datasources/local/app_database.dart';
+import '../../datasources/local/daos/notes_dao.dart';
 
 /// Local Drift implementation of [INoteRepository].
 ///
@@ -49,11 +48,10 @@ class LocalNoteRepository implements INoteRepository {
     try {
       final row = await _notesDao.findById(id);
       return row == null ? null : _rowToNote(row);
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to find note by id: $id',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -63,11 +61,10 @@ class LocalNoteRepository implements INoteRepository {
     try {
       final rows = await _notesDao.search(query);
       return rows.map(_rowToNote).toList();
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Full-text search failed for query: "$query"',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -80,11 +77,10 @@ class LocalNoteRepository implements INoteRepository {
       final companion = _noteToCompanion(note);
       await _notesDao.insertNote(companion);
       return note;
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to insert note: ${note.id}',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -95,11 +91,10 @@ class LocalNoteRepository implements INoteRepository {
       final companion = _noteToCompanion(note);
       await _notesDao.updateNote(companion);
       return note;
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to update note: ${note.id}',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -108,11 +103,10 @@ class LocalNoteRepository implements INoteRepository {
   Future<void> archive(String id) async {
     try {
       await _notesDao.archiveNote(id);
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to archive note: $id',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -121,11 +115,10 @@ class LocalNoteRepository implements INoteRepository {
   Future<void> delete(String id) async {
     try {
       await _notesDao.deleteNote(id);
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to delete note: $id',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -139,11 +132,10 @@ class LocalNoteRepository implements INoteRepository {
       await _notesDao.togglePin(id, pinned: newPinned);
       final updated = await _notesDao.findById(id);
       return updated == null ? null : _rowToNote(updated);
-    } on Exception catch (e, st) {
+    } on Exception catch (e) {
       throw DatabaseException(
         'Failed to toggle pin for note: $id',
-        originalError: e,
-        stackTrace: st,
+        cause: e,
       );
     }
   }
@@ -164,8 +156,8 @@ class LocalNoteRepository implements INoteRepository {
         syncStatus: _parseSyncStatus(row.syncStatus),
       );
 
-  /// Converts a domain [Note] model into a [NoteRowCompanion] for Drift.
-  NoteRowCompanion _noteToCompanion(Note note) => NoteRowCompanion.insert(
+  /// Converts a domain [Note] model into a [NotesTableCompanion] for Drift.
+  NotesTableCompanion _noteToCompanion(Note note) => NotesTableCompanion.insert(
         id: note.id,
         title: note.title,
         content: note.content,

@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:drift/drift.dart';
 
 import '../app_database.dart';
@@ -104,12 +102,12 @@ class NotesDao extends DatabaseAccessor<AppDatabase> with _$NotesDaoMixin {
   // ── Mutations ──────────────────────────────────────────────────────────────
 
   /// Inserts a new note row. Throws if [id] already exists.
-  Future<void> insertNote(NoteRowCompanion companion) async {
+  Future<void> insertNote(NotesTableCompanion companion) async {
     await into(notesTable).insert(companion);
   }
 
   /// Updates an existing note row. Returns true if a row was updated.
-  Future<bool> updateNote(NoteRowCompanion companion) async {
+  Future<bool> updateNote(NotesTableCompanion companion) async {
     final count = await (update(notesTable)
           ..where((t) => t.id.equals(companion.id.value)))
         .write(companion);
@@ -119,7 +117,7 @@ class NotesDao extends DatabaseAccessor<AppDatabase> with _$NotesDaoMixin {
   /// Sets [isArchived] = true and clears the pin on the note with [id].
   Future<void> archiveNote(String id) async {
     await (update(notesTable)..where((t) => t.id.equals(id))).write(
-      const NoteRowCompanion(
+      const NotesTableCompanion(
         isArchived: Value(true),
         isPinned: Value(false),
       ),
@@ -134,7 +132,7 @@ class NotesDao extends DatabaseAccessor<AppDatabase> with _$NotesDaoMixin {
   /// Sets the pinned state of the note with [id] to [pinned].
   Future<void> togglePin(String id, {required bool pinned}) async {
     await (update(notesTable)..where((t) => t.id.equals(id))).write(
-      NoteRowCompanion(isPinned: Value(pinned)),
+      NotesTableCompanion(isPinned: Value(pinned)),
     );
   }
 
@@ -144,7 +142,7 @@ class NotesDao extends DatabaseAccessor<AppDatabase> with _$NotesDaoMixin {
   /// transaction — callers should not invoke this directly.
   Future<void> updateTagIds(String id, List<String> tagIds) async {
     await (update(notesTable)..where((t) => t.id.equals(id))).write(
-      NoteRowCompanion(tagIds: Value(tagIds)),
+      NotesTableCompanion(tagIds: Value(tagIds)),
     );
   }
 }
