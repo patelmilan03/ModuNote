@@ -23,7 +23,7 @@
 | # | Phase | Status | Notes |
 |---|---|---|---|
 | 1 | Project setup & folder structure | ✅ **Complete** | See details below |
-| 2 | Data layer (Drift schema, DAOs, Repositories) | ⬜ Not started | — |
+| 2 | Data layer (Drift schema, DAOs, Repositories) | ✅ **Complete** | See details below |
 | 3 | State management (Riverpod providers, base ViewModels) | ⬜ Not started | — |
 | 4 | Note list screen | ⬜ Not started | — |
 | 5 | Note editor screen (Quill) | ⬜ Not started | — |
@@ -146,47 +146,83 @@ Expected result: App launches with Material 3 scaffold, "ModuNote" in the app ba
 **Completed**: Phase 2
 **Deliverable**: Full Drift schema, all DAOs, local repository implementations, and data-layer Riverpod providers wired to interfaces.
 
+> **Note**: This phase was completed across two sessions due to an interruption. The first session wrote `app_database.dart`, `notes_dao.dart`, `tags_dao.dart`, and the three local repository files before stopping mid-phase. The second session discovered multiple bugs in those committed files, created all missing files, fixed the bugs, ran `build_runner`, and committed the completed phase. See "Phase 2 Bugfix & Recovery" below.
+
 ### Files Created
 
 #### `lib/data/datasources/local/`
-- `app_database.dart` — `@DriftDatabase` with 5 tables, 4 DAOs, FTS5 virtual table + 3 triggers (insert/update/delete), `MigrationStrategy`
-- `app_database.g.dart` — stub (replace via `build_runner`); includes all 5 `$TableClass` impls + `_$AppDatabase`
-- `row_classes.dart` — `NoteRow`, `TagRow`, `NoteTagRow`, `CategoryRow`, `AudioRecordRow` + 5 Companion classes
-- `database_providers.dart` — `appDatabaseProvider`, `noteRepositoryProvider`, `tagRepositoryProvider`, `categoryRepositoryProvider` (all `keepAlive: true`)
-- `database_providers.g.dart` — stub (replace via `build_runner`)
+- `app_database.dart` *(partially existed — not modified in Phase 2)* — `@DriftDatabase` with 5 tables, 4 DAOs, FTS5 virtual table + 3 triggers (INSERT/UPDATE/BEFORE DELETE), `MigrationStrategy`
+- `database_providers.dart` — `appDatabaseProvider`, `noteRepositoryProvider`, `tagRepositoryProvider`, `categoryRepositoryProvider` (all `keepAlive: true`); `appDatabaseProvider` calls `ref.onDispose(db.close)`
 
 #### `lib/data/datasources/local/converters/`
-- `type_converters.dart` — `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter`
+- `type_converters.dart` — `QuillDeltaConverter` (`Map<String,dynamic>` ↔ `String` JSON), `DateTimeConverter` (`DateTime` ↔ `int` epoch ms UTC), `StringListConverter` (`List<String>` ↔ `String` JSON array)
 
 #### `lib/data/datasources/local/tables/`
-- `notes_table.dart` — `NotesTable` with `tagIds` denormalised column + `sync_status` default `'local'`
-- `tags_table.dart` — `TagsTable` with unique constraint on `name`
-- `note_tags_table.dart` — `NoteTagsTable` (composite PK: noteId + tagId)
-- `categories_table.dart` — `CategoriesTable` with nullable `parentId`
-- `audio_records_table.dart` — `AudioRecordsTable` with nullable `transcribedText`
+- `notes_table.dart` — `NotesTable` (`@DataClassName('NoteRow')`): `tagIds` denormalised via `StringListConverter`, `sync_status` defaults to `'local'`
+- `tags_table.dart` — `TagsTable` (`@DataClassName('TagRow')`): `name` has `.customConstraint('NOT NULL UNIQUE')`
+- `note_tags_table.dart` — `NoteTagsTable` (`@DataClassName('NoteTagRow')`): composite primary key `{noteId, tagId}`
+- `categories_table.dart` — `CategoriesTable` (`@DataClassName('CategoryRow')`): `parentId` nullable, `sortOrder` defaults to `0`
+- `audio_records_table.dart` — `AudioRecordsTable` (`@DataClassName('AudioRecordRow')`): `transcribedText` nullable, `codec` defaults to `'aac'`
 
 #### `lib/data/datasources/local/daos/`
-- `notes_dao.dart` — `watchAll`, `watchByTag`, `watchByCategory`, `findById`, `search` (FTS5), `insertNote`, `updateNote`, `archiveNote`, `deleteNote`, `togglePin`, `updateTagIds`
-- `notes_dao.g.dart` — mixin stub
-- `tags_dao.dart` — `watchAll`, `searchByPrefix`, `findByName`, `findById`, `findByNote`, `insertTag`, `deleteTag`, `addTagToNote`, `removeTagFromNote`, `setTagsForNote`, `_syncDenormalisedTagIds`
-- `tags_dao.g.dart` — mixin stub
-- `categories_dao.dart` — `watchAll`, `findChildren`, `findById`, `insertCategory`, `updateCategory`, `deleteCategory`, `moveCategory`
-- `categories_dao.g.dart` — mixin stub
-- `audio_records_dao.dart` — `watchByNote`, `findById`, `findByNote`, `totalFileSizeBytes`, `insertAudioRecord`, `updateTranscription`, `deleteAudioRecord`, `deleteAllForNote`
-- `audio_records_dao.g.dart` — mixin stub
+- `categories_dao.dart` — `watchAll`, `findChildren(String parentId)`, `findRoots`, `findById`, `insertCategory`, `updateCategory`, `deleteCategory`, `moveCategory`, `updateSortOrder`
+- `audio_records_dao.dart` — `watchByNote`, `findById`, `findByNote`, `totalFileSizeBytes` (raw SQL `COALESCE(SUM…)`), `insertAudioRecord`, `updateTranscription`, `deleteAudioRecord`, `deleteAllForNote`
 
-#### `lib/data/repositories/local/` (upgraded from stubs)
+*(Previously committed in interrupted session — fixed in Phase 2 recovery):*
+- `notes_dao.dart` — `watchAll`, `watchByTag`, `watchByCategory`, `findById`, `search` (FTS5), `insertNote`, `updateNote`, `archiveNote`, `deleteNote`, `togglePin`, `updateTagIds`
+- `tags_dao.dart` — `watchAll`, `searchByPrefix`, `findByName`, `findById`, `findByNote`, `insertTag`, `deleteTag`, `addTagToNote`, `removeTagFromNote`, `setTagsForNote`, `_syncDenormalisedTagIds`
+
+#### `lib/data/repositories/local/` (upgraded from stubs — bugs fixed in Phase 2 recovery)
 - `local_note_repository.dart` — implements `INoteRepository` via `NotesDao`; maps `NoteRow` ↔ `Note`; parses `SyncStatus` enum
-- `local_tag_repository.dart` — implements `ITagRepository` via `TagsDao`; normalises tag names on write
+- `local_tag_repository.dart` — implements `ITagRepository` via `TagsDao`; normalises tag names on write via `StringExtensions.normalised`
 - `local_category_repository.dart` — implements `ICategoryRepository` via `CategoriesDao`
 
-### Decisions Recorded
-- FTS5 virtual table with 3 SQLite triggers (insert/update/delete) for always-consistent full-text search
-- `tagIds` denormalised column on `NotesTable` for O(1) tag list access in ViewModel streams
-- `setTagsForNote` runs inside a Drift `transaction()` for atomicity
-- All Drift exceptions wrapped in `DatabaseException` at the DAO boundary
-- Row data classes and Companions extracted to `row_classes.dart` (normally generated — build_runner replaces)
-- `appDatabaseProvider` calls `ref.onDispose(db.close)` for clean shutdown
+#### `lib/data/repositories/interfaces/` (signatures corrected to match implementations)
+- `i_tag_repository.dart` — `insert(String name)` (not `insert(Tag tag)`); `addTagToNote`/`removeTagFromNote` (not `addToNote`/`removeFromNote`); `setTagsForNote` uses positional params; added `findById`
+- `i_category_repository.dart` — `findChildren(String parentId)` non-nullable; added `findRoots()`; added `updateSortOrder(String id, int sortOrder)`; `move` uses positional params; corrected `insert` signature
+
+#### `lib/core/utils/string_extensions.dart`
+- Re-export shim: `export '../extensions/string_extensions.dart'` — created because `local_tag_repository.dart` imports from `core/utils/` but the file lives at `core/extensions/`. Keeps the committed repo file unmodified.
+
+### Architectural Decisions
+
+| Decision | Detail |
+|---|---|
+| FTS5 full-text search | Virtual table `notes_fts` with 3 SQLite triggers (INSERT/UPDATE/BEFORE DELETE) keeps the index always in sync without application-level maintenance |
+| Denormalised `tagIds` column | `NotesTable.tagIds` stores a JSON-encoded `List<String>` alongside the normalised join table. Gives O(1) tag list access in ViewModel streams without a join |
+| `setTagsForNote` transactional | Runs inside Drift `transaction()`: deletes all join-table rows for the note, inserts new ones, then calls `_syncDenormalisedTagIds` — atomic, no partial state |
+| TypeConverters — not raw SQL | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` registered on table columns so Drift handles serialisation transparently |
+| Companion naming | Drift names companions after the TABLE class, not the data class: `NotesTableCompanion`, `TagsTableCompanion`, `NoteTagsTableCompanion`, `CategoriesTableCompanion`, `AudioRecordsTableCompanion` |
+| `DatabaseException` signature | `DatabaseException(String message, {Object? cause})` — the `cause` named param is the only extra field; no `originalError` or `stackTrace` |
+| `keepAlive: true` on all data providers | Database and repository providers must not be disposed during the app session |
+| `ref.onDispose(db.close)` | Ensures SQLite connection is closed cleanly if the provider is ever disposed |
+| `findChildren` non-nullable | `findChildren(String parentId)` takes a required ID; callers wanting root categories use the dedicated `findRoots()` method |
+
+### Phase 2 Bugfix & Recovery
+
+The first session was interrupted after committing partial work. The second session found and fixed the following bugs before the phase could be completed:
+
+| Bug | Root cause | Fix |
+|---|---|---|
+| Companion class names wrong in all DAOs + repos | Drift names companions after the TABLE class (`NotesTableCompanion`), not the data class (`NoteRowCompanion`) | Bulk-renamed across `notes_dao.dart`, `tags_dao.dart`, and all three local repos |
+| `DatabaseException` wrong constructor params | All repos called `DatabaseException('msg', originalError: e, stackTrace: st)` but the constructor only accepts `(message, {cause})` | Replaced with `DatabaseException(msg, cause: e)` throughout |
+| Wrong import paths in local repos | `'../datasources/local/...'` resolves to non-existent `lib/data/repositories/datasources/` | Fixed to `'../../datasources/local/...'` |
+| Wrong `string_extensions` import | `local_tag_repository.dart` imported from `core/utils/` but file is at `core/extensions/` | Fixed import + created `core/utils/string_extensions.dart` re-export |
+| Interface / implementation mismatch | `ITagRepository` and `ICategoryRepository` had signatures that didn't match the implementations (wrong method names, wrong param types) | Rewrote both interfaces to exactly match their implementations |
+| `intl` version conflict | `flutter_quill ^10.8.5` requires `intl ^0.19.0`; Flutter SDK pins `intl 0.20.2` | Added `dependency_overrides: intl: '>=0.19.0 <0.21.0'` to `pubspec.yaml` |
+| `custom_lint`/`riverpod_generator` incompatibility | `riverpod_generator ^2.4.3` incompatible with `custom_lint ^0.6.4` | Bumped to `custom_lint: ^0.7.6` and `riverpod_lint: ^2.4.0` |
+
+**Recovery strategy**: Hand-wrote minimal `.g.dart` stubs for all DAOs and providers to enable compilation before `build_runner` ran. Once `flutter pub get` succeeded (after the pubspec fixes above), `dart run build_runner build --delete-conflicting-outputs` replaced all stubs with real generated code (93 outputs). `flutter analyze` confirmed 0 errors.
+
+### First-Run Instructions (Phase 2 state)
+
+```bash
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+flutter run
+```
+
+Expected: app boots to NoteListScreen placeholder; Drift opens the SQLite database on first launch (no crash).
 
 ---
 
@@ -205,6 +241,11 @@ Expected result: App launches with Material 3 scaffold, "ModuNote" in the app ba
 | Firebase strategy | Repo interface swap (Phase 10) | 1 |
 | Backend stack | FastAPI + PostgreSQL + SQLAlchemy async | 1 (planning) |
 | AI features | Deferred to Phase 12 | 1 (planning) |
+| Full-text search | FTS5 virtual table + 3 SQLite triggers | 2 |
+| Tag denormalisation | `tagIds` JSON column on NotesTable for O(1) ViewModel access | 2 |
+| Companion naming | TABLE class name + Companion (e.g. `NotesTableCompanion`) | 2 |
+| Type converters | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` | 2 |
+| Data providers lifecycle | All 4 data-layer providers use `keepAlive: true` | 2 |
 | Category deletion policy | **TBD — Phase 8** | — |
 | AI provider (Gemini vs Groq) | **TBD — Phase 12** | — |
 

@@ -170,7 +170,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | Phase | Title | Status |
 |---|---|---|
 | 1 | Project setup & folder structure | ✅ Complete |
-| 2 | Data layer (Drift schema, DAOs, Repositories) | ⬜ Not started |
+| 2 | Data layer (Drift schema, DAOs, Repositories) | ✅ Complete |
 | 3 | State management (Riverpod providers, base ViewModels) | ⬜ Not started |
 | 4 | Note list screen | ⬜ Not started |
 | 5 | Note editor screen (Quill) | ⬜ Not started |
@@ -193,6 +193,8 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 - **Errors** are wrapped in `AppException` subtypes before surfacing to the ViewModel layer.
 - **Tag names** are always stored and compared lowercase. Use `StringExtensions.normalised`.
 - **UUIDs** always go through `UuidGenerator.generate()` — never call `Uuid().v4()` directly.
+- **Drift companion naming** — Companions are named after the **table class**, not the data class: `NotesTableCompanion` (not `NoteRowCompanion`), `TagsTableCompanion`, `NoteTagsTableCompanion`, `CategoriesTableCompanion`, `AudioRecordsTableCompanion`.
+- **DatabaseException** constructor signature is `DatabaseException(String message, {Object? cause})` — there is no `originalError` or `stackTrace` parameter.
 
 ---
 
@@ -206,6 +208,9 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `lib/core/theme/app_colors.dart` | Every design token |
 | `lib/core/constants/app_constants.dart` | Magic numbers and string keys |
 | `lib/presentation/router/app_router.dart` | Routes + ThemeModeNotifier |
+| `lib/data/datasources/local/app_database.dart` | `@DriftDatabase` — 5 tables, 4 DAOs, FTS5, migrations |
+| `lib/data/datasources/local/database_providers.dart` | Riverpod providers for DB + 3 repositories (all `keepAlive: true`) |
+| `lib/data/datasources/local/converters/type_converters.dart` | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` |
 | `MODUNOTE_UI_REFERENCE.md` | Full pixel-level UI spec from Claude Design |
 | `progress.md` | Human-readable phase progress log |
 
@@ -215,7 +220,8 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 
 1. Read `CLAUDE.md` (this file) — understand the architecture.
 2. Read `progress.md` — know what's been built and what's next.
-3. Read `MODUNOTE_UI_REFERENCE.md` — before touching any UI file.
-4. Run `flutter pub get` then `dart run build_runner build --delete-conflicting-outputs`.
+3. Read `THREAD_HANDOFF.md` — get the most recent session summary and next-phase scope.
+4. Read `MODUNOTE_UI_REFERENCE.md` — before touching any UI file.
+5. Run `flutter pub get` then `dart run build_runner build --delete-conflicting-outputs`.
 5. Run `flutter run` — should boot to NoteListScreen placeholder.
 6. Ask the developer which phase to proceed with before writing any code.
