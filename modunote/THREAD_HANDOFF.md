@@ -173,6 +173,7 @@ These bugs existed in files committed by the interrupted first session and were 
 - Run `dart run build_runner build --delete-conflicting-outputs` after any `@riverpod` or Drift table change
 - Drift companions are named after the TABLE class: `NotesTableCompanion` not `NoteRowCompanion`
 - `DatabaseException` signature: `DatabaseException(String message, {Object? cause})`
+- **Claude must never run git commands** — no `git add`, `git commit`, `git push`, `git reset`, or any variant. All commits are made exclusively by the developer using GitHub Desktop.
 
 ---
 

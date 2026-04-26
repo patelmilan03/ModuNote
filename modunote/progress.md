@@ -2,6 +2,8 @@
 
 > Updated at the end of every phase. Read this before starting any new phase.
 
+> ⚠️ **Git rule**: Claude must never run `git add`, `git commit`, `git push`, or any other git command. All commits are made exclusively by the developer using GitHub Desktop.
+
 ---
 
 ## Project Identity

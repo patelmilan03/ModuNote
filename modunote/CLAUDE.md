@@ -195,6 +195,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 - **UUIDs** always go through `UuidGenerator.generate()` — never call `Uuid().v4()` directly.
 - **Drift companion naming** — Companions are named after the **table class**, not the data class: `NotesTableCompanion` (not `NoteRowCompanion`), `TagsTableCompanion`, `NoteTagsTableCompanion`, `CategoriesTableCompanion`, `AudioRecordsTableCompanion`.
 - **DatabaseException** constructor signature is `DatabaseException(String message, {Object? cause})` — there is no `originalError` or `stackTrace` parameter.
+- **No git operations** — Claude must never run `git add`, `git commit`, `git push`, `git reset`, or any other git command. All version control is handled exclusively by the developer using GitHub Desktop.
 
 ---
 

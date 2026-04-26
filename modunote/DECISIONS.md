@@ -39,6 +39,7 @@ These rules apply to every phase, every file, forever. Never override them.
 8. **Generated files (`*.g.dart`) are gitignored and never edited manually** — they are build artifacts. Pre-written stubs are compile-time shims only; `dart run build_runner build --delete-conflicting-outputs` always replaces them.
 9. **Run build_runner after any `@riverpod` annotation change or Drift table change** — skipping this will cause stale generated code to silently mismatch.
 10. **`WidgetsFlutterBinding.ensureInitialized()` is always called before `runApp`** — required by Drift (async DB path resolution) and flutter_sound (platform channel setup).
+11. **Claude (or any AI agent) must never run `git` commands or commit code** — all commits are made exclusively by the developer using GitHub Desktop. Never run `git add`, `git commit`, `git push`, `git reset`, or any other git command that changes repository state. Code changes are written to disk only; the developer handles all version control.
 
 ---
 
@@ -70,8 +71,8 @@ These rules apply to every phase, every file, forever. Never override them.
 | `build_runner` | `^2.4.11` | Orchestrates all code generators (Riverpod + Drift) |
 | `drift_dev` | `^2.18.0` | Generates Drift table classes, DAO mixins, database implementations |
 | `flutter_lints` | `^4.0.0` | Standard Flutter lint rules baseline |
-| `custom_lint` | `^0.6.4` | Plugin host for riverpod_lint — catches provider mistakes at analysis time |
-| `riverpod_lint` | `^2.3.10` | Riverpod-specific lint rules (e.g. warns on missing provider scopes, bad watch patterns) |
+| `custom_lint` | `^0.7.6` | Plugin host for riverpod_lint — catches provider mistakes at analysis time. Bumped from `^0.6.4` in Phase 2 to resolve incompatibility with `riverpod_generator ^2.4.3`. |
+| `riverpod_lint` | `^2.4.0` | Riverpod-specific lint rules (e.g. warns on missing provider scopes, bad watch patterns). Bumped from `^2.3.10` in Phase 2 alongside custom_lint. |
 
 ---
 
@@ -140,8 +141,8 @@ When assigning tags to a note, `setTagsForNote` deletes all existing rows in `no
 **D2.5 — All Drift exceptions are caught and re-thrown as `DatabaseException` at the DAO boundary**
 Every DAO method wraps its body in a `try/catch` that catches `DriftWrappedException` and generic `Exception`, then throws `DatabaseException(message, cause: e)`. Raw Drift exceptions must never propagate above the DAO layer. Repository implementations do not catch — they trust the DAOs.
 
-**D2.6 — Row classes extracted to `row_classes.dart`**
-Drift normally generates data classes (`NoteRow`, `TagRow`, etc.) and Companion classes into `*.g.dart`. Since stubs are hand-written, these are placed in `row_classes.dart` as a manually maintained file. When `build_runner` runs, it regenerates the true data classes inside `app_database.g.dart` and the manual file becomes redundant — but it must exist for the stub to compile. The developer should delete `row_classes.dart` after first successful `build_runner` run if it causes conflicts.
+**D2.6 — Row classes live inside `app_database.g.dart` (generated); no separate `row_classes.dart` exists**
+Drift generates data classes (`NoteRow`, `TagRow`, etc.) and Companion classes into `app_database.g.dart`. During Phase 2 recovery, a hand-written stub for `app_database.g.dart` was provided inline in that single file — it defined all row classes, companion classes, `$Table` classes, and `_$AppDatabase`. There is no separate `row_classes.dart` file. After `build_runner` ran successfully (93 outputs), the stub was replaced by the real generated output entirely within `app_database.g.dart`. Never create a separate `row_classes.dart` file.
 
 **D2.7 — `appDatabaseProvider` is `keepAlive: true` and calls `ref.onDispose`**
 The database must not be recreated on every widget rebuild. `keepAlive: true` on `appDatabaseProvider` ensures it lives for the app's lifetime. `ref.onDispose(db.close)` ensures the SQLite connection is flushed and closed cleanly on hot restart or app termination.
@@ -425,7 +426,13 @@ Never deviate from these values. They are pixel-specified in the design system.
 | ID | Description | Phase | Status | Resolution |
 |---|---|---|---|---|
 | BUG-01 | `Undefined name 'themeModeNotifierProvider'` — `app_router.g.dart` stub missing `themeModeProvider` block. Missing symbol in `part` file breaks entire part. | 1 | ✅ Fixed | Added `themeModeProvider` block + `_$ThemeModeNotifier` abstract class to stub |
-| BUG-02 | (Future bugs logged here) | — | — | — |
+| BUG-02 | Companion class names wrong across all DAOs and local repos — used `NoteRowCompanion`, `TagRowCompanion`, etc. Drift names companions after the TABLE class, not the data class. | 2 | ✅ Fixed | Renamed to `NotesTableCompanion`, `TagsTableCompanion`, `NoteTagsTableCompanion`, `CategoriesTableCompanion`, `AudioRecordsTableCompanion` throughout all 7 affected files |
+| BUG-03 | `DatabaseException` called with non-existent params `originalError:` and `stackTrace:` in all three local repos — the constructor only accepts `(String message, {Object? cause})`. | 2 | ✅ Fixed | Replaced all callsites with `DatabaseException(message, cause: e)` |
+| BUG-04 | Wrong import paths in local repos — `'../datasources/local/…'` resolves to non-existent `lib/data/repositories/datasources/` | 2 | ✅ Fixed | Corrected to `'../../datasources/local/…'` |
+| BUG-05 | `local_tag_repository.dart` imported `string_extensions` from `core/utils/` — file lives at `core/extensions/` | 2 | ✅ Fixed | Fixed import directly; added `core/utils/string_extensions.dart` re-export shim so both paths work |
+| BUG-06 | `ITagRepository` and `ICategoryRepository` method signatures mismatched their implementations (`addToNote` vs `addTagToNote`, nullable vs non-nullable `findChildren`, missing `findRoots`, `updateSortOrder`) | 2 | ✅ Fixed | Rewrote both interfaces to exactly match implementations |
+| BUG-07 | `intl` version conflict — `flutter_quill ^10.8.5` requires `intl ^0.19.0` but Flutter SDK pins `intl 0.20.2` | 2 | ✅ Fixed | Added `dependency_overrides: intl: '>=0.19.0 <0.21.0'` to `pubspec.yaml` |
+| BUG-08 | `custom_lint ^0.6.4` incompatible with `riverpod_generator ^2.4.3` — `flutter pub get` failed | 2 | ✅ Fixed | Bumped `custom_lint` to `^0.7.6` and `riverpod_lint` to `^2.4.0` in `pubspec.yaml` |
 
 ---
 
