@@ -2,7 +2,7 @@
 
 > Updated at the end of every phase. Read this before starting any new phase.
 
-> ⚠️ **Git rule**: Claude must never run `git add`, `git commit`, `git push`, or any other git command. All commits are made exclusively by the developer using GitHub Desktop.
+> ⚠️ **Git rule**: Claude may create and edit files on the local machine freely. Claude must never run `git commit`, `git push`, `git pull`, `git reset`, or any git command that changes repository state or interacts with GitHub. All commits and pushes are handled exclusively by the developer using GitHub Desktop.
 
 ---
 
@@ -26,7 +26,7 @@
 |---|---|---|---|
 | 1 | Project setup & folder structure | ✅ **Complete** | See details below |
 | 2 | Data layer (Drift schema, DAOs, Repositories) | ✅ **Complete** | See details below |
-| 3 | State management (Riverpod providers, base ViewModels) | ⬜ Not started | — |
+| 3 | State management (Riverpod providers, base ViewModels) | ✅ **Complete** | See details below |
 | 4 | Note list screen | ⬜ Not started | — |
 | 5 | Note editor screen (Quill) | ⬜ Not started | — |
 | 6 | Voice-to-text + audio recording/playback | ⬜ Not started | — |
@@ -228,6 +228,50 @@ Expected: app boots to NoteListScreen placeholder; Drift opens the SQLite databa
 
 ---
 
+## Phase 3 — State Management ✅
+
+**Completed**: Phase 3
+**Deliverable**: 5 Riverpod ViewModels wired to the Phase 2 repository layer. No UI changes — placeholder screens unchanged.
+
+### Files Created
+
+#### `lib/presentation/viewmodels/`
+
+- `note_list_view_model.dart` — `NoteListViewModel extends _$NoteListViewModel`. `build()` returns `Stream<List<Note>>` from `INoteRepository.watchAll()`. Mutations: `archive`, `delete`, `togglePin`. Errors set `state = AsyncError(e, st)`; stream auto-updates state on success.
+- `note_editor_view_model.dart` — `NoteEditorViewModel extends _$NoteEditorViewModel`. Family provider with optional `noteId` build param. `build()` returns `Future<Note?>` (null for new note). Private `_isNew` flag tracks insert vs update. Mutations: `save`, `updateTitle`, `updateContent`, `addTag`, `removeTag`, `setCategory`. `addTag`/`removeTag` use `ITagRepository` then reload note via `findById`. `setCategory` constructs Note directly (bypasses `copyWith` to correctly handle `null` to clear a category).
+- `tag_list_view_model.dart` — `TagListViewModel extends _$TagListViewModel`. `build()` streams `ITagRepository.watchAll()`. Mutations: `insert` (returns `Tag`), `delete`.
+- `category_tree_view_model.dart` — `CategoryTreeViewModel extends _$CategoryTreeViewModel`. `build()` streams `ICategoryRepository.watchAll()` as a flat list. Mutations: `insert`, `move`, `delete`.
+- `search_view_model.dart` — `SearchState` class + `SearchViewModel extends _$SearchViewModel`. `SearchState` holds `query: String` + `results: AsyncValue<List<Note>>`. `setQuery` debounces 300 ms via `dart:async Timer`. `ref.onDispose` cancels the timer. Empty query clears results immediately without DB hit.
+
+### Architectural Decisions
+
+| Decision | Detail |
+|---|---|
+| Stream-based VMs use `build() → Stream<T>` | Riverpod code-gen generates `StreamNotifier` — each stream emission becomes `AsyncData<T>` automatically. No manual `.listen()` anywhere. |
+| `NoteEditorViewModel` uses `Future<Note?>` | No `watchById` on `INoteRepository`; editor manages state manually after each mutation. |
+| `_isNew` field for insert vs update | Set in `build()`, cleared after first successful `insert`. Avoids extra DB round-trip. |
+| `setCategory(null)` bypasses `copyWith` | `Note.copyWith(categoryId: null)` keeps old value (Dart nullable-copyWith limitation). Direct constructor call used instead. |
+| `SearchState` co-locates query + results | Original D3.5 listed `AsyncNotifier<List<Note>>` for search — confirmed incorrect by developer. `Notifier<SearchState>` is the right choice. |
+| Search debounce: 300 ms | Small enough to feel responsive; large enough to avoid hammering FTS5 on every keystroke. |
+
+### Bugfix Log
+
+| Bug | Fix |
+|---|---|
+| D3.5 error: `searchViewModelProvider` listed as `AsyncNotifier<List<Note>>` | Confirmed by developer as wrong. Corrected to `Notifier<SearchState>` before implementation. DECISIONS.md updated at Phase 3 start. |
+
+### First-Run Instructions (Phase 3 state)
+
+```bash
+dart run build_runner build --delete-conflicting-outputs
+flutter analyze
+flutter run
+```
+
+Expected: app boots to NoteListScreen placeholder (no UI change from Phase 2). `build_runner` produces 5 new `.g.dart` files in `lib/presentation/viewmodels/`. `flutter analyze` reports 0 errors.
+
+---
+
 ## Decisions Log (cross-phase)
 
 | Decision | Value | Phase set |
@@ -248,6 +292,9 @@ Expected: app boots to NoteListScreen placeholder; Drift opens the SQLite databa
 | Companion naming | TABLE class name + Companion (e.g. `NotesTableCompanion`) | 2 |
 | Type converters | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` | 2 |
 | Data providers lifecycle | All 4 data-layer providers use `keepAlive: true` | 2 |
+| ViewModel stream pattern | `build() → Stream<T>` for list VMs; Riverpod auto-wraps as `AsyncValue<T>` | 3 |
+| `NoteEditorViewModel` family param | Optional `noteId` build param; `_isNew` flag tracks first insert | 3 |
+| `SearchState` pattern | `Notifier<SearchState>` with query + `AsyncValue<List<Note>>` results; 300 ms debounce | 3 |
 | Category deletion policy | **TBD — Phase 8** | — |
 | AI provider (Gemini vs Groq) | **TBD — Phase 12** | — |
 

@@ -171,7 +171,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 |---|---|---|
 | 1 | Project setup & folder structure | ✅ Complete |
 | 2 | Data layer (Drift schema, DAOs, Repositories) | ✅ Complete |
-| 3 | State management (Riverpod providers, base ViewModels) | ⬜ Not started |
+| 3 | State management (Riverpod providers, base ViewModels) | ✅ Complete |
 | 4 | Note list screen | ⬜ Not started |
 | 5 | Note editor screen (Quill) | ⬜ Not started |
 | 6 | Voice-to-text + audio recording/playback | ⬜ Not started |
@@ -195,7 +195,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 - **UUIDs** always go through `UuidGenerator.generate()` — never call `Uuid().v4()` directly.
 - **Drift companion naming** — Companions are named after the **table class**, not the data class: `NotesTableCompanion` (not `NoteRowCompanion`), `TagsTableCompanion`, `NoteTagsTableCompanion`, `CategoriesTableCompanion`, `AudioRecordsTableCompanion`.
 - **DatabaseException** constructor signature is `DatabaseException(String message, {Object? cause})` — there is no `originalError` or `stackTrace` parameter.
-- **No git operations** — Claude must never run `git add`, `git commit`, `git push`, `git reset`, or any other git command. All version control is handled exclusively by the developer using GitHub Desktop.
+- **No git operations** — Claude may create and edit files on the local machine freely. Claude must never run `git commit`, `git push`, `git pull`, `git reset`, or any other git command that changes repository state or interacts with GitHub. All commits and pushes are handled exclusively by the developer using GitHub Desktop.
 
 ---
 

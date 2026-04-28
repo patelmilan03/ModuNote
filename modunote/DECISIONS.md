@@ -39,7 +39,7 @@ These rules apply to every phase, every file, forever. Never override them.
 8. **Generated files (`*.g.dart`) are gitignored and never edited manually** — they are build artifacts. Pre-written stubs are compile-time shims only; `dart run build_runner build --delete-conflicting-outputs` always replaces them.
 9. **Run build_runner after any `@riverpod` annotation change or Drift table change** — skipping this will cause stale generated code to silently mismatch.
 10. **`WidgetsFlutterBinding.ensureInitialized()` is always called before `runApp`** — required by Drift (async DB path resolution) and flutter_sound (platform channel setup).
-11. **Claude (or any AI agent) must never run `git` commands or commit code** — all commits are made exclusively by the developer using GitHub Desktop. Never run `git add`, `git commit`, `git push`, `git reset`, or any other git command that changes repository state. Code changes are written to disk only; the developer handles all version control.
+11. **Claude may create and edit files on the local machine freely** — but must never run `git commit`, `git push`, `git pull`, `git reset`, or any git command that changes repository state or interacts with GitHub. All commits and pushes are handled exclusively by the developer using GitHub Desktop.
 
 ---
 
@@ -161,9 +161,9 @@ The database must not be recreated on every widget rebuild. `keepAlive: true` on
 
 ---
 
-## Phase 3 — State Management ⬜ Not Started
+## Phase 3 — State Management ✅ Complete
 
-### Pre-Decided Architecture
+### Decisions Made
 
 **D3.1 — ViewModel pattern: `AsyncNotifier` for async data, `Notifier` for sync state**
 Screens that load data from the repository use `AsyncNotifier<T>`. Screens with purely local UI state (e.g. a toggle) use `Notifier<T>`. Never use `StateNotifier` (deprecated in Riverpod 2). Never use `StateProvider` (too simple, not composable).
@@ -172,17 +172,26 @@ Screens that load data from the repository use `AsyncNotifier<T>`. Screens with 
 Each screen gets exactly one ViewModel file in `lib/presentation/viewmodels/`. The ViewModel exposes the minimum state the screen needs. Cross-screen state (e.g. the currently selected category) is shared via a separate top-level provider, not by sharing ViewModel instances.
 
 **D3.3 — ViewModels watch repository streams via `ref.watch`**
-`AsyncNotifier` ViewModels call `ref.watch(noteRepositoryProvider).watchAll()` and convert the resulting `Stream` to `AsyncValue` using `ref.listen` or `stream` pattern. Never manually subscribe to streams with `.listen()` inside a ViewModel — use Riverpod's stream-to-AsyncValue conversion.
+Stream-based ViewModels (NoteList, TagList, CategoryTree) have `build()` return `Stream<T>` directly — Riverpod code-gen wraps each emission as `AsyncValue<T>` automatically. This is the canonical stream-to-AsyncValue conversion; never use `.listen()` manually. `NoteEditorViewModel` uses `Future<Note?>` in `build()` and manages state manually since there is no `watchById` stream on `INoteRepository`.
 
 **D3.4 — Error handling in ViewModels: `AsyncError` state**
 When a repository call throws an `AppException`, the ViewModel catches it and sets state to `AsyncError(e, stackTrace)`. Never swallow exceptions silently. The view layer reads `AsyncValue.when(error: ...)` to show error UI.
 
-**D3.5 — Providers to build in Phase 3**
-- `noteListViewModelProvider` — `AsyncNotifier<List<Note>>`, watches `INoteRepository.watchAll()`
-- `noteEditorViewModelProvider` — `AsyncNotifier<Note?>`, parameterised by optional noteId
-- `tagListViewModelProvider` — `AsyncNotifier<List<Tag>>`, watches `ITagRepository.watchAll()`
-- `categoryListViewModelProvider` — `AsyncNotifier<List<Category>>`, watches `ICategoryRepository.watchAll()`
-- `searchViewModelProvider` — `AsyncNotifier<List<Note>>`, calls `INoteRepository.search(query)`
+**D3.5 — Providers built in Phase 3** *(D3.5 corrected: `searchViewModelProvider` was originally listed as `AsyncNotifier<List<Note>>` — this was wrong; confirmed `Notifier<SearchState>` by developer before implementation)*
+- `noteListViewModelProvider` — `StreamNotifier<List<Note>>`, streams `INoteRepository.watchAll()`
+- `noteEditorViewModelProvider` — `AsyncNotifier<Note?>`, family provider parameterised by optional `noteId`
+- `tagListViewModelProvider` — `StreamNotifier<List<Tag>>`, streams `ITagRepository.watchAll()`
+- `categoryTreeViewModelProvider` — `StreamNotifier<List<Category>>`, streams `ICategoryRepository.watchAll()`
+- `searchViewModelProvider` — `Notifier<SearchState>`, debounced 300 ms → `INoteRepository.search(query)`
+
+**D3.6 — `NoteEditorViewModel._isNew` tracks insert vs update**
+A private `bool _isNew` field is set to `true` when `noteId == null` in `build()`. It is flipped to `false` after the first successful `insert`. All subsequent `save()` calls use `update`. This avoids an extra `findById` round-trip just to determine insert vs update.
+
+**D3.7 — `setCategory(null)` bypasses `Note.copyWith`**
+`Note.copyWith(categoryId: null)` keeps the old value (standard Dart nullable-copyWith limitation). `NoteEditorViewModel.setCategory` constructs the `Note` directly so `categoryId: null` is honoured to remove a category assignment. This is intentional and documented to prevent future accidental use of `copyWith` for this case.
+
+**D3.8 — `SearchState` is a plain class in the same file as `SearchViewModel`**
+`SearchState` (holding `query: String` and `results: AsyncValue<List<Note>>`) is not a separate file; it lives in `search_view_model.dart`. It has no `Equatable` dependency — the provider's `Notifier` handles rebuild correctly via reference equality on `copyWith` output.
 
 ---
 
@@ -433,6 +442,7 @@ Never deviate from these values. They are pixel-specified in the design system.
 | BUG-06 | `ITagRepository` and `ICategoryRepository` method signatures mismatched their implementations (`addToNote` vs `addTagToNote`, nullable vs non-nullable `findChildren`, missing `findRoots`, `updateSortOrder`) | 2 | ✅ Fixed | Rewrote both interfaces to exactly match implementations |
 | BUG-07 | `intl` version conflict — `flutter_quill ^10.8.5` requires `intl ^0.19.0` but Flutter SDK pins `intl 0.20.2` | 2 | ✅ Fixed | Added `dependency_overrides: intl: '>=0.19.0 <0.21.0'` to `pubspec.yaml` |
 | BUG-08 | `custom_lint ^0.6.4` incompatible with `riverpod_generator ^2.4.3` — `flutter pub get` failed | 2 | ✅ Fixed | Bumped `custom_lint` to `^0.7.6` and `riverpod_lint` to `^2.4.0` in `pubspec.yaml` |
+| BUG-09 | D3.5 in DECISIONS.md listed `searchViewModelProvider` as `AsyncNotifier<List<Note>>` — wrong. `Notifier<SearchState>` is needed to co-locate query + async results for debounced search UX. | 3 | ✅ Fixed | Confirmed by developer before Phase 3 implementation. D3.5 corrected in place. `SearchState` holds `query: String` + `results: AsyncValue<List<Note>>`. |
 
 ---
 

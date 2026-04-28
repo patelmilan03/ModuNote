@@ -3,20 +3,13 @@
 
 ---
 
-## Status: Phase 2 ✅ Complete. Proceed with Phase 3.
+## Status: Phase 3 ✅ Complete. Proceed with Phase 4.
 
-Phase 2 is fully complete and verified. The entire Drift data layer is in place —
-5 tables, 4 DAOs, type converters, 3 local repository implementations, and Riverpod
-providers wiring everything to the repository interfaces. `flutter analyze` reports
-0 errors. The app boots to NoteListScreen.
-
-> **Session interruption note**: Phase 2 was completed across two sessions. The first
-> session committed partial work (app_database, notes_dao, tags_dao, and the 3 local repos)
-> before stopping. The second session found and fixed multiple bugs in those files (wrong
-> companion naming convention, wrong DatabaseException params, wrong import paths,
-> interface/implementation mismatches, dependency version conflicts), created all missing
-> files, ran build_runner successfully (93 outputs), and committed the completed phase.
-> See "Phase 2 bugs fixed" below.
+Phase 3 is fully complete. All 5 Riverpod ViewModels are in place and wired to the
+Phase 2 repository layer. `dart run build_runner build --delete-conflicting-outputs`
+must be run by the developer to generate the `.g.dart` files, then `flutter analyze`
+should report 0 errors. The app still boots to the NoteListScreen placeholder — no UI
+changes were made in Phase 3.
 
 ---
 
@@ -60,80 +53,116 @@ watches `routerProvider` + `themeModeNotifierProvider`
 
 ## What was built (Phase 2)
 
-The complete Drift data layer — schema, converters, DAOs, repositories, and Riverpod DI.
+The complete Drift data layer. See `progress.md § Phase 2` for full file list.
 
-### `lib/data/datasources/local/`
-
-- `app_database.dart` — `@DriftDatabase(tables: [NotesTable, TagsTable, NoteTagsTable, CategoriesTable, AudioRecordsTable], daos: [NotesDao, TagsDao, CategoriesDao, AudioRecordsDao])`. Includes FTS5 virtual table `notes_fts` + 3 SQLite triggers (INSERT/UPDATE/BEFORE DELETE). `MigrationStrategy` with `onCreate`.
-- `database_providers.dart` — 4 Riverpod providers, all `keepAlive: true`:
-  - `appDatabaseProvider` — opens DB, calls `ref.onDispose(db.close)`
-  - `noteRepositoryProvider` → `LocalNoteRepository(db.notesDao)`
-  - `tagRepositoryProvider` → `LocalTagRepository(db.tagsDao)`
-  - `categoryRepositoryProvider` → `LocalCategoryRepository(db.categoriesDao)`
-
-### `lib/data/datasources/local/converters/`
-
-- `type_converters.dart`:
-  - `QuillDeltaConverter` — `Map<String,dynamic>` ↔ JSON `String`; fallback to `{ops:[{insert:'\n'}]}` on bad JSON
-  - `DateTimeConverter` — `DateTime` ↔ `int` (milliseconds since epoch, UTC)
-  - `StringListConverter` — `List<String>` ↔ JSON `String`; fallback to `[]` on bad JSON
-
-### `lib/data/datasources/local/tables/`
-
-- `notes_table.dart` — `@DataClassName('NoteRow')`. Columns: id, title, content (QuillDeltaConverter), categoryId (nullable), tagIds (StringListConverter, default `'[]'`), isPinned (default false), isArchived (default false), createdAt/updatedAt (DateTimeConverter), syncStatus (default `'local'`). PK: `{id}`.
-- `tags_table.dart` — `@DataClassName('TagRow')`. `name` uses `.customConstraint('NOT NULL UNIQUE')`.
-- `note_tags_table.dart` — `@DataClassName('NoteTagRow')`. Composite PK: `{noteId, tagId}`.
-- `categories_table.dart` — `@DataClassName('CategoryRow')`. `parentId` nullable. `sortOrder` defaults to `0`.
-- `audio_records_table.dart` — `@DataClassName('AudioRecordRow')`. `transcribedText` nullable. `codec` defaults to `'aac'`.
-
-### `lib/data/datasources/local/daos/`
-
-- `notes_dao.dart` — watchAll (ordered updatedAt DESC), watchByTag (join), watchByCategory (filter + updatedAt DESC), findById, search (FTS5 MATCH), insertNote, updateNote, archiveNote (sets isArchived=true), deleteNote, togglePin, updateTagIds
-- `tags_dao.dart` — watchAll (name ASC), searchByPrefix (LIKE `prefix%`), findByName, findById, findByNote (join), insertTag, deleteTag, addTagToNote, removeTagFromNote, setTagsForNote (transaction: delete all → insert new → `_syncDenormalisedTagIds`), `_syncDenormalisedTagIds` (reads join table, writes tagIds JSON to note)
-- `categories_dao.dart` — watchAll (sortOrder ASC, name ASC), findChildren(String parentId), findRoots (parentId IS NULL), findById, insertCategory, updateCategory (returns bool), deleteCategory, moveCategory (writes parentId only), updateSortOrder
-- `audio_records_dao.dart` — watchByNote (createdAt ASC), findById, findByNote, totalFileSizeBytes (raw SQL COALESCE SUM), insertAudioRecord, updateTranscription (writes transcribedText only), deleteAudioRecord, deleteAllForNote
-
-### `lib/data/repositories/local/`
-
-- `local_note_repository.dart` — wraps `NotesDao`; maps `NoteRow` ↔ `Note`; parses `SyncStatus` from string
-- `local_tag_repository.dart` — wraps `TagsDao`; normalises tag names via `StringExtensions.normalised` before write
-- `local_category_repository.dart` — wraps `CategoriesDao`; maps `CategoryRow` ↔ `Category`
+Key summary:
+- `app_database.dart` — `@DriftDatabase` with 5 tables, 4 DAOs, FTS5 + 3 triggers
+- `database_providers.dart` — `appDatabaseProvider`, `noteRepositoryProvider`, `tagRepositoryProvider`, `categoryRepositoryProvider` (all `keepAlive: true`)
+- Tables: `NotesTable`, `TagsTable`, `NoteTagsTable`, `CategoriesTable`, `AudioRecordsTable`
+- DAOs: `NotesDao`, `TagsDao`, `CategoriesDao`, `AudioRecordsDao`
+- Repos: `LocalNoteRepository`, `LocalTagRepository`, `LocalCategoryRepository`
+- Type converters: `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter`
 
 ---
 
-## Phase 2 bugs fixed
+## What was built (Phase 3)
 
-These bugs existed in files committed by the interrupted first session and were fixed before build_runner ran:
+All 5 Riverpod ViewModels in `lib/presentation/viewmodels/`.
 
-| Bug | Fix |
+### ViewModel signatures
+
+#### `note_list_view_model.dart`
+```dart
+@riverpod
+class NoteListViewModel extends _$NoteListViewModel {
+  Stream<List<Note>> build()         // streams noteRepositoryProvider.watchAll()
+  Future<void> archive(String id)
+  Future<void> delete(String id)
+  Future<void> togglePin(String id)
+}
+```
+
+#### `note_editor_view_model.dart`
+```dart
+@riverpod
+class NoteEditorViewModel extends _$NoteEditorViewModel {
+  bool _isNew;   // true when noteId == null; flipped to false after first insert
+  Future<Note?> build({String? noteId})   // null → new note, non-null → findById
+  Future<void> save(Note note)
+  Future<void> updateTitle(String title)
+  Future<void> updateContent(Map<String, dynamic> content)
+  Future<void> addTag(String tagId)        // uses tagRepositoryProvider + reloads note
+  Future<void> removeTag(String tagId)     // uses tagRepositoryProvider + reloads note
+  Future<void> setCategory(String? categoryId)  // constructs Note directly (no copyWith)
+}
+```
+
+Usage: `ref.watch(noteEditorViewModelProvider())` for new note,
+`ref.watch(noteEditorViewModelProvider(noteId: id))` for existing.
+
+#### `tag_list_view_model.dart`
+```dart
+@riverpod
+class TagListViewModel extends _$TagListViewModel {
+  Stream<List<Tag>> build()          // streams tagRepositoryProvider.watchAll()
+  Future<Tag> insert(String name)    // returns created Tag (Phase 7 UI needs it)
+  Future<void> delete(String id)
+}
+```
+
+#### `category_tree_view_model.dart`
+```dart
+@riverpod
+class CategoryTreeViewModel extends _$CategoryTreeViewModel {
+  Stream<List<Category>> build()     // flat list; Phase 8 UI builds tree from parentId
+  Future<Category> insert({required String name, String? parentId, int sortOrder = 0})
+  Future<void> move(String id, String? newParentId)
+  Future<void> delete(String id)
+}
+```
+
+#### `search_view_model.dart`
+```dart
+class SearchState {
+  final String query;
+  final AsyncValue<List<Note>> results;
+  // copyWith(...)
+}
+
+@riverpod
+class SearchViewModel extends _$SearchViewModel {
+  Timer? _debounce;                  // cancelled via ref.onDispose
+  SearchState build()                // initial: query='', results=AsyncData([])
+  void setQuery(String query)        // debounced 300 ms; empty query clears immediately
+  // _performSearch(query) — private
+}
+```
+
+### Key design decisions (Phase 3)
+
+| Decision | Detail |
 |---|---|
-| Companion names: `NoteRowCompanion` etc. | Drift names companions after the TABLE class → `NotesTableCompanion`, `TagsTableCompanion`, `NoteTagsTableCompanion`, `CategoriesTableCompanion`, `AudioRecordsTableCompanion` |
-| `DatabaseException(msg, originalError: e, stackTrace: st)` | Correct signature is `DatabaseException(String message, {Object? cause})` → fixed to `DatabaseException(msg, cause: e)` |
-| Import paths: `'../datasources/local/…'` | Resolves to non-existent path; corrected to `'../../datasources/local/…'` |
-| `string_extensions` import: `core/utils/` | File is at `core/extensions/`; fixed import + added `core/utils/string_extensions.dart` re-export |
-| `ITagRepository`/`ICategoryRepository` mismatched signatures | Rewrote both interfaces to exactly match implementations |
-| `intl` version conflict | Added `dependency_overrides: intl: '>=0.19.0 <0.21.0'` to `pubspec.yaml` |
-| `custom_lint`/`riverpod_generator` incompatibility | Bumped to `custom_lint: ^0.7.6`, `riverpod_lint: ^2.4.0` |
+| Stream VMs: `build() → Stream<T>` | Riverpod generates `StreamNotifier` — each emission auto-wrapped as `AsyncData<T>`. No `.listen()` in ViewModels. |
+| `NoteEditorViewModel` uses Future | No `watchById` on `INoteRepository`; state is managed manually after each mutation. |
+| `_isNew` for insert/update | Set in `build()`, cleared after first `insert`. No extra DB round-trip. |
+| `setCategory(null)` bypasses `copyWith` | `Note.copyWith(categoryId: null)` keeps old value (Dart limitation). Constructor used directly. |
+| `SearchState` Notifier pattern | Original D3.5 listed `AsyncNotifier<List<Note>>` — confirmed wrong by developer. `Notifier<SearchState>` correct. |
+| Error handling | All mutations catch `AppException`, set `state = AsyncError(e, st)`. Non-AppException errors are not caught (DAO layer boundary). |
 
 ---
 
-## Architecture decisions locked in Phase 2
+## Architecture decisions locked in Phase 3
 
 | Decision | Value |
 |---|---|
-| FTS5 full-text search | Virtual table + 3 SQLite triggers — always in sync, no app-level maintenance |
-| Tag denormalisation | `tagIds` JSON column on `NotesTable` for O(1) ViewModel stream access |
-| `setTagsForNote` | Runs inside Drift `transaction()` for atomicity; syncs denormalised column |
-| TypeConverters | Applied at column level — Drift handles serialisation transparently |
-| Companion naming | TABLE class name + `Companion` suffix (Drift codegen convention) |
-| `DatabaseException` | `(String message, {Object? cause})` — the only extra param is `cause` |
-| Data provider lifecycle | All 4 data-layer providers use `keepAlive: true` |
-| DB dispose | `appDatabaseProvider` calls `ref.onDispose(db.close)` |
-| `findChildren` non-nullable | Takes a required `String parentId`; root access via dedicated `findRoots()` |
+| ViewModel stream pattern | `build() → Stream<T>` for list VMs |
+| NoteEditorViewModel family param | Optional `noteId`; `_isNew` flag |
+| SearchState pattern | `Notifier<SearchState>`; 300 ms debounce |
+| `setCategory(null)` | Direct constructor; no `copyWith` |
 
 ---
 
-## All architecture decisions (Phase 1 + 2)
+## All architecture decisions (Phases 1–3)
 
 | Decision | Value | Phase |
 |---|---|---|
@@ -158,6 +187,9 @@ These bugs existed in files committed by the interrupted first session and were 
 | Companion naming | TABLE class name + `Companion` (Drift codegen convention) | 2 |
 | Type converters | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` | 2 |
 | Data providers lifecycle | All 4 data-layer providers use `keepAlive: true` | 2 |
+| ViewModel stream pattern | `build() → Stream<T>` for list VMs | 3 |
+| NoteEditorViewModel family param | Optional `noteId`; `_isNew` flag for insert/update | 3 |
+| SearchState pattern | `Notifier<SearchState>`; 300 ms debounce | 3 |
 
 ---
 
@@ -173,7 +205,7 @@ These bugs existed in files committed by the interrupted first session and were 
 - Run `dart run build_runner build --delete-conflicting-outputs` after any `@riverpod` or Drift table change
 - Drift companions are named after the TABLE class: `NotesTableCompanion` not `NoteRowCompanion`
 - `DatabaseException` signature: `DatabaseException(String message, {Object? cause})`
-- **Claude must never run git commands** — no `git add`, `git commit`, `git push`, `git reset`, or any variant. All commits are made exclusively by the developer using GitHub Desktop.
+- **Claude may create/edit files locally** — but must never run `git commit`, `git push`, `git pull`, or any git command touching GitHub. All commits made exclusively by the developer using GitHub Desktop.
 
 ---
 
@@ -189,32 +221,35 @@ These bugs existed in files committed by the interrupted first session and were 
 ## First-run instructions
 
 ```bash
-flutter pub get
 dart run build_runner build --delete-conflicting-outputs
-flutter run
+flutter analyze   # expected: 0 errors
+flutter run       # app boots to NoteListScreen placeholder
 ```
 
 Expected: Material 3 scaffold, "ModuNote" app bar, "📝 Note List / Phase 4 — coming soon"
-centred on screen, amber FAB bottom-right. Drift opens the SQLite database silently on launch.
+centred on screen, amber FAB bottom-right. 5 new `.g.dart` files generated in
+`lib/presentation/viewmodels/`.
 
 ---
 
-## Phase 3 — What to build next
+## Phase 4 — What to build next
 
-**Title**: State management — Riverpod providers + base ViewModels
+**Title**: Note List Screen
 
-**Scope**:
-1. `NoteListViewModel` (`AsyncNotifier<List<Note>>`) — watches `noteRepositoryProvider`, exposes `watchAll()`, `archive()`, `togglePin()`, `delete()`
-2. `NoteEditorViewModel` (`AsyncNotifier<Note?>`) — loads note by id (or null for new), exposes `save()`, `updateTitle()`, `updateContent()`, `addTag()`, `removeTag()`, `setCategory()`
-3. `TagListViewModel` (`AsyncNotifier<List<Tag>>`) — watches `tagRepositoryProvider`, exposes `watchAll()`, `insert()`, `delete()`
-4. `CategoryTreeViewModel` (`AsyncNotifier<List<Category>>`) — watches `categoryRepositoryProvider`, exposes `watchAll()`, `insert()`, `move()`, `delete()`
-5. `SearchViewModel` (`Notifier<SearchState>`) — debounced search query → `noteRepositoryProvider.search()`
-6. All ViewModels use `@riverpod` annotation + code-gen
-7. Update `CLAUDE.md`, `progress.md`, `THREAD_HANDOFF.md`
+**Scope** (from DECISIONS.md D4.1–D4.6):
+1. Replace `NoteListScreen` placeholder with a full implementation using `noteListViewModelProvider`
+2. Render `AsyncValue.when(data, loading, error)` — loading = shimmer skeleton, error = retry button
+3. Two-section list: "Pinned" then "Recent", each sorted by `updatedAt` DESC
+4. `MNNoteCard` widget in `lib/presentation/widgets/mn_note_card.dart` — receives `Note`, `onTap`; never reads providers directly
+5. Archived notes never shown (`INoteRepository.watchAll()` already filters them)
+6. Amber FAB → `context.push(AppRoutes.newNote)`
+7. `MNSearchField` tap → `context.push(AppRoutes.search)` (navigation affordance, not inline search)
+8. Update `CLAUDE.md`, `progress.md`, `THREAD_HANDOFF.md`
 
-**Before starting Phase 3**, Claude should present a detailed summary of every ViewModel's
-state shape, provider type choice (`AsyncNotifier` vs `Notifier`), and error handling strategy
-for developer approval — per project protocol.
+**Before starting Phase 4**, Claude should present a detailed summary of every widget,
+state path, and method signature for developer approval — per project protocol.
+
+**UI spec**: Read `MODUNOTE_UI_REFERENCE.md` before touching any widget.
 
 ---
 
