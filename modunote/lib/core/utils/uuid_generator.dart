@@ -5,7 +5,7 @@ import 'package:uuid/uuid.dart';
 class UuidGenerator {
   const UuidGenerator._();
 
-  static final _uuid = const Uuid();
+  static const _uuid = Uuid();
 
   /// Generates a new random UUID v4 string.
   static String generate() => _uuid.v4();

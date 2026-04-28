@@ -1,8 +1,6 @@
 import 'package:drift/drift.dart';
 
 import '../app_database.dart';
-import '../tables/tags_table.dart';
-import '../tables/note_tags_table.dart';
 
 part 'tags_dao.g.dart';
 

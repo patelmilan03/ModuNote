@@ -4,7 +4,6 @@ import '../../../core/utils/uuid_generator.dart';
 import '../../models/tag.dart';
 import '../../repositories/interfaces/i_tag_repository.dart';
 import '../../datasources/local/app_database.dart';
-import '../../datasources/local/daos/tags_dao.dart';
 
 /// Local Drift implementation of [ITagRepository].
 ///

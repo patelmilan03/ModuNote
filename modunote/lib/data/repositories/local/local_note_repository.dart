@@ -4,7 +4,6 @@ import '../../../core/errors/app_exception.dart';
 import '../../models/note.dart';
 import '../../repositories/interfaces/i_note_repository.dart';
 import '../../datasources/local/app_database.dart';
-import '../../datasources/local/daos/notes_dao.dart';
 
 /// Local Drift implementation of [INoteRepository].
 ///

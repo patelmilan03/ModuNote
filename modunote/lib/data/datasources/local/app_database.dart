@@ -48,7 +48,7 @@ part 'app_database.g.dart';
   daos: [NotesDao, TagsDao, CategoriesDao, AudioRecordsDao],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase(QueryExecutor e) : super(e);
+  AppDatabase(super.e);
 
   /// Creates the platform-appropriate [QueryExecutor] backed by SQLite via
   /// drift_flutter.  File name: [modunote.db].
@@ -74,9 +74,13 @@ class AppDatabase extends _$AppDatabase {
   // Declared here so AppDatabase can be injected into services and repositories
   // without the caller needing to reference Drift internals.
 
+  @override
   late final NotesDao notesDao = NotesDao(this);
+  @override
   late final TagsDao tagsDao = TagsDao(this);
+  @override
   late final CategoriesDao categoriesDao = CategoriesDao(this);
+  @override
   late final AudioRecordsDao audioRecordsDao = AudioRecordsDao(this);
 
   // ── Private helpers ────────────────────────────────────────────────────────

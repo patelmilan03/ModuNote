@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart';
 
 import '../app_database.dart';
-import '../tables/audio_records_table.dart';
 
 part 'audio_records_dao.g.dart';
 

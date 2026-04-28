@@ -5,7 +5,6 @@ import '../../../core/utils/uuid_generator.dart';
 import '../../models/category.dart';
 import '../../repositories/interfaces/i_category_repository.dart';
 import '../../datasources/local/app_database.dart';
-import '../../datasources/local/daos/categories_dao.dart';
 
 /// Local Drift implementation of [ICategoryRepository].
 ///
