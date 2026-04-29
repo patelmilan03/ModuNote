@@ -195,51 +195,69 @@ A private `bool _isNew` field is set to `true` when `noteId == null` in `build()
 
 ---
 
-## Phase 4 — Note List Screen ⬜ Not Started
+## Phase 4 — Note List Screen ✅ Complete
 
-### Pre-Decided Architecture
+### Decisions Made
 
 **D4.1 — Screen is `ConsumerWidget`, uses `noteListViewModelProvider`**
-`NoteListScreen` watches `noteListViewModelProvider` and renders `AsyncValue.when(data, loading, error)`. The loading state shows a shimmer skeleton. The error state shows a retry button.
+`NoteListScreen` watches `noteListViewModelProvider` and renders `AsyncValue.when(data, loading, error)`. It also watches `tagListViewModelProvider` to build a `Map<String, String>` (tagId → tagName) for resolving tag names on note cards. The loading state shows pulsing skeleton boxes. The error state shows a retry button calling `ref.invalidate(noteListViewModelProvider)`.
 
 **D4.2 — Two-section list: Pinned then Recent**
-The note list is divided into two sections by a `SliverStickyHeader` or manual `SliverList` with section dividers. Pinned notes appear first under a "Pinned" label, then all other notes under "Recent". The sort within each section is `updatedAt` descending.
+Notes are split into `pinned` (isPinned == true) and `recent` (isPinned == false) lists inside the `data` branch. Each list is sorted by `updatedAt` descending. Section headers are only rendered when their respective list is non-empty. Implemented with a `ListView` whose children list is built imperatively.
 
-**D4.3 — Note card widget: `MNNoteCard`**
-Each note is rendered by a reusable `MNNoteCard` widget in `lib/presentation/widgets/mn_note_card.dart`. It receives a `Note` object and an `onTap` callback. It never reads from a provider directly — it is purely presentational. Spec: see `MODUNOTE_UI_REFERENCE.md § 2.3`.
+**D4.3 — Note card widget: `MNNoteCard extends StatelessWidget`**
+`lib/presentation/widgets/mn_note_card.dart`. Props: `Note note`, `VoidCallback onTap`, `List<String> tagNames` (defaults to `const []`). The `tagNames` parameter is resolved by `NoteListScreen` before passing — the card never reads providers. Preview text is extracted from Quill Delta JSON (`note.content['ops']`). Timestamp is computed inline. Up to 3 tag chips shown.
 
 **D4.4 — Archived notes are never shown on the home screen**
-`INoteRepository.watchAll()` filters out `isArchived == true`. There is no archive screen in the current scope — archived notes are soft-deleted from the user's perspective until a future phase adds a trash/archive view.
+`INoteRepository.watchAll()` filters out `isArchived == true`. No archive UI in current scope.
 
-**D4.5 — FAB navigates to `/note/new`**
-The amber FAB calls `context.push(AppRoutes.newNote)`. It is positioned per the UI reference: `bottom: 96, right: 20` to clear the floating bottom nav bar.
+**D4.5 — FAB: amber, `bottom: 96`, `right: 20`, navigates to `/note/new`**
+Custom `_Fab` widget (GestureDetector + Container). Uses `AppColors.accent` background, `AppColors.accentOn` icon, `borderRadius: 18`, and two-layer box shadow per spec. Calls `context.push(AppRoutes.newNote)`.
 
-**D4.6 — Search bar navigates to `/search`**
-Tapping the `MNSearchField` on the home screen pushes `/search` using `context.push(AppRoutes.search)`. It does not expand inline — it is a navigation affordance, not an inline search. Inline search lives on the Explore screen.
+**D4.6 — `MNSearchField` on Home is non-editable; tap navigates to `/search`**
+`lib/presentation/widgets/mn_search_field.dart` is a `StatelessWidget` with optional `VoidCallback onTap`. On Home it is non-editable (GestureDetector wraps a static row). On Explore it will be editable (Phase 5+).
+
+**D4.7 — Floating bottom nav implemented on NoteListScreen (Phase 4 only)**
+The `_BottomNav` widget is absolutely positioned at `left: 16, right: 16, bottom: 14` within a `Stack` inside `SafeArea`. This is a per-screen implementation for Phase 4. Phase 9 (`ShellRoute`) will replace it with a persistent cross-screen nav. Home tab is `isActive: true` (hardcoded for Phase 4).
+
+**D4.8 — Tag name resolution via dual-provider watch**
+`NoteListScreen.build()` watches both `noteListViewModelProvider` and `tagListViewModelProvider`. It uses `tagsAsync.maybeWhen(data: ..., orElse: () => <String, String>{})` to build the id→name map. If tags are still loading, cards render without chip labels (empty `tagNames` list); they appear on the next rebuild when tags resolve.
+
+**D4.9 — Shimmer skeleton: pulsing `_SkeletonBox` StatefulWidget**
+No third-party shimmer package. `_SkeletonBox` uses `AnimationController.repeat(reverse: true)` with an `AnimatedBuilder` to oscillate opacity between 0.35 and 0.65 over 800 ms. Three skeleton cards shown in `_LoadingBody`.
+
+**D4.10 — No build_runner required for Phase 4**
+No new `@riverpod` annotations were added. No new Drift tables. `dart run build_runner build` does not need to be re-run after Phase 4.
 
 ---
 
-## Phase 5 — Note Editor Screen ⬜ Not Started
+## Phase 5 — Note Editor Screen ✅ Complete
 
-### Pre-Decided Architecture
+### Implementation Decisions
 
-**D5.1 — Editor uses `flutter_quill` v10 with `QuillController`**
-The `QuillController` is owned by the `NoteEditorViewModel` (or initialised in the screen with a `ConsumerStatefulWidget`). It is initialised from `Note.content` (Delta JSON map) on load. On every change, the controller's document is serialised back to Delta JSON and the ViewModel's save-debounce timer is reset.
+**D5.1 — `NoteEditorScreen extends ConsumerStatefulWidget`**
+The screen owns `QuillController`, `TextEditingController` (title), `FocusNode`, `ScrollController`, and all timer/subscription handles. `ConsumerStatefulWidget` provides `initState`/`dispose` lifecycle alongside Riverpod watch. Purely presentational shared widgets use `StatelessWidget` (`MNTagRow`) or `StatefulWidget` (`MNEditorToolbar`).
 
-**D5.2 — Auto-save with 800ms debounce**
-The editor auto-saves after 800ms of inactivity. It does not save on every keystroke. The "Saved" status badge in the app bar reflects the save state: writing → a neutral dot, saved → green dot + "Saved". This is implemented with a `Timer` in the ViewModel, cancelled and restarted on each document change.
+**D5.2 — Controller initialization guarded by `_controllersInitialized` bool**
+`_initControllers(Note? note)` is called from `build()` via `noteAsync.whenData(_initControllers)`. The guard ensures it runs exactly once. For existing notes: initializes `QuillController` from `Document.fromJson(note.content['ops'] as List)` and sets `_titleController.text`. For new notes: `QuillController` starts with an empty `Document()`. `setState` is NOT called inside `_initControllers` — the synchronous assignment to `_quillController` during the build frame is sufficient.
 
-**D5.3 — Title is an inline editable `TextField` in the app bar**
-The note title is not in the Quill document — it is a separate `TextField` styled to look like an app bar title (Plus Jakarta Sans, 17px, weight 700). It saves with the same debounce as the body.
+**D5.3 — Auto-save: 800 ms debounce on content changes only**
+Content changes are detected via `_quillController!.document.changes.listen(...)` (`StreamSubscription` on document mutations, not selection changes). Title changes via `_titleController.addListener`. Both call `_scheduleAutoSave()`. The `_isDirty` flag drives the save badge: `true` → neutral dot + "Saving…"; `false` → green dot + "Saved". On back, the debounce is flushed synchronously (`await _performAutoSave()`) before `context.pop()`.
 
-**D5.4 — Format toolbar is pinned above the keyboard**
-`MNEditorToolbar` is positioned using Flutter's `Scaffold.bottomSheet` or a `Column` with `Expanded` + `resizeToAvoidBottomInset: true`. It must always appear directly above the keyboard, not float freely. It contains 9 tools: bold, italic, underline, H1, H2, bullet list, numbered list, checklist, blockquote.
+**D5.4 — `MNEditorToolbar extends StatefulWidget`**
+The toolbar owns `controller.addListener` in `initState` (fires on content AND selection changes) so active-state badges update when the cursor moves into formatted text. Toggle logic: active → `Attribute.clone(attr, null)` (removes); inactive → `formatSelection(attr)`. Checklist active = list value `'checked'` OR `'unchecked'`.
 
-**D5.5 — `NoteEditorScreen` accepts optional `noteId`**
-If `noteId` is null, the editor creates a new note. If `noteId` is provided (from `/note/:id`), the editor loads the existing note. New notes are saved to the DB immediately on first keystroke (not on back navigation) so they always have a valid ID.
+**D5.5 — `MNTagRow extends StatelessWidget`**
+All state callbacks (`onRemoveTag`, `onAddTagTap`, `onCategoryTap`, `onMicTap`) passed from the parent screen. Tag names resolved from `allTags` list passed in (no provider watch inside widget).
 
-**D5.6 — Quill Delta content is never stored as a Flutter-specific format**
-The Delta JSON stored in SQLite is the standard Quill Delta format — not a Flutter-specific binary. This ensures the content can be rendered by the FastAPI backend (Phase 11) or any future web front-end without conversion.
+**D5.6 — Recording overlay positioned via `Positioned(left:16, right:16, bottom:8)` in a `Stack`**
+The full body column (app bar + editor + tag row + toolbar) is wrapped in a `Stack`. When `_isRecording == true`, `_RecordingOverlay` is absolutely positioned above the toolbar. The pulsing stop button uses `SingleTickerProviderStateMixin` in private `_PulsingStopButton`.
+
+**D5.7 — Tag addition ensures note is persisted first**
+`_onAddTagTap` checks `_currentNote == null`. If so, it cancels the debounce and calls `await _performAutoSave()` synchronously before showing the dialog. After `addTag()` or `removeTag()` completes, `_syncCurrentNote()` re-reads the ViewModel state to keep `_currentNote` in sync with the updated `tagIds`.
+
+**D5.8 — Category bottom sheet is a Phase 5 stub**
+Tapping the category chip calls `showModalBottomSheet` with placeholder text "Category picker — Phase 8". Full tree picker built in Phase 8.
 
 ---
 
@@ -443,6 +461,8 @@ Never deviate from these values. They are pixel-specified in the design system.
 | BUG-07 | `intl` version conflict — `flutter_quill ^10.8.5` requires `intl ^0.19.0` but Flutter SDK pins `intl 0.20.2` | 2 | ✅ Fixed | Added `dependency_overrides: intl: '>=0.19.0 <0.21.0'` to `pubspec.yaml` |
 | BUG-08 | `custom_lint ^0.6.4` incompatible with `riverpod_generator ^2.4.3` — `flutter pub get` failed | 2 | ✅ Fixed | Bumped `custom_lint` to `^0.7.6` and `riverpod_lint` to `^2.4.0` in `pubspec.yaml` |
 | BUG-09 | D3.5 in DECISIONS.md listed `searchViewModelProvider` as `AsyncNotifier<List<Note>>` — wrong. `Notifier<SearchState>` is needed to co-locate query + async results for debounced search UX. | 3 | ✅ Fixed | Confirmed by developer before Phase 3 implementation. D3.5 corrected in place. `SearchState` holds `query: String` + `results: AsyncValue<List<Note>>`. |
+| BUG-10 | `overridden_fields` + `annotate_overrides` on 4 DAO fields in `AppDatabase` — redeclared `notesDao`, `tagsDao`, `categoriesDao`, `audioRecordsDao` as `late final` fields, shadowing the same concrete `late final` fields already generated in `_$AppDatabase`. Dart cannot override a concrete field with another concrete field; adding `@override` suppressed one lint but not the other. | 3 | ✅ Fixed | Removed all 4 DAO field declarations from `AppDatabase`. They are inherited from `_$AppDatabase` which already initialises them correctly with `this as AppDatabase`. |
+| BUG-11 | 20 `info`-level lint issues post-Phase-3: `unnecessary_import` in 7 files (DAO table imports redundant because `app_database.dart` re-exports all tables and DAOs; DAO imports in local repos redundant for same reason; `flutter_riverpod` in `search_view_model.dart` re-exported by `riverpod_annotation`). Also `use_super_parameters` on `AppDatabase` constructor and `prefer_const_declarations` on `UuidGenerator._uuid`. | 3 | ✅ Fixed | Removed 11 redundant imports across `notes_dao.dart`, `tags_dao.dart`, `audio_records_dao.dart`, `categories_dao.dart`, `local_note_repository.dart`, `local_tag_repository.dart`, `local_category_repository.dart`, `search_view_model.dart`. Applied `super.e` constructor syntax in `AppDatabase`. Changed `static final _uuid = const Uuid()` to `static const _uuid = Uuid()`. `flutter analyze` now reports 0 issues. |
 
 ---
 

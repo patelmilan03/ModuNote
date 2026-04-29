@@ -27,8 +27,8 @@
 | 1 | Project setup & folder structure | ✅ **Complete** | See details below |
 | 2 | Data layer (Drift schema, DAOs, Repositories) | ✅ **Complete** | See details below |
 | 3 | State management (Riverpod providers, base ViewModels) | ✅ **Complete** | See details below |
-| 4 | Note list screen | ⬜ Not started | — |
-| 5 | Note editor screen (Quill) | ⬜ Not started | — |
+| 4 | Note list screen | ✅ **Complete** | See details below |
+| 5 | Note editor screen (Quill) | ✅ **Complete** | See details below |
 | 6 | Voice-to-text + audio recording/playback | ⬜ Not started | — |
 | 7 | Tags (freeform + autocomplete) | ⬜ Not started | — |
 | 8 | Categories (hierarchical folder tree) | ⬜ Not started | — |
@@ -259,6 +259,10 @@ Expected: app boots to NoteListScreen placeholder; Drift opens the SQLite databa
 | Bug | Fix |
 |---|---|
 | D3.5 error: `searchViewModelProvider` listed as `AsyncNotifier<List<Note>>` | Confirmed by developer as wrong. Corrected to `Notifier<SearchState>` before implementation. DECISIONS.md updated at Phase 3 start. |
+| `overridden_fields` on DAO fields in `AppDatabase` — redeclared fields that `_$AppDatabase` already provides as concrete `late final` | Removed all 4 DAO field declarations from `AppDatabase`; inherited directly from the generated base class. |
+| 11 `unnecessary_import` warnings — redundant table imports in DAOs, redundant DAO imports in local repos, redundant `flutter_riverpod` in `search_view_model.dart` | Removed all redundant imports; each file now imports only `app_database.dart` (which re-exports tables and DAOs) or `riverpod_annotation` (which re-exports Riverpod). |
+| `use_super_parameters` on `AppDatabase(QueryExecutor e) : super(e)` | Changed to `AppDatabase(super.e)`. |
+| `prefer_const_declarations` on `UuidGenerator._uuid` | Changed `static final _uuid = const Uuid()` to `static const _uuid = Uuid()`. |
 
 ### First-Run Instructions (Phase 3 state)
 
@@ -269,6 +273,94 @@ flutter run
 ```
 
 Expected: app boots to NoteListScreen placeholder (no UI change from Phase 2). `build_runner` produces 5 new `.g.dart` files in `lib/presentation/viewmodels/`. `flutter analyze` reports 0 errors.
+
+---
+
+---
+
+## Phase 4 — Note List Screen ✅
+
+**Completed**: Phase 4
+**Deliverable**: Full NoteListScreen implementation. `flutter run` shows the live note list with pinned/recent sections, shimmer loading, error retry, floating bottom nav, and amber FAB.
+
+### Files Created
+
+#### `lib/presentation/widgets/`
+- `mn_note_card.dart` — `MNNoteCard extends StatelessWidget`. Props: `Note note`, `VoidCallback onTap`, `List<String> tagNames`. Renders card per UI Reference § 2.3: pinned tint background, pin icon, title (PJS 16.5/700), single-line preview (Inter 13.5/400), up to 3 filled tag chips. Private `_TagChip` widget. Timestamp computed inline from `note.updatedAt`. Body preview extracted from Quill Delta JSON.
+- `mn_search_field.dart` — `MNSearchField extends StatelessWidget`. Props: `VoidCallback? onTap`. Height 48, surfaceContainer bg, borderRadius 16, 0.5px outline border. Non-editable on Home; navigates on tap.
+
+#### `lib/presentation/views/note_list/`
+- `note_list_screen.dart` — **Replaced** placeholder with full implementation. `NoteListScreen extends ConsumerWidget`. Watches `noteListViewModelProvider` + `tagListViewModelProvider`. Uses `Stack` + `Positioned.fill` + two `Positioned` overlays (bottom nav + FAB). Private helper widgets:
+  - `_DataBody` — renders note list with section headers; empty state inline
+  - `_AppBarSection` — day label + "Your notes" + gradient avatar
+  - `_SectionHeader` — "PINNED" / "RECENT" label + hairline divider + optional count badge
+  - `_LoadingBody` — 3 pulsing `_SkeletonBox` widgets as fake cards
+  - `_SkeletonBox` — `StatefulWidget`, `AnimationController.repeat(reverse: true)`, opacity 0.35→0.65
+  - `_ErrorBody` — error icon + "Could not load notes" + Retry `TextButton`
+  - `_EmptyState` — empty icon + "No notes yet" + search field + centred message
+  - `_BottomNav` — floating pill nav at `left: 16, right: 16, bottom: 14`; 4 tabs; Home active
+  - `_NavTab` — `AnimatedContainer` pill; active = `primaryContainer` bg + icon + label
+  - `_Fab` — amber 56×56, `borderRadius: 18`, two-layer amber shadow
+
+### Architectural Decisions
+
+| Decision | Detail |
+|---|---|
+| Tag name resolution | `NoteListScreen` watches both `noteListViewModelProvider` + `tagListViewModelProvider`; builds `Map<String,String>` id→name; passes resolved names to `MNNoteCard.tagNames` |
+| `MNNoteCard` is `StatelessWidget` | Purely presentational — no providers. Tab navigation, swipe actions deferred to later phases |
+| Shimmer without package | `_SkeletonBox` `StatefulWidget` with `AnimationController` — no `shimmer` package required |
+| Bottom nav scope | Phase 4 bottom nav is per-screen (hardcoded Home active). Replaced by `ShellRoute` in Phase 9 |
+| No build_runner | No new `@riverpod` annotations or Drift tables — build_runner does not need to re-run |
+| `flutter analyze` | 0 issues (2 `prefer_const_constructors` warnings fixed during implementation) |
+
+### First-Run Instructions (Phase 4 state)
+
+```bash
+# No new packages — no flutter pub get needed
+# No new @riverpod annotations — no build_runner needed
+flutter analyze   # expected: 0 issues
+flutter run       # app boots to full NoteListScreen
+```
+
+Expected: Home screen renders with "Your notes" heading, gradient avatar, search field, PINNED / RECENT sections (empty state if DB empty), floating amber FAB, floating bottom nav pill.
+
+---
+
+## Phase 5 — Note Editor Screen ✅
+
+**Completed**: Phase 5
+**Deliverable**: Full `NoteEditorScreen` implementation with Quill rich-text editor, 800 ms auto-save, format toolbar, tag row, and recording overlay UI (wired to real audio in Phase 6).
+
+### Files Created
+
+#### `lib/presentation/widgets/`
+- `mn_editor_toolbar.dart` — `MNEditorToolbar extends StatefulWidget`. Props: `required QuillController controller`. Owns `controller.addListener` to update active-state badges on selection/content changes. 9 formatting tools (bold, italic, underline, H1, H2, bullet, numbered list, checklist, blockquote) each rendered as 34×34 `_ToolButton` with `borderRadius: 10`. Active: `primaryContainer` bg, `onPrimaryContainer` icon. Inactive: transparent bg, `onSurfaceVariant` icon. H1/H2 use `Text` labels (no Material icon available). Toggle: active → `Attribute.clone(attr, null)` unsets; inactive → `formatSelection(attr)` applies. Checklist active = list value `'checked'` OR `'unchecked'`. Spec: UI Reference § 3.4.
+- `mn_tag_row.dart` — `MNTagRow extends StatelessWidget`. Props: `tagIds`, `allTags`, `categoryName?`, `onRemoveTag`, `onAddTagTap`, `onCategoryTap`, `onMicTap`, `isRecording`. Category chip (height 30, `br 10`, surfaceContainer bg). Horizontal scrollable row of dismissible sm filled tag chips + `+ tag` sm outlined chip. Mic button (40×40, `br 14`; idle = primaryContainer; recording = recordRed + white square). Spec: UI Reference § 3.4.
+
+#### `lib/presentation/views/note_editor/`
+- `note_editor_screen.dart` — **Replaced** placeholder. `NoteEditorScreen extends ConsumerStatefulWidget`. Key state: `QuillController? _quillController`, `TextEditingController _titleController`, `FocusNode`, `ScrollController`, `StreamSubscription? _contentSubscription`, `Timer? _debounce`, `Timer? _recordTimer`, `bool _isDirty`, `bool _isRecording`, `int _recordSeconds`, `Note? _currentNote`, `bool _controllersInitialized`. Layout: `Scaffold(resizeToAvoidBottomInset: true)` → `SafeArea` → `Stack` (Column + `Positioned` recording overlay). Column: `_EditorAppBar` (back btn + title TextField + `_SaveBadge` + more btn) + `Expanded(QuillEditor)` + `MNTagRow` + `MNEditorToolbar`. Private widgets: `_EditorAppBar`, `_CircleIconButton`, `_SaveBadge`, `_RecordingOverlay`, `_WaveformBars`, `_PulsingStopButton`.
+
+### Architectural Decisions
+
+| Decision | Detail |
+|---|---|
+| `ConsumerStatefulWidget` for editor | Owns `QuillController` lifecycle (`initState`/`dispose`). Only exception to the "always `ConsumerWidget`" rule |
+| Controller init from `whenData` in build | `noteAsync.whenData(_initControllers)` called each build; guarded by `_controllersInitialized`. Sets `_quillController` synchronously; no `setState` needed — current build frame sees updated value |
+| Content-only stream subscription | `_quillController!.document.changes.listen()` for auto-save (not `addListener`) — avoids triggering save on cursor movements |
+| Auto-save on back | `_onBack` cancels debounce, `await _performAutoSave()`, then `context.pop()` |
+| `_syncCurrentNote()` after tag mutations | After `addTag`/`removeTag`, re-reads ViewModel state to keep `_currentNote.tagIds` in sync |
+| No `withOpacity` | All translucent colors use `.withValues(alpha: ...)` to match Flutter 3.27+ deprecation-free style |
+| No new packages, no build_runner | Phase 5 adds no new `@riverpod` providers and no new Drift tables |
+
+### First-Run Instructions (Phase 5 state)
+
+```bash
+# No new packages, no new @riverpod annotations
+flutter analyze   # expected: 0 issues
+flutter run       # tap FAB → Note Editor opens; type → auto-saves after 0.8 s
+```
+
+Expected: Tapping FAB opens Note Editor with empty Quill editor. Title TextField at top. "Saved" badge shows green dot after 0.8 s idle. Format toolbar pins above keyboard. Tag row shows "+ tag" chip and mic button. Tapping mic shows recording overlay with timer. Tapping back returns to Note List.
 
 ---
 

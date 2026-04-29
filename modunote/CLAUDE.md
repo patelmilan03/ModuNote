@@ -74,7 +74,7 @@ lib/
     │   ├── search/search_screen.dart
     │   ├── tags/tags_screen.dart
     │   └── settings/settings_screen.dart
-    ├── widgets/                       # Shared widgets (Phase 4+)
+    ├── widgets/                       # Shared widgets — mn_note_card.dart, mn_search_field.dart, mn_editor_toolbar.dart, mn_tag_row.dart (Phase 4+)
     └── router/
         ├── app_router.dart            # GoRouter config, routerProvider, ThemeModeNotifier
         └── app_router.g.dart          # Generated — run `dart run build_runner build`
@@ -172,8 +172,8 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | 1 | Project setup & folder structure | ✅ Complete |
 | 2 | Data layer (Drift schema, DAOs, Repositories) | ✅ Complete |
 | 3 | State management (Riverpod providers, base ViewModels) | ✅ Complete |
-| 4 | Note list screen | ⬜ Not started |
-| 5 | Note editor screen (Quill) | ⬜ Not started |
+| 4 | Note list screen | ✅ Complete |
+| 5 | Note editor screen (Quill) | ✅ Complete |
 | 6 | Voice-to-text + audio recording/playback | ⬜ Not started |
 | 7 | Tags (freeform + autocomplete) | ⬜ Not started |
 | 8 | Categories (hierarchical folder tree) | ⬜ Not started |
@@ -186,7 +186,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 
 ## Key Conventions
 
-- **All screen widgets** extend `ConsumerWidget`, never `StatelessWidget`/`StatefulWidget` directly (Riverpod can be watched everywhere).
+- **All screen widgets** extend `ConsumerWidget` or `ConsumerStatefulWidget` — never `StatelessWidget`/`StatefulWidget` directly (Riverpod can be watched everywhere). Use `ConsumerStatefulWidget` when the screen needs `initState`/`dispose` lifecycle (e.g. `NoteEditorScreen` owns `QuillController`).
 - **Providers** use `@riverpod` annotation + code-gen. No manual `Provider(...)` declarations.
 - **Models** are immutable plain Dart classes with `Equatable`. `copyWith` on every model.
 - **Repository interfaces** live in `data/repositories/interfaces/`. ViewModels import the interface, not the implementation.
@@ -224,5 +224,5 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 3. Read `THREAD_HANDOFF.md` — get the most recent session summary and next-phase scope.
 4. Read `MODUNOTE_UI_REFERENCE.md` — before touching any UI file.
 5. Run `flutter pub get` then `dart run build_runner build --delete-conflicting-outputs`.
-5. Run `flutter run` — should boot to NoteListScreen placeholder.
+5. Run `flutter run` — should boot to NoteListScreen (Phase 4 — full note list UI).
 6. Ask the developer which phase to proceed with before writing any code.

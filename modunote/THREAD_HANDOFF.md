@@ -3,13 +3,12 @@
 
 ---
 
-## Status: Phase 3 ✅ Complete. Proceed with Phase 4.
+## Status: Phase 5 ✅ Complete. Proceed with Phase 6.
 
-Phase 3 is fully complete. All 5 Riverpod ViewModels are in place and wired to the
-Phase 2 repository layer. `dart run build_runner build --delete-conflicting-outputs`
-must be run by the developer to generate the `.g.dart` files, then `flutter analyze`
-should report 0 errors. The app still boots to the NoteListScreen placeholder — no UI
-changes were made in Phase 3.
+Phase 5 is fully complete. `NoteEditorScreen` has been replaced with the full Quill editor
+implementation. Two new shared widgets (`MNEditorToolbar`, `MNTagRow`) are in place.
+`flutter analyze` reports **0 issues**. No new packages were added. No build_runner run is
+required. The developer should commit Phase 5 via GitHub Desktop before starting Phase 6.
 
 ---
 
@@ -32,7 +31,6 @@ watches `routerProvider` + `themeModeNotifierProvider`
 - `errors/app_exception.dart` — sealed `AppException` + 5 subtypes
 - `extensions/string_extensions.dart` — `isBlank`, `normalised`, `truncate`, etc.
 - `utils/uuid_generator.dart` — `UuidGenerator.generate()` wrapper
-- `utils/string_extensions.dart` — re-export shim for `extensions/string_extensions.dart`
 
 **Data models** (`lib/data/models/`):
 - `note.dart` — `Note` + `SyncStatus` enum
@@ -104,8 +102,8 @@ Usage: `ref.watch(noteEditorViewModelProvider())` for new note,
 ```dart
 @riverpod
 class TagListViewModel extends _$TagListViewModel {
-  Stream<List<Tag>> build()          // streams tagRepositoryProvider.watchAll()
-  Future<Tag> insert(String name)    // returns created Tag (Phase 7 UI needs it)
+  Stream<List<Tag>> build()
+  Future<Tag> insert(String name)
   Future<void> delete(String id)
 }
 ```
@@ -114,7 +112,7 @@ class TagListViewModel extends _$TagListViewModel {
 ```dart
 @riverpod
 class CategoryTreeViewModel extends _$CategoryTreeViewModel {
-  Stream<List<Category>> build()     // flat list; Phase 8 UI builds tree from parentId
+  Stream<List<Category>> build()
   Future<Category> insert({required String name, String? parentId, int sortOrder = 0})
   Future<void> move(String id, String? newParentId)
   Future<void> delete(String id)
@@ -131,71 +129,137 @@ class SearchState {
 
 @riverpod
 class SearchViewModel extends _$SearchViewModel {
-  Timer? _debounce;                  // cancelled via ref.onDispose
-  SearchState build()                // initial: query='', results=AsyncData([])
-  void setQuery(String query)        // debounced 300 ms; empty query clears immediately
-  // _performSearch(query) — private
+  Timer? _debounce;
+  SearchState build()
+  void setQuery(String query)   // debounced 300 ms; empty → AsyncData([]) immediately
 }
 ```
 
-### Key design decisions (Phase 3)
+---
 
-| Decision | Detail |
-|---|---|
-| Stream VMs: `build() → Stream<T>` | Riverpod generates `StreamNotifier` — each emission auto-wrapped as `AsyncData<T>`. No `.listen()` in ViewModels. |
-| `NoteEditorViewModel` uses Future | No `watchById` on `INoteRepository`; state is managed manually after each mutation. |
-| `_isNew` for insert/update | Set in `build()`, cleared after first `insert`. No extra DB round-trip. |
-| `setCategory(null)` bypasses `copyWith` | `Note.copyWith(categoryId: null)` keeps old value (Dart limitation). Constructor used directly. |
-| `SearchState` Notifier pattern | Original D3.5 listed `AsyncNotifier<List<Note>>` — confirmed wrong by developer. `Notifier<SearchState>` correct. |
-| Error handling | All mutations catch `AppException`, set `state = AsyncError(e, st)`. Non-AppException errors are not caught (DAO layer boundary). |
+## What was built (Phase 4)
+
+Full Note List Screen.
+
+### New files
+
+#### `lib/presentation/widgets/`
+- `mn_note_card.dart` — `MNNoteCard extends StatelessWidget`
+  - Props: `Note note`, `VoidCallback onTap`, `List<String> tagNames = const []`
+  - Renders: pinned tint background, pin icon (if isPinned), title (PJS 16.5/w700), 1-line preview (Inter 13.5/w400), up to 3 filled `#tag` chips
+  - Private `_TagChip` widget (height 24, pill, chipBg/chipText colours)
+  - `_timestamp()` → relative string ("Just now" / "Xm ago" / "Xh ago" / "Yesterday" / "Xd ago" / "MMM d" / "MMM d, yyyy")
+  - `_preview()` → extracts plain text from Quill Delta `ops` list
+
+- `mn_search_field.dart` — `MNSearchField extends StatelessWidget`
+  - Props: `VoidCallback? onTap`
+  - Height 48, borderRadius 16, surfaceContainer bg, 0.5px outline border
+  - Placeholder: "Search notes, tags…" (Inter 14.5/w400/onSurfaceMuted)
+
+#### `lib/presentation/views/note_list/note_list_screen.dart` (replaced)
+Full `NoteListScreen extends ConsumerWidget`. Private widgets in same file:
+
+| Widget | Type | Purpose |
+|---|---|---|
+| `_DataBody` | StatelessWidget | Renders app bar + search + pinned section + recent section; empty state inline |
+| `_AppBarSection` | StatelessWidget | Day label (UPPERCASE) + "Your notes" (PJS 26/w800) + gradient avatar |
+| `_SectionHeader` | StatelessWidget | Section label + hairline divider + optional count badge |
+| `_LoadingBody` | StatelessWidget | 3 pulsing `_SkeletonBox` widgets |
+| `_SkeletonBox` | StatefulWidget | AnimationController repeating pulse (opacity 0.35→0.65, 800 ms) |
+| `_ErrorBody` | StatelessWidget | Error icon + message + Retry TextButton |
+| `_EmptyState` | StatelessWidget | App bar + search + centred icon + "No notes yet" message |
+| `_BottomNav` | StatelessWidget | Floating pill, `left: 16, right: 16, bottom: 14`, height 64 |
+| `_NavTab` | StatelessWidget | AnimatedContainer pill; active = primaryContainer + label |
+| `_Fab` | StatelessWidget | Amber 56×56, borderRadius 18, two-layer amber shadow |
+
+**Key behaviours**:
+- `NoteListScreen` watches `noteListViewModelProvider` + `tagListViewModelProvider`
+- Builds `Map<String,String>` (tagId→tagName); passes resolved names to `MNNoteCard.tagNames`
+- `Stack` → `Positioned.fill` (content) + `Positioned` (bottom nav) + `Positioned` (FAB)
+- All inside `SafeArea` — positioned nav is 14px above safe-area bottom edge
 
 ---
 
-## Architecture decisions locked in Phase 3
+## What was built (Phase 5)
 
-| Decision | Value |
-|---|---|
-| ViewModel stream pattern | `build() → Stream<T>` for list VMs |
-| NoteEditorViewModel family param | Optional `noteId`; `_isNew` flag |
-| SearchState pattern | `Notifier<SearchState>`; 300 ms debounce |
-| `setCategory(null)` | Direct constructor; no `copyWith` |
+Full Note Editor Screen.
+
+### New / modified files
+
+#### `lib/presentation/widgets/`
+- `mn_editor_toolbar.dart` — `MNEditorToolbar extends StatefulWidget`. Props: `required QuillController controller`. Owns `controller.addListener` → `setState` so active badges update on selection changes. 9 tools: bold, italic, underline, H1 (Text label), H2 (Text label), bullet, numbered list, checklist, blockquote. Each tool: 34×34, `br 10`, active bg = `primaryContainer`, active icon = `onPrimaryContainer`, inactive = transparent + `onSurfaceVariant`. Toggle: active → `Attribute.clone(attr, null)`; inactive → `formatSelection(attr)`. Checklist active = list value `'checked'` or `'unchecked'`.
+- `mn_tag_row.dart` — `MNTagRow extends StatelessWidget`. Props: `tagIds`, `allTags`, `categoryName?`, `onRemoveTag`, `onAddTagTap`, `onCategoryTap`, `onMicTap`, `isRecording`. Category chip (h30, br10), horizontal-scroll row of dismissible sm filled tag chips + `+ tag` sm outlined chip, mic button (40×40 br14; idle = primaryContainer; recording = recordRed + stop square + glow).
+
+#### `lib/presentation/views/note_editor/note_editor_screen.dart` (replaced)
+`NoteEditorScreen extends ConsumerStatefulWidget`. Key state variables:
+
+| Variable | Type | Purpose |
+|---|---|---|
+| `_quillController` | `QuillController?` | Null until note data loads |
+| `_titleController` | `TextEditingController` | Title field |
+| `_editorFocusNode` | `FocusNode` | Quill editor focus |
+| `_editorScrollController` | `ScrollController` | Quill scroll |
+| `_contentSubscription` | `StreamSubscription?` | Content-change → auto-save |
+| `_debounce` | `Timer?` | 800 ms auto-save |
+| `_recordTimer` | `Timer?` | 1 s tick for recording |
+| `_isDirty` | `bool` | Unsaved changes pending |
+| `_isRecording` | `bool` | Recording overlay visible |
+| `_recordSeconds` | `int` | Recording timer counter |
+| `_currentNote` | `Note?` | Last saved/loaded note |
+| `_controllersInitialized` | `bool` | One-shot init guard |
+
+**Private widgets in same file**: `_EditorAppBar`, `_CircleIconButton`, `_SaveBadge`, `_RecordingOverlay`, `_WaveformBars`, `_PulsingStopButton`.
+
+**Key behaviours**:
+- `noteAsync.whenData(_initControllers)` in `build()` — one-shot controller init
+- `document.changes.listen()` (not `addListener`) — fires on content changes only
+- `_performAutoSave()` builds Note from local state, calls `NoteEditorViewModel.save(note)`
+- `_onBack()` flushes debounce, `await _performAutoSave()`, then `context.pop()`
+- `_syncCurrentNote()` called after `addTag`/`removeTag` to keep `_currentNote.tagIds` in sync
+- Category chip → stub `showModalBottomSheet` ("Category picker — Phase 8")
 
 ---
 
-## All architecture decisions (Phases 1–3)
+## Architecture decisions locked (Phases 1–5)
 
 | Decision | Value | Phase |
 |---|---|---|
-| State management | Riverpod 2 + code-gen (`@riverpod` annotations) | 1 |
+| State management | Riverpod 2 + code-gen | 1 |
 | Local DB | Drift v2 | 1 |
 | Navigation | GoRouter v14 | 1 |
 | Rich text editor | flutter_quill v10 (Quill Delta JSON) | 1 |
-| Audio | flutter_sound v9 — AAC 32kbps mono 16kHz (~0.24 MB/min) | 1 |
+| Audio | flutter_sound v9 — AAC 32kbps mono 16kHz | 1 |
 | Voice-to-text | speech_to_text v7 (on-device) | 1 |
-| Fonts | Plus Jakarta Sans (headings) + Inter (body) via google_fonts | 1 |
-| Model equality | Equatable (not freezed) — simpler, less codegen | 1 |
-| Tag storage | Lowercase normalised via `StringExtensions.normalised` | 1 |
-| UUID | `UuidGenerator.generate()` wrapper — never call `Uuid().v4()` directly | 1 |
-| Category hierarchy | Adjacency list, max depth 5 | 1 |
-| SyncStatus | Included in Note from day one — Firebase prep for Phase 10 | 1 |
-| ThemeMode | Defaults to `ThemeMode.system`, toggled via `ThemeModeNotifier` | 1 |
-| Firebase strategy | Repository interface swap — Phase 10 | 1 |
-| Backend stack | FastAPI + PostgreSQL + SQLAlchemy async — Phase 11 | 1 |
-| AI features | Deferred to Phase 12 | 1 |
+| Fonts | Plus Jakarta Sans + Inter (google_fonts) | 1 |
+| Model equality | Equatable (not freezed) | 1 |
+| Tag storage | Lowercase via `StringExtensions.normalised` | 1 |
+| UUID | `UuidGenerator.generate()` | 1 |
 | FTS5 full-text search | Virtual table + 3 SQLite triggers | 2 |
 | Tag denormalisation | `tagIds` JSON column on `NotesTable` | 2 |
-| Companion naming | TABLE class name + `Companion` (Drift codegen convention) | 2 |
+| Companion naming | TABLE class name + `Companion` | 2 |
 | Type converters | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` | 2 |
-| Data providers lifecycle | All 4 data-layer providers use `keepAlive: true` | 2 |
+| Data providers lifecycle | `keepAlive: true` on all 4 data providers | 2 |
 | ViewModel stream pattern | `build() → Stream<T>` for list VMs | 3 |
-| NoteEditorViewModel family param | Optional `noteId`; `_isNew` flag for insert/update | 3 |
-| SearchState pattern | `Notifier<SearchState>`; 300 ms debounce | 3 |
+| `NoteEditorViewModel` family param | Optional `noteId`; `_isNew` flag | 3 |
+| `SearchState` pattern | `Notifier<SearchState>`; 300 ms debounce | 3 |
+| `MNNoteCard` widget type | `StatelessWidget` — purely presentational | 4 |
+| Tag name resolution | Dual-provider watch in screen; Map passed to card | 4 |
+| Phase 4 bottom nav | Per-screen (hardcoded active=Home); Phase 9 → `ShellRoute` | 4 |
+| Shimmer skeleton | Custom `_SkeletonBox` StatefulWidget (no package) | 4 |
+| `NoteEditorScreen` widget type | `ConsumerStatefulWidget` — owns `QuillController` lifecycle | 5 |
+| Controller init strategy | `_initControllers` guarded by bool; called via `noteAsync.whenData()` in build | 5 |
+| Auto-save source | `document.changes` stream (not `addListener`) — content-only, no cursor noise | 5 |
+| `MNEditorToolbar` | `StatefulWidget` owning `addListener` for selection-aware active state | 5 |
+| `MNTagRow` | `StatelessWidget` — all callbacks passed from parent screen | 5 |
+| Recording overlay | `Positioned(bottom:8)` in Stack; pulsing via `_PulsingStopButton` StatefulWidget | 5 |
+| Category picker Phase 5 | Stub `showModalBottomSheet` — full tree in Phase 8 | 5 |
+| Color opacity API | `.withValues(alpha:)` — not deprecated `.withOpacity()` | 5 |
 
 ---
 
 ## Key conventions (enforce in all phases)
 
-- All screen widgets extend `ConsumerWidget` — never `StatelessWidget` directly
+- All **screen** widgets extend `ConsumerWidget` or `ConsumerStatefulWidget`. Use `ConsumerStatefulWidget` only when the screen needs `initState`/`dispose` (e.g. `NoteEditorScreen` owns `QuillController`). Shared presentational widgets use `StatelessWidget` or `StatefulWidget` as appropriate.
 - All providers use `@riverpod` annotation — no manual `Provider(...)` declarations
 - ViewModels import repository **interfaces** only, never Drift DAOs directly
 - All errors wrapped in `AppException` subtypes before surfacing to ViewModels
@@ -203,13 +267,13 @@ class SearchViewModel extends _$SearchViewModel {
 - UUIDs always via `UuidGenerator.generate()`
 - Generated files (`*.g.dart`) are gitignored — never edit manually
 - Run `dart run build_runner build --delete-conflicting-outputs` after any `@riverpod` or Drift table change
-- Drift companions are named after the TABLE class: `NotesTableCompanion` not `NoteRowCompanion`
+- Drift companions: `NotesTableCompanion`, `TagsTableCompanion`, etc.
 - `DatabaseException` signature: `DatabaseException(String message, {Object? cause})`
-- **Claude may create/edit files locally** — but must never run `git commit`, `git push`, `git pull`, or any git command touching GitHub. All commits made exclusively by the developer using GitHub Desktop.
+- **Claude may create/edit files locally** — never run git commands. All commits via GitHub Desktop.
 
 ---
 
-## Pending decisions (to be resolved in later phases)
+## Pending decisions
 
 | Decision | Phase |
 |---|---|
@@ -218,44 +282,47 @@ class SearchViewModel extends _$SearchViewModel {
 
 ---
 
-## First-run instructions
+## First-run instructions (Phase 5 state)
 
 ```bash
-dart run build_runner build --delete-conflicting-outputs
-flutter analyze   # expected: 0 errors
-flutter run       # app boots to NoteListScreen placeholder
+# No new packages added in Phase 5 — flutter pub get not needed
+# No new @riverpod annotations — build_runner not needed
+flutter analyze   # expected: 0 issues
+flutter run       # boots to NoteListScreen; tap FAB to open NoteEditorScreen
 ```
 
-Expected: Material 3 scaffold, "ModuNote" app bar, "📝 Note List / Phase 4 — coming soon"
-centred on screen, amber FAB bottom-right. 5 new `.g.dart` files generated in
-`lib/presentation/viewmodels/`.
+Expected: Home screen unchanged. Tap amber FAB → Note Editor opens with empty Quill editor,
+title TextField, "Saved" badge, format toolbar, tag row, mic button. Type text → badge shows
+"Saving…" → 0.8 s later shows green dot "Saved". Tap back → returns to Note List. Tap an
+existing note card → editor opens with pre-loaded title + content.
 
 ---
 
-## Phase 4 — What to build next
+## Phase 6 — What to build next
 
-**Title**: Note List Screen
+**Title**: Voice-to-Text + Audio Recording/Playback
 
-**Scope** (from DECISIONS.md D4.1–D4.6):
-1. Replace `NoteListScreen` placeholder with a full implementation using `noteListViewModelProvider`
-2. Render `AsyncValue.when(data, loading, error)` — loading = shimmer skeleton, error = retry button
-3. Two-section list: "Pinned" then "Recent", each sorted by `updatedAt` DESC
-4. `MNNoteCard` widget in `lib/presentation/widgets/mn_note_card.dart` — receives `Note`, `onTap`; never reads providers directly
-5. Archived notes never shown (`INoteRepository.watchAll()` already filters them)
-6. Amber FAB → `context.push(AppRoutes.newNote)`
-7. `MNSearchField` tap → `context.push(AppRoutes.search)` (navigation affordance, not inline search)
-8. Update `CLAUDE.md`, `progress.md`, `THREAD_HANDOFF.md`
+**Scope** (from DECISIONS.md D6.1–D6.6):
 
-**Before starting Phase 4**, Claude should present a detailed summary of every widget,
-state path, and method signature for developer approval — per project protocol.
+1. Wire the mic button in `MNTagRow` to real audio recording via `AudioRecordingService`
+2. Connect waveform bars in `_RecordingOverlay` to real amplitude stream
+3. After recording stops, run `SpeechToTextService` and insert transcript at Quill cursor
+4. Implement `AudioRecord` persistence via `AudioRecordsDao` + `LocalAudioRecordRepository`
+5. Add microphone permission handling via `PermissionException`
+6. `flutter analyze` = 0 issues after implementation
+7. Update all four doc files
 
-**UI spec**: Read `MODUNOTE_UI_REFERENCE.md` before touching any widget.
+**Key files already in place**: `lib/services/audio/audio_recording_service.dart` (stub),
+`lib/services/speech/speech_to_text_service.dart` (stub). Wire these up to the UI.
+
+**Before starting Phase 6**, Claude must present a detailed plan for developer approval.
 
 ---
 
 ## Files to attach to new thread
 
 - `CLAUDE.md` — AI context (architecture, conventions, phase status)
+- `DECISIONS.md` — all architectural decisions (Phases 1–4 complete)
 - `progress.md` — phase log + decisions log
 - `MODUNOTE_UI_REFERENCE.md` — design spec (required before any UI work)
 - `THREAD_HANDOFF.md` — this file
