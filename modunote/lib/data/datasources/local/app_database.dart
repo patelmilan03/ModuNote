@@ -1,6 +1,8 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import 'converters/type_converters.dart';
+export 'converters/type_converters.dart';
 import 'tables/notes_table.dart';
 import 'tables/tags_table.dart';
 import 'tables/note_tags_table.dart';
@@ -69,19 +71,6 @@ class AppDatabase extends _$AppDatabase {
           // Add versioned migration steps here in Phase 10.
         },
       );
-
-  // ── DAOs ───────────────────────────────────────────────────────────────────
-  // Declared here so AppDatabase can be injected into services and repositories
-  // without the caller needing to reference Drift internals.
-
-  @override
-  late final NotesDao notesDao = NotesDao(this);
-  @override
-  late final TagsDao tagsDao = TagsDao(this);
-  @override
-  late final CategoriesDao categoriesDao = CategoriesDao(this);
-  @override
-  late final AudioRecordsDao audioRecordsDao = AudioRecordsDao(this);
 
   // ── Private helpers ────────────────────────────────────────────────────────
 
