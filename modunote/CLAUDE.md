@@ -9,7 +9,7 @@
 ## Project Overview
 
 **App name**: ModuNote
-**Purpose**: Quick-capture ideation tool for a solo YouTube/Instagram content creator.
+**Purpose**: Quick-capture ideation app for content creators and people who prefer speaking over typing for journalling.
 **Platform**: Android (Flutter). iOS deferred.
 **Developer profile**: Junior Flutter developer. Background in Python / FastAPI / PostgreSQL. Has prior Flutter MVVM experience (VocalNote app).
 
