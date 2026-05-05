@@ -32,5 +32,5 @@ final class ValidationException extends AppException {
 
 /// Thrown by audio/speech services when the platform denies a permission.
 final class PermissionException extends AppException {
-  const PermissionException(super.message);
+  const PermissionException(super.message, {super.cause});
 }

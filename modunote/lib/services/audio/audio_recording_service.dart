@@ -72,10 +72,6 @@ class AudioRecordingService {
           _amplitudeCtrl.add(normalized);
         }
       });
-    } on RecorderStopedException catch (e) {
-      throw PermissionException(
-          'Microphone permission denied — cannot start recording',
-          cause: e);
     } on Exception catch (e) {
       // flutter_sound throws a generic Exception with a message containing
       // "Permission" when the OS denies the microphone.
@@ -139,7 +135,7 @@ class AudioRecordingService {
 
   void _assertInitialized() {
     if (!_initialized) {
-      throw FileStorageException(
+      throw const FileStorageException(
           'AudioRecordingService.init() must be called before use');
     }
   }

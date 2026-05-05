@@ -77,9 +77,11 @@ class SpeechToTextService {
   Future<void> _listen() async {
     await _stt.listen(
       onResult: _handleResult,
-      listenMode: ListenMode.dictation,
       pauseFor: const Duration(seconds: 8),
-      cancelOnError: false,
+      listenOptions: SpeechListenOptions(
+        listenMode: ListenMode.dictation,
+        cancelOnError: false,
+      ),
     );
   }
 

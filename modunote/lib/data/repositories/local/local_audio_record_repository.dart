@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart';
 
 import '../../datasources/local/app_database.dart';
-import '../../datasources/local/daos/audio_records_dao.dart';
 import '../../models/audio_record.dart';
 import '../../repositories/interfaces/i_audio_record_repository.dart';
 import '../../../core/errors/app_exception.dart';

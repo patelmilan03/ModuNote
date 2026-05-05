@@ -401,12 +401,283 @@ Section 7:  7.1, 7.2, 7.3, 7.5, 7.6, 7.7, 7.14, 7.20, 7.21, 7.22, 7.24, 7.26, 7.
 Section 8:  8.1, 8.2, 8.3, 8.4
 Section 10: 10.1, 10.2, 10.3, 10.4, 10.8
 Section 14: 14.1
+Section 15: 15.1, 15.2, 15.3, 15.11, 15.12, 15.17, 15.18, 15.26, 15.39, 15.40, 15.41
 ```
 
-**Total: ~35 checks ≈ 15 minutes on device.**
+**Total: ~46 checks ≈ 20 minutes on device.**
 
 ---
 
-## Full Regression Checklist (~1 hr)
+## Full Regression Checklist (~1.5 hr)
 
-Run all numbered checks in all 14 sections before tagging a release or starting a new phase.
+Run all numbered checks in all 15 sections before tagging a release or starting a new phase.
+
+---
+
+## 15 — Voice Recording & STT Deep Verification
+
+> This section answers three questions:
+> 1. **Where are the saved audio files?**
+> 2. **Where is the transcribed text stored?**
+> 3. **How do I confirm a recording succeeded at every level?**
+>
+> All ADB commands require a **debug build** (`flutter run`, not a release APK).
+> The package name for this app is `com.modunote.app`.
+
+---
+
+### 15A — Where Audio Files Are Saved
+
+ModuNote saves every recording as a `.aac` file under the app's private documents directory.
+
+**On-device path:**
+```
+/data/user/0/com.modunote.app/app_flutter/audio_notes/
+```
+
+Each file is named with a UUID v4, e.g.:
+```
+/data/user/0/com.modunote.app/app_flutter/audio_notes/3f2a8b1c-9d4e-4f3a-8e2b-1c9d4e3f2a8b.aac
+```
+
+This path is constructed by `AudioFileStorage.generateFilePath()`:
+- Root: `getApplicationDocumentsDirectory()` → resolves to `…/app_flutter/` on Android
+- Sub-directory: `AppConstants.audioSubDir` = `"audio_notes"`
+- Filename: `UuidGenerator.generate() + ".aac"`
+
+**Expected file characteristics:**
+| Property | Value |
+|---|---|
+| Format | AAC (ADTS container) |
+| Bitrate | 32 kbps |
+| Channels | Mono (1) |
+| Sample rate | 16 kHz |
+| Approximate size | ~0.24 MB per minute (~4 KB per second) |
+
+---
+
+### 15B — Where Transcribed Text Is Stored
+
+Transcribed text is stored in **two places simultaneously** when a recording is stopped:
+
+**1. SQLite database (persistent)**
+- File: `/data/user/0/com.modunote.app/databases/modunote.db`
+- Table: `audio_records`
+- Column: `transcribed_text` (nullable TEXT)
+- Also in the same row: `id`, `note_id`, `file_path`, `duration_ms`, `file_size_bytes`, `codec`, `created_at`
+
+**2. Quill editor body (immediate UI)**
+- Inserted at the cursor position when recording stops
+- Inserted as `\n{transcript}\n` (newline-padded block)
+- This is what the user sees immediately in the note body
+
+If the user spoke nothing (or STT returned no text), `transcribed_text` is `NULL` in the DB and nothing is inserted into the editor.
+
+---
+
+### 15C — In-App Verification (No Tools Required)
+
+These checks require only the running app on a device.
+
+| # | Check | Expected |
+|---|---|---|
+| 15.1 🔴 | Record a voice note; speak clearly for 3–5 seconds then stop | Audio clip chip appears above the tag row in the editor |
+| 15.2 🔴 | Chip shows a duration formatted as `M:SS` (e.g. `0:05`) | Duration is non-zero and matches approximate speaking time |
+| 15.3 🔴 | Tap the play ▶ icon on the chip | Audio plays back through device speaker; icon changes to pause ⏸ |
+| 15.4 🔴 | Tap pause ⏸ while audio is playing | Audio stops immediately |
+| 15.5 🔴 | Tap ✕ dismiss button on chip | Chip disappears from the row |
+| 15.6 | Speak a sentence; after stopping, check the note body | Spoken text (or close approximation) appears inserted at the cursor |
+| 15.7 | Close and reopen the note | Audio chip is still present (DB persistence via `watchByNote` stream) |
+| 15.8 | Record a second voice note in the same note | Two chips appear side by side in a horizontally scrollable row |
+| 15.9 | Save the note (back button) then reopen | Both chips still present |
+| 15.10 | Tap ✕ on one chip; close and reopen the note | Only the remaining chip is present (deletion is permanent) |
+
+---
+
+### 15D — ADB File System Verification
+
+Confirms the `.aac` file was physically written to disk.
+
+**Prerequisites:** USB debugging enabled, device connected, `adb` on PATH.
+
+**Step 1 — List audio files:**
+```bash
+adb shell run-as com.modunote.app ls -lh app_flutter/audio_notes/
+```
+
+Expected output (one line per recording):
+```
+-rw------- 1 u0_a123 u0_a123   18K 2026-05-05 14:32 3f2a8b1c-9d4e-4f3a-8e2b-1c9d4e3f2a8b.aac
+```
+
+| Check | Expected |
+|---|---|
+| 15.11 🔴 | Directory `audio_notes/` exists | No `ls: cannot access` error |
+| 15.12 🔴 | At least one `.aac` file present after recording | UUID-named file visible |
+| 15.13 | File size is non-zero and proportional to duration | A 5-second clip ≈ 20–22 KB |
+| 15.14 | After tapping ✕ dismiss, re-run the `ls` command | The deleted file is gone from the directory |
+
+**Step 2 — Pull a file to your PC and play it:**
+```bash
+# Copy one file to current directory on PC
+adb shell run-as com.modunote.app cat app_flutter/audio_notes/{uuid}.aac > test_recording.aac
+
+# Play it (Windows — requires VLC or Windows Media Player to handle .aac)
+# Or rename to .m4a — most media players accept that extension
+```
+
+| Check | Expected |
+|---|---|
+| 15.15 | Pulled file plays in VLC / Windows Media Player | Voice is audible and clear |
+| 15.16 | Audio is mono (single channel), approx 16 kHz sample rate | Shown in VLC → Tools → Media Information → Codec |
+
+**Step 3 — Check total audio directory size:**
+```bash
+adb shell run-as com.modunote.app du -sh app_flutter/audio_notes/
+```
+Expected: size grows after each recording, shrinks after deletions.
+
+---
+
+### 15E — ADB Database Verification
+
+Confirms the `audio_records` row was written with correct metadata and transcription.
+
+**Method A — sqlite3 on-device (requires sqlite3 binary):**
+```bash
+# Copy DB to a writable location, then query
+adb shell run-as com.modunote.app cp databases/modunote.db /sdcard/modunote_debug.db
+adb shell sqlite3 /sdcard/modunote_debug.db "SELECT id, note_id, substr(file_path,45), duration_ms, file_size_bytes, transcribed_text FROM audio_records;"
+```
+
+**Method B — Pull DB to PC then open in DB Browser for SQLite (recommended):**
+```bash
+# Pull the database file to current directory on PC
+adb shell run-as com.modunote.app cat databases/modunote.db > modunote_debug.db
+```
+
+Then open `modunote_debug.db` in [DB Browser for SQLite](https://sqlitebrowser.org/):
+1. File → Open Database → select `modunote_debug.db`
+2. Browse Data tab → Table: `audio_records`
+
+**What to verify in the `audio_records` table:**
+
+| # | Column | Expected Value |
+|---|---|---|
+| 15.17 🔴 | `id` | A valid UUID v4 string (e.g. `3f2a8b1c-9d4e-4f3a-8e2b-...`) |
+| 15.18 🔴 | `note_id` | Matches the `id` of the parent note in the `notes` table |
+| 15.19 🔴 | `file_path` | Full absolute path ending in `.aac` under `audio_notes/` |
+| 15.20 🔴 | `duration_ms` | Positive integer; approximately `seconds_spoken × 1000` |
+| 15.21 🔴 | `file_size_bytes` | Positive integer; matches the on-disk file size from `ls -lh` |
+| 15.22 | `codec` | `"aac"` (default value from Drift schema) |
+| 15.23 | `transcribed_text` | The spoken text (or NULL if nothing was transcribed) |
+| 15.24 | `created_at` | Unix timestamp in milliseconds for when recording stopped |
+| 15.25 | After ✕ dismiss: re-pull DB and check | Row is no longer present in `audio_records` table |
+
+**Verify file_path ↔ disk sync:**
+```sql
+-- Run in DB Browser (Execute SQL tab)
+SELECT file_path FROM audio_records WHERE note_id = '{your-note-id}';
+```
+The returned path should match a file you can see with `adb shell run-as com.modunote.app ls app_flutter/audio_notes/`.
+
+---
+
+### 15F — STT Transcription Verification
+
+Confirms that live speech-to-text output was captured, accumulated, and stored correctly.
+
+**In-app transcript check:**
+
+| # | Check | Expected |
+|---|---|---|
+| 15.26 🔴 | While recording overlay is open, speak a sentence | Live transcript preview appears below the timer text in the overlay |
+| 15.27 | Transcript updates continuously as you speak | Text grows with each recognized phrase (partial + final results merged) |
+| 15.28 | Stop recording; check editor body | Transcript text inserted at cursor position, preceded and followed by a newline |
+| 15.29 | Transcript in editor matches what was shown in the overlay | Text is identical (accumulated from finalResults) |
+
+**Pause / timeout recovery check (Android-specific):**
+
+| # | Check | Expected |
+|---|---|---|
+| 15.30 | Start recording; speak a sentence; then stay silent for 8+ seconds; then speak again | STT resumes after the 8 s silence pause and continues transcribing (timeout recovery active) |
+| 15.31 | After a silence-recovery, the transcript is continuous | Previously spoken text is preserved; new speech appended (not replaced) |
+
+> **How this works**: `SpeechToTextService._onStatus('notListening')` detects the Android STT engine stopping silently. After a 200 ms delay, `_listen()` is restarted if `_active` is still true. The `_accumulated` string retains all text spoken before the timeout, so new speech appends correctly.
+
+**DB transcription check:**
+
+After recording and stopping, pull the DB (see Section 15E Method B) and verify:
+```sql
+SELECT transcribed_text FROM audio_records ORDER BY created_at DESC LIMIT 1;
+```
+
+| # | Check | Expected |
+|---|---|---|
+| 15.32 | `transcribed_text` is not NULL after speaking | Column contains recognized text |
+| 15.33 | Content matches editor body insertion | Same string, minus leading/trailing newlines |
+| 15.34 | Record with silence only (no speech); check DB | `transcribed_text` is NULL; nothing inserted into editor |
+
+---
+
+### 15G — Logcat Verification (Advanced)
+
+Filter Android system logs to see real-time output from the recording and STT services.
+
+**Flutter app logs (most useful):**
+```bash
+adb logcat -s flutter
+```
+
+Look for these log patterns during recording:
+```
+I/flutter: [AudioRecordingService] Recording started: /data/user/0/…/audio_notes/{uuid}.aac
+I/flutter: [AudioRecordingService] Recording stopped. Duration: 5234ms
+I/flutter: [SpeechToTextService] STT initialized successfully
+I/flutter: [SpeechToTextService] Status: notListening — restarting (timeout recovery)
+I/flutter: [SpeechToTextService] Result: "your spoken words here" (final: true)
+```
+
+**flutter_sound system logs:**
+```bash
+adb logcat -s "flutter_sound"
+```
+
+**speech_to_text system logs:**
+```bash
+adb logcat | grep -i "speech\|stt\|SpeechRecognition"
+```
+
+| # | Check | Expected |
+|---|---|---|
+| 15.35 | Recording start logged | Path of `.aac` file logged when mic button tapped |
+| 15.36 | Recording stop logged | Duration in ms logged |
+| 15.37 | `finalResult` events appear | `Result: "text" (final: true)` lines appear as you speak |
+| 15.38 | Timeout recovery logged | `Status: notListening — restarting` appears after >7 s silence |
+
+---
+
+### 15H — Permission Edge Cases
+
+| # | Check | Expected |
+|---|---|---|
+| 15.39 🔴 | Fresh install, tap mic icon → OS permission dialog | Android system permission dialog: "Allow ModuNote to record audio?" |
+| 15.40 🔴 | Tap "Allow" → recording starts immediately | Overlay appears; timer runs; waveform animates |
+| 15.41 🔴 | Fresh install, tap mic icon → tap "Deny" | SnackBar: "Microphone permission denied". No crash. No overlay. |
+| 15.42 | After deny: tap mic again | Same SnackBar re-appears (no OS dialog on second tap — OS blocks repeated requests) |
+| 15.43 | Revoke permission in device Settings → return to app → tap mic | SnackBar: "Microphone permission denied". App handles gracefully. |
+
+---
+
+### 15I — Quick Reference Summary
+
+| Question | Answer |
+|---|---|
+| **Where are audio files?** | `adb shell run-as com.modunote.app ls app_flutter/audio_notes/` |
+| **Where is transcribed text (DB)?** | `audio_records.transcribed_text` column in `modunote.db` |
+| **Where is transcribed text (UI)?** | Inserted at Quill cursor in note body on recording stop |
+| **How to pull the database?** | `adb shell run-as com.modunote.app cat databases/modunote.db > debug.db` |
+| **How to pull an audio file?** | `adb shell run-as com.modunote.app cat app_flutter/audio_notes/{uuid}.aac > clip.aac` |
+| **How to query the DB on PC?** | DB Browser for SQLite → open `debug.db` → Browse Data → `audio_records` |
+| **Why does STT stop mid-recording?** | Android OS timeout (~7 s silence). App auto-recovers via `_onStatus` handler. |
+| **Expected file size per minute?** | ~240 KB/min (32 kbps × 60 s ÷ 8 bits per byte) |
