@@ -147,8 +147,8 @@ Drift generates data classes (`NoteRow`, `TagRow`, etc.) and Companion classes i
 **D2.7 — `appDatabaseProvider` is `keepAlive: true` and calls `ref.onDispose`**
 The database must not be recreated on every widget rebuild. `keepAlive: true` on `appDatabaseProvider` ensures it lives for the app's lifetime. `ref.onDispose(db.close)` ensures the SQLite connection is flushed and closed cleanly on hot restart or app termination.
 
-**D2.8 — All three repository providers are `keepAlive: true`**
-`noteRepositoryProvider`, `tagRepositoryProvider`, and `categoryRepositoryProvider` are all `keepAlive: true`. Repositories are stateless wrappers — they are cheap to construct but there is no reason to reconstruct them. Keeping them alive avoids re-subscription of any active streams.
+**D2.8 — All repository providers are `keepAlive: true`**
+`noteRepositoryProvider`, `tagRepositoryProvider`, `categoryRepositoryProvider`, and (added Phase 6) `audioRecordRepositoryProvider` are all `keepAlive: true`. Repositories are stateless wrappers — they are cheap to construct but there is no reason to reconstruct them. Keeping them alive avoids re-subscription of any active streams. Total `keepAlive` providers in `database_providers.dart`: 5 (including `appDatabaseProvider`).
 
 **D2.9 — `QuillDeltaConverter` serialises content as JSON string**
 `Note.content` (a `Map<String, dynamic>` Delta document) is stored in SQLite as a JSON string via `QuillDeltaConverter`. On read, it is deserialised back to `Map<String, dynamic>`. This is straightforward and Firebase-compatible (Firestore can store maps natively). The converter lives in `lib/data/datasources/local/converters/type_converters.dart`.
@@ -261,9 +261,9 @@ Tapping the category chip calls `showModalBottomSheet` with placeholder text "Ca
 
 ---
 
-## Phase 6 — Voice-to-Text + Audio ⬜ Not Started
+## Phase 6 — Voice-to-Text + Audio ✅ Complete
 
-### Pre-Decided Architecture
+### Implementation Decisions
 
 **D6.1 — Audio format: AAC, 32kbps, mono, 16kHz**
 This is fixed. It gives ~0.24 MB/min, adequate quality for voice, and broad playback compatibility. Never change codec, bitrate, channel count, or sample rate without updating `AppConstants` and the audio spec documentation.
@@ -272,16 +272,27 @@ This is fixed. It gives ~0.24 MB/min, adequate quality for voice, and broad play
 The subdirectory name is `AppConstants.audioSubDir = 'audio_notes'`. Files are named `{uuid}.aac`. The `AudioFileStorage` class in `lib/data/datasources/file/audio_file_storage.dart` handles all file I/O. DAOs never touch the file system — they only store the `filePath` string.
 
 **D6.3 — `AudioRecordingService` streams amplitude for waveform**
-`flutter_sound`'s recorder exposes a `Stream<RecordingDisposition>` with decibel level. `AudioRecordingService` maps this to a normalised `Stream<double>` (0.0–1.0) that the UI uses to render the waveform bar heights. Never compute waveform in the UI layer.
+`flutter_sound`'s recorder exposes a `Stream<RecordingDisposition>` with decibel level. `AudioRecordingService` maps this to a normalised `Stream<double>` (0.0–1.0) via `((db + 60) / 60).clamp(0.0, 1.0)` that the UI uses to render the waveform bar heights. Never compute waveform in the UI layer.
 
-**D6.4 — Speech-to-text runs after recording stops, not in real-time**
-`SpeechToTextService` is called with the recorded file path after recording ends. It transcribes the audio and the result is saved to `AudioRecord.transcribedText` and also inserted into the Quill document at the cursor position. Real-time streaming STT is not implemented in this phase.
+**D6.4 — ~~Speech-to-text runs after recording stops~~ → REVISED: STT runs simultaneously with flutter_sound recording**
+*Original plan*: `SpeechToTextService` would transcribe the recorded audio file after recording ends.
+*Why it changed*: `speech_to_text` v7 only performs live microphone recognition — it cannot transcribe an audio file. File-based transcription is not supported by the package.
+*Final decision (confirmed by developer)*: `flutter_sound` recording and `speech_to_text` listening run simultaneously on the same microphone input. The live transcript accumulates in `SpeechToTextService._accumulated` as the user speaks. On stop, the accumulated text is inserted at the Quill cursor. The audio file is saved to `AudioRecord` regardless of STT result.
 
-**D6.5 — Microphone permission handled by `PermissionException`**
-Before recording, the app checks microphone permission. If denied, it throws `PermissionException` which the ViewModel catches and surfaces as an error state. Never silently fail on permission denial.
+**D6.5 — Microphone permission handled without `permission_handler` package**
+Before recording, `SpeechToTextService.initialize()` is called which triggers the Android `RECORD_AUDIO` permission dialog via the `speech_to_text` package's native handling. Once granted, `flutter_sound` can also use the mic. If `initialize()` returns `false`, a SnackBar is shown ("Microphone permission denied") and recording is aborted. No `PermissionException` is thrown from the ViewModel — permission denial is handled directly in the screen's `_onMicTap`. `PermissionException` is still in `AppException` for future use.
 
 **D6.6 — `AudioRecord` is linked to a note via `noteId`**
-One note can have multiple `AudioRecord` entries (the user can record multiple clips). They are displayed in the tag row area of the editor. Deleting a note cascades to delete all its `AudioRecord` rows and the corresponding files on disk — handled by `AudioRecordsDao.deleteAllForNote` + `AudioFileStorage.deleteFile`.
+One note can have multiple `AudioRecord` entries (the user can record multiple clips). They are displayed in the editor as a horizontal scroll row of compact clip chips above `MNTagRow`. Deleting a note cascades to delete all its `AudioRecord` rows and the corresponding files on disk — handled by `AudioRecordsDao.deleteAllForNote` + `AudioFileStorage.deleteFile`.
+
+**D6.7 — Android STT timeout recovery via `_onStatus` restart**
+Android's on-device STT engine stops listening automatically after approximately 7 seconds of silence and fires a `'notListening'` status callback. Without recovery, long recordings would silently stop transcribing. Fix: `SpeechToTextService._onStatus` detects the `'notListening'` status and — if `_active` is still `true` — schedules a 200 ms delayed call to `_listen()` to restart recognition. The 200 ms gap prevents an immediate re-trigger loop. This pattern is transparent to the caller; `accumulatedText` continues to grow across restarts.
+
+**D6.8 — `AudioRecordingService` and `SpeechToTextService` are plain Dart classes, not `@riverpod` providers**
+Both services are owned by `_NoteEditorScreenState` as instance fields. Their lifecycle is tied to the screen: created lazily on first mic tap (guarded by `_audioInitialized`), disposed in `State.dispose()`. They are NOT registered as Riverpod providers because they hold active platform channels and subscriptions that must be tied to a single screen instance, not shared app-wide. The `AudioEditorViewModel` and `audioRecordRepositoryProvider` ARE `@riverpod` because they hold only DB-level state.
+
+**D6.9 — File deletion is the screen's responsibility, not the ViewModel's**
+`AudioEditorViewModel.deleteRecord(id)` only removes the DB row. The screen's `_AudioClipsRowState._delete` method is responsible for calling both `ref.read(audioEditorViewModelProvider(...).notifier).deleteRecord(id)` AND `_audioStorage.deleteFile(filePath)`. This separation keeps the ViewModel free of file-system concerns (ViewModels must not import `dart:io`) and keeps the DAO's responsibility scope narrow.
 
 ---
 
@@ -463,6 +474,9 @@ Never deviate from these values. They are pixel-specified in the design system.
 | BUG-09 | D3.5 in DECISIONS.md listed `searchViewModelProvider` as `AsyncNotifier<List<Note>>` — wrong. `Notifier<SearchState>` is needed to co-locate query + async results for debounced search UX. | 3 | ✅ Fixed | Confirmed by developer before Phase 3 implementation. D3.5 corrected in place. `SearchState` holds `query: String` + `results: AsyncValue<List<Note>>`. |
 | BUG-10 | `overridden_fields` + `annotate_overrides` on 4 DAO fields in `AppDatabase` — redeclared `notesDao`, `tagsDao`, `categoriesDao`, `audioRecordsDao` as `late final` fields, shadowing the same concrete `late final` fields already generated in `_$AppDatabase`. Dart cannot override a concrete field with another concrete field; adding `@override` suppressed one lint but not the other. | 3 | ✅ Fixed | Removed all 4 DAO field declarations from `AppDatabase`. They are inherited from `_$AppDatabase` which already initialises them correctly with `this as AppDatabase`. |
 | BUG-11 | 20 `info`-level lint issues post-Phase-3: `unnecessary_import` in 7 files (DAO table imports redundant because `app_database.dart` re-exports all tables and DAOs; DAO imports in local repos redundant for same reason; `flutter_riverpod` in `search_view_model.dart` re-exported by `riverpod_annotation`). Also `use_super_parameters` on `AppDatabase` constructor and `prefer_const_declarations` on `UuidGenerator._uuid`. | 3 | ✅ Fixed | Removed 11 redundant imports across `notes_dao.dart`, `tags_dao.dart`, `audio_records_dao.dart`, `categories_dao.dart`, `local_note_repository.dart`, `local_tag_repository.dart`, `local_category_repository.dart`, `search_view_model.dart`. Applied `super.e` constructor syntax in `AppDatabase`. Changed `static final _uuid = const Uuid()` to `static const _uuid = Uuid()`. `flutter analyze` now reports 0 issues. |
+| BUG-12 | 2 `prefer_const_constructors` lint warnings during Phase 4 NoteListScreen implementation. | 4 | ✅ Fixed | Applied `const` to the affected widget constructors during implementation. `flutter analyze` 0 issues. |
+| BUG-13 | `speech_to_text` v7 cannot transcribe audio files — original D6.4 architecture assumed file-based transcription ("STT runs after recording stops using the recorded file path"). This is not a code bug but a capability misunderstanding: `speech_to_text` v7 only performs live microphone recognition; it has no file transcription API. Running `recognize(audioFilePath)` is not supported. Discovered during Phase 6 planning. | 6 | ✅ Resolved | Architecture revised to simultaneous live STT + flutter_sound recording (confirmed by developer). D6.4 updated in DECISIONS.md. **Pitfall for future phases**: never assume `speech_to_text` can transcribe an audio file. If file-based transcription is ever needed, a separate backend endpoint (Whisper or Google STT API) is required. |
+| BUG-14 | Android STT engine silently stops recognising after ~7 seconds of silence and fires a `'notListening'` status event. Without recovery, long recordings would truncate the transcript mid-sentence. Not documented in the `speech_to_text` package README. | 6 | ✅ Fixed | Added `_onStatus` callback to `SpeechToTextService` that detects `'notListening'` while `_active == true` and restarts `_stt.listen()` after a 200 ms delay. This transparent restart is documented as D6.7. |
 
 ---
 

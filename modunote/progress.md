@@ -29,7 +29,7 @@
 | 3 | State management (Riverpod providers, base ViewModels) | ✅ **Complete** | See details below |
 | 4 | Note list screen | ✅ **Complete** | See details below |
 | 5 | Note editor screen (Quill) | ✅ **Complete** | See details below |
-| 6 | Voice-to-text + audio recording/playback | ⬜ Not started | — |
+| 6 | Voice-to-text + audio recording/playback | ✅ **Complete** | See details below |
 | 7 | Tags (freeform + autocomplete) | ⬜ Not started | — |
 | 8 | Categories (hierarchical folder tree) | ⬜ Not started | — |
 | 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ⬜ Not started | — |
@@ -364,6 +364,73 @@ Expected: Tapping FAB opens Note Editor with empty Quill editor. Title TextField
 
 ---
 
+## Phase 6 — Voice-to-Text + Audio Recording/Playback ✅
+
+**Completed**: Phase 6
+**Deliverable**: Real audio recording via `flutter_sound` + live speech-to-text via `speech_to_text`, wired to the mic button. Audio clip chips with playback. Transcript inserted at Quill cursor on stop.
+
+### Files Created
+
+#### `lib/data/datasources/file/`
+- `audio_file_storage.dart` — `AudioFileStorage`. `ensureAudioDir()` creates `audio_notes/` under `getApplicationDocumentsDirectory()`. `generateFilePath()` returns `{audioDir}/{uuid}.aac`. `getFileSize(filePath)` returns bytes. `deleteFile(filePath)` removes file. All IO exceptions wrapped in `FileStorageException`.
+
+#### `lib/data/repositories/interfaces/`
+- `i_audio_record_repository.dart` — `IAudioRecordRepository` interface: `watchByNote`, `findByNote`, `findById`, `insert`, `updateTranscription`, `delete`, `deleteAllForNote`.
+
+#### `lib/data/repositories/local/`
+- `local_audio_record_repository.dart` — Implements `IAudioRecordRepository` via `AudioRecordsDao`. Maps `AudioRecordRow` ↔ `AudioRecord`. Wraps Drift exceptions as `DatabaseException(msg, cause: e)`.
+
+#### `lib/services/audio/`
+- `audio_recording_service.dart` — Replaces stub. `FlutterSoundRecorder` + `FlutterSoundPlayer`. `init()` opens both (idempotent, guarded by `_initialized`). `startRecording(filePath)` uses `Codec.aacADTS`, `bitRate: 32000`, `numChannels: 1`, `sampleRate: 16000`; maps `onProgress.decibels` → `amplitudeStream` (0.0–1.0 normalized). `stopRecording()` returns `durationMs` via `Stopwatch`. `startPlayback(filePath, {onDone})` / `stopPlayback()`. `dispose()` closes both safely.
+
+#### `lib/services/speech/`
+- `speech_to_text_service.dart` — Replaces stub. `SpeechToText` wrapper. `initialize()` requests mic permission. `startListening({onResult})` uses `ListenMode.dictation`, `pauseFor: 8s`. Appends `finalResult` words to `_accumulated`; passes `_accumulated + inFlight` for partial. `_onStatus` handler restarts listener on `'notListening'` while `_active` (Android STT timeout recovery). `stopListening()`, `resetText()`, `dispose()`.
+
+#### `lib/presentation/viewmodels/`
+- `audio_editor_view_model.dart` — `AudioEditorViewModel extends _$AudioEditorViewModel`. Family `{required String noteId}`. `build()` → `Stream<List<AudioRecord>>` from `audioRecordRepositoryProvider.watchByNote`. `saveRecording(filePath, durationMs, fileSizeBytes, transcript?)` → constructs + inserts `AudioRecord`. `deleteRecord(id)` → deletes DB row (caller deletes file).
+
+### Files Modified
+
+#### `lib/data/datasources/local/database_providers.dart`
+- Added `audioRecordRepositoryProvider` (`@Riverpod(keepAlive: true)`) → `LocalAudioRecordRepository(db.audioRecordsDao)`. Added imports for new interface + repo.
+
+#### `lib/presentation/views/note_editor/note_editor_screen.dart`
+- **`_onMicTap()`**: replaced stub. Flushes auto-save if needed, lazy-inits `AudioRecordingService` + `SpeechToTextService`, checks STT permission (SnackBar + early return if denied), generates file path, starts recording + listening simultaneously, subscribes to amplitude stream for waveform, starts record timer.
+- **`_stopRecording()`**: replaced stub. Cancels timer + amplitude subscription, stops both services, saves `AudioRecord` via `audioEditorViewModelProvider`, inserts transcript at Quill cursor via `_insertTranscriptAtCursor`.
+- **`_insertTranscriptAtCursor(text)`**: new method. Inserts `'\n$text\n'` at `selection.baseOffset`.
+- **`_WaveformBars`**: now accepts `double amplitude`. `AnimatedContainer(duration: 80ms)` per bar with height `= 4.0 + amplitude * 20.0 * coefficient[i]`.
+- **`_RecordingOverlay`**: gains `amplitude` + `liveTranscript` props. Transcript preview added below timer row (hidden when empty).
+- **`_AudioClipsRow`** (new `ConsumerStatefulWidget`): watches `audioEditorViewModelProvider`. Horizontal scroll of `_AudioClipChip` widgets. Manages `_playingId` for play/pause. Chips: h28, pill, surfaceContainer bg, play/pause icon + duration text + delete ×.
+- **Column order in `_buildEditor`**: AppBar → QuillEditor → `_AudioClipsRow` → `MNTagRow` → `MNEditorToolbar`.
+- New state fields: `_audioService`, `_sttService`, `_audioStorage`, `_audioInitialized`, `_amplitudeSubscription`, `_currentRecordingPath`, `_currentAmplitude`, `_liveTranscript`.
+
+#### `android/app/src/main/AndroidManifest.xml`
+- Added `<uses-permission android:name="android.permission.RECORD_AUDIO"/>`.
+
+### Architectural Decisions
+
+| Decision | Detail |
+|---|---|
+| STT approach | Simultaneous: `flutter_sound` records AAC while `speech_to_text` listens live. Confirmed by developer. Works on most modern Android devices. |
+| D6.4 revised | Original D6.4 assumed file-based STT (impossible with `speech_to_text` v7). Revised to live STT running simultaneously with flutter_sound recording. |
+| STT timeout recovery | `_onStatus('notListening')` handler with 200 ms delay restarts `_stt.listen()` if still `_active`. Prevents transcript truncation on long recordings. |
+| Services lifecycle | `AudioRecordingService` + `SpeechToTextService` are plain Dart classes owned by `_NoteEditorScreenState`. Not `@riverpod` providers — lifecycle is tied to the screen. |
+| `_AudioClipsRow` widget type | `ConsumerStatefulWidget` — needs both `ref.watch(audioEditorViewModelProvider)` and local `_playingId` playback state. |
+| File deletion responsibility | `audioEditorViewModelProvider.deleteRecord` removes the DB row only. The screen (via `_audioStorage.deleteFile`) removes the file. Separation of concerns. |
+
+### First-Run Instructions (Phase 6 state)
+
+```bash
+dart run build_runner build --delete-conflicting-outputs
+# New generated: audio_editor_view_model.g.dart; updated: database_providers.g.dart
+flutter analyze   # expected: 0 issues
+flutter run
+```
+
+Expected: Tap FAB → Note Editor. Tap mic button → OS dialog (first launch) → grant → recording overlay with live timer + animated waveform bars. Speak → transcript text appears. Tap pulsing stop → overlay gone, words inserted into editor, audio chip appears above tag row. Tap play chip → audio plays back.
+
+---
+
 ## Decisions Log (cross-phase)
 
 | Decision | Value | Phase set |
@@ -383,7 +450,7 @@ Expected: Tapping FAB opens Note Editor with empty Quill editor. Title TextField
 | Tag denormalisation | `tagIds` JSON column on NotesTable for O(1) ViewModel access | 2 |
 | Companion naming | TABLE class name + Companion (e.g. `NotesTableCompanion`) | 2 |
 | Type converters | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` | 2 |
-| Data providers lifecycle | All 4 data-layer providers use `keepAlive: true` | 2 |
+| Data providers lifecycle | All 5 data-layer providers use `keepAlive: true` (Phase 6 added `audioRecordRepositoryProvider`) | 2 / 6 |
 | ViewModel stream pattern | `build() → Stream<T>` for list VMs; Riverpod auto-wraps as `AsyncValue<T>` | 3 |
 | `NoteEditorViewModel` family param | Optional `noteId` build param; `_isNew` flag tracks first insert | 3 |
 | `SearchState` pattern | `Notifier<SearchState>` with query + `AsyncValue<List<Note>>` results; 300 ms debounce | 3 |
@@ -398,6 +465,35 @@ Expected: Tapping FAB opens Note Editor with empty Quill editor. Title TextField
 |---|---|
 | Category deletion policy when children exist (cascade vs re-parent) | 8 |
 | AI provider evaluation (Gemini free tier vs Groq) | 12 |
+
+---
+
+## Documentation Produced (Post-Phase-6 Session)
+
+The following documentation files were created or significantly updated after Phase 6 was completed. They are not code changes but are part of the project's permanent record.
+
+### Files Updated
+
+| File | What changed |
+|---|---|
+| `CLAUDE.md` | Phase 6 status marked ✅; `audio_file_storage.dart`, `audio_recording_service.dart`, `speech_to_text_service.dart` added to quick reference; `database_providers.dart` description updated to 5 `keepAlive` providers; `TESTING.md` added to quick reference; on-boarding checklist expanded to 10 steps including `flutter analyze` gate and TESTING.md smoke test |
+| `THREAD_HANDOFF.md` | Status header updated to "Phase 6 ✅ Complete. Proceed with Phase 7."; full "What was built (Phase 6)" section added; architecture decisions table updated with all Phase 6 entries; Phase 7 scope documented; first-run instructions updated; `TESTING.md` added to files-to-attach list |
+| `DECISIONS.md` | Phase 6 status changed from ⬜ to ✅; D6.4 revised from "file-based STT" to "simultaneous live STT + flutter_sound" with full rationale; D6.5 updated to reflect permission handling without `permission_handler` package; D6.7 added (Android STT timeout recovery pattern); D6.8 added (services lifecycle as plain Dart classes); D6.9 added (file deletion separation of concerns); D2.8 updated to reflect 5 keepAlive providers |
+| `README.md` | Replaced default Flutter stub with full project description, tech stack table, architecture overview, phase status table, getting-started commands, and key documentation references |
+| `progress.md` | Phase 6 section added (this file); data providers lifecycle corrected from 4 to 5 |
+
+### Files Created
+
+| File | Purpose |
+|---|---|
+| `TESTING.md` | Full manual testing guide. 14 sections, ~130 numbered checks covering all Phases 1–6 features. Includes: app bootstrap, note list screen, note creation + auto-save, editor + toolbar (all 9 buttons), pinning/sections, search, voice recording (permission flow, waveform, STT, timeout recovery, stop + insert, clip chips), data persistence, themes (exact color token checks), navigation/routing, stub screens, edge cases, performance, and `flutter analyze` gate. Quick smoke test: ~35 🔴 CRITICAL checks in ~15 min. Full regression: ~130 checks in ~1 hr. |
+
+### Testing Philosophy (recorded for future phases)
+
+- **Phases 1–9** (active feature development): Manual smoke test only. The UI changes too fast between phases to justify automating it.
+- **After Phase 9** (navigation stable): Add **unit tests** for ViewModels and repository layer (`flutter_test`). These are pure Dart, fast, and don't break on UI refactors.
+- **After Phase 12** (feature-complete): Add **integration tests** for critical flows (`integration_test` package). Add **GitHub Actions** CI to run `flutter analyze` + `flutter test` on every push.
+- The `TESTING.md` smoke test list maps directly to future integration test cases — each numbered check is a candidate `testWidgets(...)` scenario.
 
 ---
 

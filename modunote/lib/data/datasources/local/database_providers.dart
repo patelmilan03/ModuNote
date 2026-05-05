@@ -1,9 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../repositories/interfaces/i_audio_record_repository.dart';
 import '../../repositories/interfaces/i_category_repository.dart';
 import '../../repositories/interfaces/i_note_repository.dart';
 import '../../repositories/interfaces/i_tag_repository.dart';
+import '../../repositories/local/local_audio_record_repository.dart';
 import '../../repositories/local/local_category_repository.dart';
 import '../../repositories/local/local_note_repository.dart';
 import '../../repositories/local/local_tag_repository.dart';
@@ -34,4 +36,10 @@ ITagRepository tagRepository(Ref ref) {
 ICategoryRepository categoryRepository(Ref ref) {
   final db = ref.watch(appDatabaseProvider);
   return LocalCategoryRepository(db.categoriesDao);
+}
+
+@Riverpod(keepAlive: true)
+IAudioRecordRepository audioRecordRepository(Ref ref) {
+  final db = ref.watch(appDatabaseProvider);
+  return LocalAudioRecordRepository(db.audioRecordsDao);
 }

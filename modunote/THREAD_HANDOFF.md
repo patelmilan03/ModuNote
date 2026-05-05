@@ -1,299 +1,412 @@
-# ModuNote — Thread Handoff
-
-> Read this file, CLAUDE.md, progress.md, and DECISIONS.md before writing a single line of code.
-> This file is the authoritative summary of the current session and the scope for the next one.
+# ModuNote — Thread Handoff Summary
+> Paste this into a new Claude conversation to continue development.
 
 ---
 
-## Current status
+## Status: Phase 6 ✅ Complete. Proceed with Phase 7.
 
-**Phases 1–5 complete and committed. Search screen implemented. All changes pushed to GitHub.**
-
-`flutter analyze` = **0 issues**.
-Next phase: **Phase 6 — Voice-to-text + audio recording/playback**.
-
----
-
-## What this app is
-
-**ModuNote** — a quick-capture ideation app for content creators and people who prefer speaking over typing for journalling. Android-only. Local-first (full offline). No accounts.
-
-Core loop: open app → tap FAB → write or speak → note auto-saves. Everything else (tags, categories, search, voice) is organised around that core loop.
-
-**Developer profile**: Junior Flutter developer. Background in Python / FastAPI / PostgreSQL. Has prior Flutter MVVM experience (VocalNote app).
+Phase 6 is fully complete. The mic button in `NoteEditorScreen` now triggers real audio
+recording (`flutter_sound`) and live speech-to-text (`speech_to_text`) simultaneously.
+Waveform bars animate from live amplitude. Live transcript appears in the recording overlay.
+On stop, the transcript is inserted at the Quill cursor and an `AudioRecord` is saved to
+Drift. Audio clip chips appear above the tag row with play/pause/delete.
+`flutter analyze` must report **0 issues** after running build_runner.
+The developer must run `dart run build_runner build --delete-conflicting-outputs` before
+committing Phase 6 via GitHub Desktop.
 
 ---
 
-## Repository
+## What was built (Phase 1)
 
-- **GitHub**: patelmilan03/ModuNote
-- **Branch**: main
-- **Package**: `modunote` (`com.modunote.app`)
-- **Platform**: Android (iOS not configured)
-- **Flutter**: ≥ 3.22.0 · Dart: ≥ 3.3.0
+A runnable Flutter skeleton — 38 files, zero business logic.
 
----
+**Root config**: `pubspec.yaml` (13 runtime + 6 dev deps), `analysis_options.yaml`
+(flutter_lints + riverpod_lint), `build.yaml` (Riverpod + Drift codegen), `.gitignore`
 
-## Architecture (non-negotiable)
+**Entry**: `lib/main.dart` → `WidgetsFlutterBinding` + `ProviderScope` + `runApp`
+`lib/app.dart` → `ModuNoteApp extends ConsumerWidget`, `MaterialApp.router`,
+watches `routerProvider` + `themeModeNotifierProvider`
 
-```
-View → ViewModel → Repository Interface → DAO (Drift) → SQLite
-```
+**Core layer** (`lib/core/`):
+- `theme/app_colors.dart` — all 34 design tokens (17 light, 17 dark + 3 shared)
+- `theme/app_typography.dart` — Plus Jakarta Sans + Inter via GoogleFonts
+- `theme/app_theme.dart` — `AppTheme.light()` / `AppTheme.dark()` with M3 ColorScheme.fromSeed
+- `constants/app_constants.dart` — string keys, limits, audio spec constants
+- `errors/app_exception.dart` — sealed `AppException` + 5 subtypes
+- `extensions/string_extensions.dart` — `isBlank`, `normalised`, `truncate`, etc.
+- `utils/uuid_generator.dart` — `UuidGenerator.generate()` wrapper
 
-- **Views** — `ConsumerWidget` or `ConsumerStatefulWidget`. Never `StatelessWidget`/`StatefulWidget` directly. Use `ConsumerStatefulWidget` only when `initState`/`dispose` lifecycle is needed (e.g. `NoteEditorScreen` owns `QuillController`).
-- **ViewModels** — `@riverpod`-annotated `AsyncNotifier` or `Notifier`. Import repository interfaces only. Never touch DAOs or `AppDatabase`.
-- **Repository interfaces** — live in `data/repositories/interfaces/`. ViewModels import these; never the implementation.
-- **DAOs** — Drift-generated. Only the local repository implementations call them.
-- **Errors** — all raw Drift/IO/platform exceptions are caught at the DAO/repository layer and re-thrown as `AppException` subtypes before reaching ViewModels.
+**Data models** (`lib/data/models/`):
+- `note.dart` — `Note` + `SyncStatus` enum
+- `tag.dart` — `Tag` (lowercase name)
+- `category.dart` — `Category` (adjacency list, parentId nullable)
+- `audio_record.dart` — `AudioRecord` (AAC, transcribedText nullable)
 
----
+**Repository interfaces** (`lib/data/repositories/interfaces/`):
+- `i_note_repository.dart` — watchAll, watchByTag, watchByCategory, findById, search, insert, update, archive, delete, togglePin
+- `i_tag_repository.dart` — watchAll, searchByPrefix, findByName, findById, findByNote, insert(String name), addTagToNote, removeTagFromNote, setTagsForNote, delete
+- `i_category_repository.dart` — watchAll, findChildren(String parentId), findRoots, findById, insert, update, delete, move, updateSortOrder
 
-## Phase-by-phase summary
-
-### Phase 1 — Project setup ✅
-
-Runnable Flutter skeleton with zero business logic.
-
-- `pubspec.yaml` — 13 runtime deps, 6 dev deps (all versions locked — see below)
-- `lib/main.dart` — `WidgetsFlutterBinding.ensureInitialized()` + `ProviderScope` + `runApp`
-- `lib/app.dart` — `ModuNoteApp extends ConsumerWidget`, `MaterialApp.router`
-- `lib/core/theme/` — `AppColors` (34 tokens), `AppTypography` (PJS + Inter), `AppTheme.light()` / `.dark()`
-- `lib/core/constants/app_constants.dart` — magic numbers, audio spec, string keys
-- `lib/core/errors/app_exception.dart` — sealed `AppException` + 5 subtypes (Database, FileStorage, NotFound, Validation, Permission)
-- `lib/core/extensions/string_extensions.dart` — `isBlank`, `normalised`, `truncate`, `capitalised`
-- `lib/core/utils/uuid_generator.dart` — `UuidGenerator.generate()`
-- `lib/data/models/` — `Note` + `SyncStatus` enum, `Tag`, `Category`, `AudioRecord`
-- `lib/data/repositories/interfaces/` — `INoteRepository`, `ITagRepository`, `ICategoryRepository`
+**Router + screens**:
 - `lib/presentation/router/app_router.dart` — GoRouter (6 routes), `routerProvider`, `ThemeModeNotifier`
-- All 5 view screens as placeholder stubs
+- 5 placeholder screens (NoteListScreen, NoteEditorScreen, SearchScreen, TagsScreen, SettingsScreen)
 
-### Phase 2 — Data layer ✅
+---
 
-Full Drift SQLite schema, DAOs, TypeConverters, local repository implementations.
+## What was built (Phase 2)
 
-- `lib/data/datasources/local/app_database.dart` — `@DriftDatabase` with 5 tables, 4 DAOs, FTS5 virtual table (`notes_fts`), 3 SQLite triggers (INSERT/UPDATE/BEFORE DELETE), `MigrationStrategy`
-- `lib/data/datasources/local/database_providers.dart` — `appDatabaseProvider`, `noteRepositoryProvider`, `tagRepositoryProvider`, `categoryRepositoryProvider` (all `keepAlive: true`)
+The complete Drift data layer. See `progress.md § Phase 2` for full file list.
+
+Key summary:
+- `app_database.dart` — `@DriftDatabase` with 5 tables, 4 DAOs, FTS5 + 3 triggers
+- `database_providers.dart` — `appDatabaseProvider`, `noteRepositoryProvider`, `tagRepositoryProvider`, `categoryRepositoryProvider` (all `keepAlive: true`)
 - Tables: `NotesTable`, `TagsTable`, `NoteTagsTable`, `CategoriesTable`, `AudioRecordsTable`
 - DAOs: `NotesDao`, `TagsDao`, `CategoriesDao`, `AudioRecordsDao`
-- Local repos: `LocalNoteRepository`, `LocalTagRepository`, `LocalCategoryRepository`
-- TypeConverters: `QuillDeltaConverter` (Delta JSON ↔ TEXT), `DateTimeConverter` (DateTime ↔ epoch ms), `StringListConverter` (List\<String\> ↔ JSON array)
+- Repos: `LocalNoteRepository`, `LocalTagRepository`, `LocalCategoryRepository`
+- Type converters: `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter`
 
-**Critical naming rules learned in this phase:**
-- Drift companions are named after the TABLE class, not the data class: `NotesTableCompanion` (NOT `NoteRowCompanion`)
-- `DatabaseException` signature: `DatabaseException(String message, {Object? cause})` — no `originalError`, no `stackTrace` param
+---
 
-### Phase 3 — State management ✅
+## What was built (Phase 3)
 
-All 5 Riverpod ViewModels. No UI changes.
+All 5 Riverpod ViewModels in `lib/presentation/viewmodels/`.
 
+### ViewModel signatures
+
+#### `note_list_view_model.dart`
 ```dart
-// NoteListViewModel — build() → Stream<List<Note>>
-// Methods: archive(id), delete(id), togglePin(id)
-
-// NoteEditorViewModel — family provider
-// build({String? noteId}) → Future<Note?>
-// _isNew flag: true when noteId == null, cleared after first insert
-// Methods: save(note), addTag(tagId), removeTag(tagId), setCategory(categoryId?)
-
-// TagListViewModel — build() → Stream<List<Tag>>
-// Methods: insert(String name) → Tag, delete(id)
-
-// CategoryTreeViewModel — build() → Stream<List<Category>>
-// Methods: insert(name, parentId?, sortOrder), move(id, newParentId?), delete(id)
-
-// SearchViewModel — Notifier<SearchState>
-// SearchState { query: String, results: AsyncValue<List<Note>> }
-// setQuery(String) — 300 ms debounce; empty query → AsyncData([]) immediately
+@riverpod
+class NoteListViewModel extends _$NoteListViewModel {
+  Stream<List<Note>> build()         // streams noteRepositoryProvider.watchAll()
+  Future<void> archive(String id)
+  Future<void> delete(String id)
+  Future<void> togglePin(String id)
+}
 ```
 
-Provider usage pattern:
+#### `note_editor_view_model.dart`
 ```dart
-ref.watch(noteEditorViewModelProvider())              // new note
-ref.watch(noteEditorViewModelProvider(noteId: id))   // existing note
+@riverpod
+class NoteEditorViewModel extends _$NoteEditorViewModel {
+  bool _isNew;   // true when noteId == null; flipped to false after first insert
+  Future<Note?> build({String? noteId})   // null → new note, non-null → findById
+  Future<void> save(Note note)
+  Future<void> updateTitle(String title)
+  Future<void> updateContent(Map<String, dynamic> content)
+  Future<void> addTag(String tagId)        // uses tagRepositoryProvider + reloads note
+  Future<void> removeTag(String tagId)     // uses tagRepositoryProvider + reloads note
+  Future<void> setCategory(String? categoryId)  // constructs Note directly (no copyWith)
+}
 ```
 
-### Phase 4 — Note list screen ✅
+Usage: `ref.watch(noteEditorViewModelProvider())` for new note,
+`ref.watch(noteEditorViewModelProvider(noteId: id))` for existing.
 
-**New files:**
-- `lib/presentation/widgets/mn_note_card.dart` — `MNNoteCard extends StatelessWidget`. Props: `Note note`, `VoidCallback onTap`, `List<String> tagNames`. Renders pinned tint bg, pin icon, title (PJS 16.5/w700), 1-line body preview from Quill Delta `ops`, up to 3 `#tag` chips, relative timestamp.
-- `lib/presentation/widgets/mn_search_field.dart` — `MNSearchField extends StatelessWidget`. Non-editable tap target (height 48, br 16, surfaceContainer bg). Navigates to `/search` on tap.
-- `lib/presentation/views/note_list/note_list_screen.dart` — full implementation. `NoteListScreen extends ConsumerWidget`. Stack layout: `Positioned.fill` content + `Align(bottomCenter)` bottom nav + `Positioned` FAB. Sections: PINNED + RECENT with `_SectionHeader`, skeleton loading (`_SkeletonBox` StatefulWidget, opacity 0.35→0.65 800 ms), error state, empty state.
+#### `tag_list_view_model.dart`
+```dart
+@riverpod
+class TagListViewModel extends _$TagListViewModel {
+  Stream<List<Tag>> build()
+  Future<Tag> insert(String name)
+  Future<void> delete(String id)
+}
+```
 
-**Bottom nav design (Phase 4 + post-Phase-5 fix):**
-- Centered at bottom via `Align(alignment: Alignment.bottomCenter, child: Padding(bottom: 14))`
-- Container is intrinsically sized (not full-width) — `mainAxisSize: MainAxisSize.min`
-- Each `_NavTab`: fixed 48×48 `AnimatedContainer` with `shape: BoxShape.circle` — true circle indicator
-- No labels on tabs — icon only
-- Home tab active on `NoteListScreen`
+#### `category_tree_view_model.dart`
+```dart
+@riverpod
+class CategoryTreeViewModel extends _$CategoryTreeViewModel {
+  Stream<List<Category>> build()
+  Future<Category> insert({required String name, String? parentId, int sortOrder = 0})
+  Future<void> move(String id, String? newParentId)
+  Future<void> delete(String id)
+}
+```
 
-### Phase 5 — Note editor screen ✅
+#### `search_view_model.dart`
+```dart
+class SearchState {
+  final String query;
+  final AsyncValue<List<Note>> results;
+  // copyWith(...)
+}
 
-**New files:**
-- `lib/presentation/widgets/mn_editor_toolbar.dart` — `MNEditorToolbar extends StatefulWidget`. Owns `controller.addListener` → `setState` for selection-aware active badges. 9 tools: bold, italic, underline, H1, H2, bullet, numbered, checklist, blockquote. Each 34×34, br 10. Active = `primaryContainer` bg + `onPrimaryContainer` icon. H1/H2 use `Text` label (no icon). Toggle: active → `Attribute.clone(attr, null)`; inactive → `formatSelection(attr)`.
-- `lib/presentation/widgets/mn_tag_row.dart` — `MNTagRow extends StatelessWidget`. Category chip (h30 br10), horizontal-scroll row of dismissible tag chips + `+ tag` outlined chip, mic button (40×40 br14; idle = primaryContainer; recording = recordRed + stop square + `.withValues(alpha: 0.15)` glow).
-- `lib/presentation/views/note_editor/note_editor_screen.dart` — `NoteEditorScreen extends ConsumerStatefulWidget`.
+@riverpod
+class SearchViewModel extends _$SearchViewModel {
+  Timer? _debounce;
+  SearchState build()
+  void setQuery(String query)   // debounced 300 ms; empty → AsyncData([]) immediately
+}
+```
 
-**NoteEditorScreen key state:**
+---
+
+## What was built (Phase 4)
+
+Full Note List Screen.
+
+### New files
+
+#### `lib/presentation/widgets/`
+- `mn_note_card.dart` — `MNNoteCard extends StatelessWidget`
+  - Props: `Note note`, `VoidCallback onTap`, `List<String> tagNames = const []`
+  - Renders: pinned tint background, pin icon (if isPinned), title (PJS 16.5/w700), 1-line preview (Inter 13.5/w400), up to 3 filled `#tag` chips
+  - Private `_TagChip` widget (height 24, pill, chipBg/chipText colours)
+  - `_timestamp()` → relative string ("Just now" / "Xm ago" / "Xh ago" / "Yesterday" / "Xd ago" / "MMM d" / "MMM d, yyyy")
+  - `_preview()` → extracts plain text from Quill Delta `ops` list
+
+- `mn_search_field.dart` — `MNSearchField extends StatelessWidget`
+  - Props: `VoidCallback? onTap`
+  - Height 48, borderRadius 16, surfaceContainer bg, 0.5px outline border
+  - Placeholder: "Search notes, tags…" (Inter 14.5/w400/onSurfaceMuted)
+
+#### `lib/presentation/views/note_list/note_list_screen.dart` (replaced)
+Full `NoteListScreen extends ConsumerWidget`. Private widgets in same file:
+
+| Widget | Type | Purpose |
+|---|---|---|
+| `_DataBody` | StatelessWidget | Renders app bar + search + pinned section + recent section; empty state inline |
+| `_AppBarSection` | StatelessWidget | Day label (UPPERCASE) + "Your notes" (PJS 26/w800) + gradient avatar |
+| `_SectionHeader` | StatelessWidget | Section label + hairline divider + optional count badge |
+| `_LoadingBody` | StatelessWidget | 3 pulsing `_SkeletonBox` widgets |
+| `_SkeletonBox` | StatefulWidget | AnimationController repeating pulse (opacity 0.35→0.65, 800 ms) |
+| `_ErrorBody` | StatelessWidget | Error icon + message + Retry TextButton |
+| `_EmptyState` | StatelessWidget | App bar + search + centred icon + "No notes yet" message |
+| `_BottomNav` | StatelessWidget | Floating pill, `left: 16, right: 16, bottom: 14`, height 64 |
+| `_NavTab` | StatelessWidget | AnimatedContainer pill; active = primaryContainer + label |
+| `_Fab` | StatelessWidget | Amber 56×56, borderRadius 18, two-layer amber shadow |
+
+**Key behaviours**:
+- `NoteListScreen` watches `noteListViewModelProvider` + `tagListViewModelProvider`
+- Builds `Map<String,String>` (tagId→tagName); passes resolved names to `MNNoteCard.tagNames`
+- `Stack` → `Positioned.fill` (content) + `Positioned` (bottom nav) + `Positioned` (FAB)
+- All inside `SafeArea` — positioned nav is 14px above safe-area bottom edge
+
+---
+
+## What was built (Phase 5)
+
+Full Note Editor Screen.
+
+### New / modified files
+
+#### `lib/presentation/widgets/`
+- `mn_editor_toolbar.dart` — `MNEditorToolbar extends StatefulWidget`. Props: `required QuillController controller`. Owns `controller.addListener` → `setState` so active badges update on selection changes. 9 tools: bold, italic, underline, H1 (Text label), H2 (Text label), bullet, numbered list, checklist, blockquote. Each tool: 34×34, `br 10`, active bg = `primaryContainer`, active icon = `onPrimaryContainer`, inactive = transparent + `onSurfaceVariant`. Toggle: active → `Attribute.clone(attr, null)`; inactive → `formatSelection(attr)`. Checklist active = list value `'checked'` or `'unchecked'`.
+- `mn_tag_row.dart` — `MNTagRow extends StatelessWidget`. Props: `tagIds`, `allTags`, `categoryName?`, `onRemoveTag`, `onAddTagTap`, `onCategoryTap`, `onMicTap`, `isRecording`. Category chip (h30, br10), horizontal-scroll row of dismissible sm filled tag chips + `+ tag` sm outlined chip, mic button (40×40 br14; idle = primaryContainer; recording = recordRed + stop square + glow).
+
+#### `lib/presentation/views/note_editor/note_editor_screen.dart` (replaced)
+`NoteEditorScreen extends ConsumerStatefulWidget`. Key state variables:
 
 | Variable | Type | Purpose |
 |---|---|---|
-| `_quillController` | `QuillController?` | Null until note loads |
+| `_quillController` | `QuillController?` | Null until note data loads |
 | `_titleController` | `TextEditingController` | Title field |
-| `_editorFocusNode` | `FocusNode` | Quill focus |
+| `_editorFocusNode` | `FocusNode` | Quill editor focus |
 | `_editorScrollController` | `ScrollController` | Quill scroll |
-| `_contentSubscription` | `StreamSubscription?` | `document.changes` → auto-save |
-| `_debounce` | `Timer?` | 800 ms auto-save debounce |
-| `_recordTimer` | `Timer?` | 1 s recording tick |
-| `_isDirty` | `bool` | Unsaved changes flag |
+| `_contentSubscription` | `StreamSubscription?` | Content-change → auto-save |
+| `_debounce` | `Timer?` | 800 ms auto-save |
+| `_recordTimer` | `Timer?` | 1 s tick for recording |
+| `_isDirty` | `bool` | Unsaved changes pending |
 | `_isRecording` | `bool` | Recording overlay visible |
-| `_recordSeconds` | `int` | Recording timer |
+| `_recordSeconds` | `int` | Recording timer counter |
 | `_currentNote` | `Note?` | Last saved/loaded note |
 | `_controllersInitialized` | `bool` | One-shot init guard |
 
-**Key behaviours:**
-- `noteAsync.whenData(_initControllers)` called in `build()` — sets `_quillController` synchronously, no `setState` needed
-- `document.changes.listen()` NOT `addListener` — fires on content only, not cursor movement
-- `_onBack()` cancels debounce → `await _performAutoSave()` → `context.pop()`
-- `_syncCurrentNote()` re-reads VM state after `addTag`/`removeTag`
+**Private widgets in same file**: `_EditorAppBar`, `_CircleIconButton`, `_SaveBadge`, `_RecordingOverlay`, `_WaveformBars`, `_PulsingStopButton`.
+
+**Key behaviours**:
+- `noteAsync.whenData(_initControllers)` in `build()` — one-shot controller init
+- `document.changes.listen()` (not `addListener`) — fires on content changes only
+- `_performAutoSave()` builds Note from local state, calls `NoteEditorViewModel.save(note)`
+- `_onBack()` flushes debounce, `await _performAutoSave()`, then `context.pop()`
+- `_syncCurrentNote()` called after `addTag`/`removeTag` to keep `_currentNote.tagIds` in sync
 - Category chip → stub `showModalBottomSheet` ("Category picker — Phase 8")
-- All colour opacity uses `.withValues(alpha:)` — not deprecated `.withOpacity()`
-
-**Private widgets in editor file:** `_EditorAppBar`, `_CircleIconButton`, `_SaveBadge` (green dot "Saved" / muted dot "Saving…"), `_RecordingOverlay`, `_WaveformBars` (12 static bars), `_PulsingStopButton` (SingleTickerProviderStateMixin, scale 0.95→1.05).
-
-### Post-Phase-5 fixes ✅
-
-**Search screen** (`lib/presentation/views/search/search_screen.dart`) — replaced placeholder with full implementation:
-- `SearchScreen extends ConsumerStatefulWidget` with auto-focused `TextField`
-- Calls `searchViewModelProvider.notifier.setQuery()` on every keystroke
-- Three states: empty prompt ("Search your notes"), no-results state, results list (`MNNoteCard`)
-- Clear (×) button appears when field has text
-- Same circle-indicator bottom nav with Explore tab active
-- Back button → `context.pop()`
-
-**Bottom nav redesign** (applied to both `NoteListScreen` and `SearchScreen`):
-- Changed from `Positioned(left:16, right:16)` full-width → `Align(bottomCenter)` + `Padding(bottom:14)`
-- Active indicator changed from pill (`AnimatedContainer` with `borderRadius:26`) → circle (`shape: BoxShape.circle`, 48×48 fixed)
-- Removed `Expanded` from `_NavTab` — tabs are now fixed-size, nav is intrinsically sized
 
 ---
 
-## Full package list
+## What was built (Phase 6)
 
-| Package | Version | Role |
+Voice-to-Text + Audio Recording/Playback.
+
+### New files
+
+#### `lib/data/datasources/file/`
+- `audio_file_storage.dart` — `AudioFileStorage`: `ensureAudioDir`, `generateFilePath` (`{appDocs}/audio_notes/{uuid}.aac`), `getFileSize`, `deleteFile`. All IO wrapped in `FileStorageException`.
+
+#### `lib/data/repositories/interfaces/`
+- `i_audio_record_repository.dart` — `IAudioRecordRepository`: `watchByNote`, `findByNote`, `findById`, `insert`, `updateTranscription`, `delete`, `deleteAllForNote`.
+
+#### `lib/data/repositories/local/`
+- `local_audio_record_repository.dart` — Drift-backed implementation via `AudioRecordsDao`. Maps `AudioRecordRow` ↔ `AudioRecord`. Wraps exceptions as `DatabaseException`.
+
+#### `lib/services/audio/`
+- `audio_recording_service.dart` — Wraps `FlutterSoundRecorder` + `FlutterSoundPlayer`. `init()` opens both (idempotent). `startRecording(filePath)` uses `Codec.aacADTS`, `bitRate 32000`, `numChannels 1`, `sampleRate 16000`. `amplitudeStream` — normalised 0.0–1.0 from `RecordingDisposition.decibels`. `stopRecording()` returns `durationMs` via `Stopwatch`. `startPlayback`/`stopPlayback` for existing clips. `dispose()` closes both.
+
+#### `lib/services/speech/`
+- `speech_to_text_service.dart` — Wraps `SpeechToText`. `initialize()` requests mic permission (returns `false` if denied). `startListening(onResult)` uses `ListenMode.dictation`, `pauseFor: 8s`. Appends final words to `_accumulated`. **Android STT timeout recovery**: `_onStatus` restarts listening if `'notListening'` fires while still `_active`. `stopListening()`, `resetText()`, `dispose()`.
+
+#### `lib/presentation/viewmodels/`
+- `audio_editor_view_model.dart` — `AudioEditorViewModel extends _$AudioEditorViewModel`. Family param: `{required String noteId}`. `build()` streams `IAudioRecordRepository.watchByNote(noteId)`. `saveRecording(filePath, durationMs, fileSizeBytes, transcript?)` creates + inserts `AudioRecord`. `deleteRecord(id)` — file deletion is caller's responsibility.
+
+### Modified files
+
+#### `lib/data/datasources/local/database_providers.dart`
+Added `audioRecordRepositoryProvider` (`@Riverpod(keepAlive: true)` → `LocalAudioRecordRepository(db.audioRecordsDao)`).
+
+#### `lib/presentation/views/note_editor/note_editor_screen.dart` (updated)
+
+New state fields in `_NoteEditorScreenState`:
+| Field | Type | Purpose |
 |---|---|---|
-| flutter_riverpod | ^2.5.1 | State management |
-| riverpod_annotation | ^2.3.5 | @riverpod annotation |
-| drift | ^2.18.0 | SQLite ORM |
-| drift_flutter | ^0.2.1 | Flutter SQLite path setup |
-| flutter_quill | ^10.8.5 | Rich text editor (Delta JSON) |
-| go_router | ^14.2.0 | Navigation |
-| speech_to_text | ^7.0.0 | On-device voice-to-text |
-| flutter_sound | ^9.2.13 | Audio recording + playback |
-| google_fonts | ^6.2.1 | Plus Jakarta Sans + Inter |
-| uuid | ^4.4.0 | UUID v4 generation |
-| path_provider | ^2.1.3 | App directory paths |
-| path | ^1.9.0 | Path manipulation |
-| equatable | ^2.0.5 | Model value equality |
-| riverpod_generator | ^2.4.3 | (dev) Provider code-gen |
-| build_runner | ^2.4.11 | (dev) Code generation runner |
-| drift_dev | ^2.18.0 | (dev) Drift code-gen |
-| flutter_lints | ^4.0.0 | (dev) Lint rules |
-| custom_lint | ^0.7.6 | (dev) riverpod_lint host |
-| riverpod_lint | ^2.4.0 | (dev) Riverpod lint rules |
+| `_audioService` | `AudioRecordingService` | Owned service instance |
+| `_sttService` | `SpeechToTextService` | Owned service instance |
+| `_audioStorage` | `AudioFileStorage` | File path generation |
+| `_audioInitialized` | `bool` | Lazy-init guard |
+| `_amplitudeSubscription` | `StreamSubscription<double>?` | Feeds waveform |
+| `_currentRecordingPath` | `String?` | In-progress recording file |
+| `_currentAmplitude` | `double` | 0.0–1.0 for waveform bars |
+| `_liveTranscript` | `String` | Live partial STT text |
 
-`dependency_overrides: intl: '>=0.19.0 <0.21.0'` — required because flutter_quill and Flutter SDK have conflicting intl version requirements.
+New `_onMicTap()`: flushes auto-save if needed → lazy-inits services → checks STT permission → generates file path → `startRecording` + `startListening` simultaneously → subscribes to amplitude → starts record timer.
+
+New `_stopRecording()`: cancels timers/subscriptions → `stopRecording()` + `stopListening()` → saves `AudioRecord` via `audioEditorViewModelProvider` → inserts transcript at Quill cursor.
+
+`_insertTranscriptAtCursor(String text)`: inserts `'\n$text\n'` at `selection.baseOffset`.
+
+`_WaveformBars`: now accepts `double amplitude`. Uses `AnimatedContainer(duration: 80ms)` per bar. Heights computed as `4.0 + amplitude * 20.0 * coefficient[i]` with 12 fixed bar coefficients.
+
+`_RecordingOverlay`: gains `amplitude` + `liveTranscript` props. Shows transcript preview (Inter 11.5/w400/muted, single-line ellipsis) below timer when non-empty.
+
+New `_AudioClipsRow extends ConsumerStatefulWidget`: watches `audioEditorViewModelProvider(noteId:)`. Horizontal scroll row of `_AudioClipChip` widgets (h28, surfaceContainer bg, pill). Each chip: play/pause (16px icon) + duration (Inter 11/w600/muted) + delete (16px ×). Manages `_playingId` state for play/pause toggle.
+
+Column order in `_buildEditor`: AppBar → QuillEditor (Expanded) → `_AudioClipsRow` → `MNTagRow` → `MNEditorToolbar`.
+
+#### `android/app/src/main/AndroidManifest.xml`
+Added `<uses-permission android:name="android.permission.RECORD_AUDIO"/>`.
 
 ---
 
-## Design tokens
+## Architecture decisions locked (Phases 1–6)
 
-All in `lib/core/theme/app_colors.dart`. Never hardcode colours anywhere.
-
-| Token | Light | Dark |
+| Decision | Value | Phase |
 |---|---|---|
-| Primary | `#5B4EFF` | `#B7AFFF` |
-| Accent / FAB | `#F59E0B` | unchanged |
-| Background | `#FEFBFF` | `#1C1B2E` |
-| Card | `#FFFFFF` | `#232238` |
-| Surface container | `#F3F0FF` | `#2C2B42` |
-| Record red | `#E5484D` | `#FF6369` |
-
-Fonts: **Plus Jakarta Sans** (headings, w700–800) via `AppTypography.plusJakartaSans(...)`. **Inter** (body, w400–600) via `AppTypography.inter(...)`.
+| State management | Riverpod 2 + code-gen | 1 |
+| Local DB | Drift v2 | 1 |
+| Navigation | GoRouter v14 | 1 |
+| Rich text editor | flutter_quill v10 (Quill Delta JSON) | 1 |
+| Audio | flutter_sound v9 — AAC 32kbps mono 16kHz | 1 |
+| Voice-to-text | speech_to_text v7 (on-device) | 1 |
+| Fonts | Plus Jakarta Sans + Inter (google_fonts) | 1 |
+| Model equality | Equatable (not freezed) | 1 |
+| Tag storage | Lowercase via `StringExtensions.normalised` | 1 |
+| UUID | `UuidGenerator.generate()` | 1 |
+| FTS5 full-text search | Virtual table + 3 SQLite triggers | 2 |
+| Tag denormalisation | `tagIds` JSON column on `NotesTable` | 2 |
+| Companion naming | TABLE class name + `Companion` | 2 |
+| Type converters | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` | 2 |
+| Data providers lifecycle | `keepAlive: true` on all 5 data providers | 2/6 |
+| ViewModel stream pattern | `build() → Stream<T>` for list VMs | 3 |
+| `NoteEditorViewModel` family param | Optional `noteId`; `_isNew` flag | 3 |
+| `SearchState` pattern | `Notifier<SearchState>`; 300 ms debounce | 3 |
+| `MNNoteCard` widget type | `StatelessWidget` — purely presentational | 4 |
+| Tag name resolution | Dual-provider watch in screen; Map passed to card | 4 |
+| Phase 4 bottom nav | Per-screen (hardcoded active=Home); Phase 9 → `ShellRoute` | 4 |
+| Shimmer skeleton | Custom `_SkeletonBox` StatefulWidget (no package) | 4 |
+| `NoteEditorScreen` widget type | `ConsumerStatefulWidget` — owns `QuillController` lifecycle | 5 |
+| Controller init strategy | `_initControllers` guarded by bool; called via `noteAsync.whenData()` in build | 5 |
+| Auto-save source | `document.changes` stream (not `addListener`) — content-only, no cursor noise | 5 |
+| `MNEditorToolbar` | `StatefulWidget` owning `addListener` for selection-aware active state | 5 |
+| `MNTagRow` | `StatelessWidget` — all callbacks passed from parent screen | 5 |
+| Recording overlay | `Positioned(bottom:8)` in Stack; pulsing via `_PulsingStopButton` StatefulWidget | 5 |
+| Category picker Phase 5 | Stub `showModalBottomSheet` — full tree in Phase 8 | 5 |
+| Color opacity API | `.withValues(alpha:)` — not deprecated `.withOpacity()` | 5 |
+| STT approach | Simultaneous `flutter_sound` + `speech_to_text` (confirmed by developer) | 6 |
+| STT timeout recovery | `_onStatus('notListening')` restarts `_stt.listen()` if `_active` is true | 6 |
+| Services lifecycle | `AudioRecordingService` + `SpeechToTextService` are plain Dart classes owned by `_NoteEditorScreenState` — not `@riverpod` providers | 6 |
+| Audio clip chips | Displayed in `_AudioClipsRow` (ConsumerStatefulWidget) above MNTagRow | 6 |
+| `_AudioClipsRow` widget type | `ConsumerStatefulWidget` — needs provider watch + `_playingId` playback state | 6 |
 
 ---
 
-## Navigation routes
+## Key conventions (enforce in all phases)
 
-| Constant | Path | Screen |
-|---|---|---|
-| `AppRoutes.home` | `/` | NoteListScreen |
-| `AppRoutes.newNote` | `/note/new` | NoteEditorScreen (new) |
-| `AppRoutes.editNote` | `/note/:id` | NoteEditorScreen (existing) |
-| `AppRoutes.search` | `/search` | SearchScreen |
-| `AppRoutes.tags` | `/tags` | TagsScreen (placeholder) |
-| `AppRoutes.settings` | `/settings` | SettingsScreen (placeholder) |
-
-`AppRoutes.editNotePath(String id)` builds the edit path. Phase 9 wraps these in a `ShellRoute`.
-
----
-
-## Key conventions (enforce every phase)
-
-1. All screen widgets extend `ConsumerWidget` or `ConsumerStatefulWidget` — never `StatelessWidget` directly
-2. All providers use `@riverpod` annotation — no manual `Provider(...)` declarations
-3. ViewModels import repository interfaces only — never DAOs or `AppDatabase`
-4. All errors wrapped in `AppException` subtypes before reaching ViewModels
-5. Tag names always lowercase via `StringExtensions.normalised` on every write
-6. UUIDs always via `UuidGenerator.generate()` — never `Uuid().v4()` directly
-7. Drift companions named after TABLE class: `NotesTableCompanion` (not `NoteRowCompanion`)
-8. `DatabaseException(String message, {Object? cause})` — no other params
-9. Generated `*.g.dart` files are gitignored — never edit manually
-10. Run `dart run build_runner build --delete-conflicting-outputs` after any `@riverpod` or Drift table change
-11. All colour opacity via `.withValues(alpha:)` — not `.withOpacity()` (deprecated in Flutter 3.27+)
-12. **Never run git commands** — all commits and pushes are done by the developer manually
+- All **screen** widgets extend `ConsumerWidget` or `ConsumerStatefulWidget`. Use `ConsumerStatefulWidget` only when the screen needs `initState`/`dispose` (e.g. `NoteEditorScreen` owns `QuillController`). Shared presentational widgets use `StatelessWidget` or `StatefulWidget` as appropriate.
+- All providers use `@riverpod` annotation — no manual `Provider(...)` declarations
+- ViewModels import repository **interfaces** only, never Drift DAOs directly
+- All errors wrapped in `AppException` subtypes before surfacing to ViewModels
+- Tag names always stored lowercase via `StringExtensions.normalised`
+- UUIDs always via `UuidGenerator.generate()`
+- Generated files (`*.g.dart`) are gitignored — never edit manually
+- Run `dart run build_runner build --delete-conflicting-outputs` after any `@riverpod` or Drift table change
+- Drift companions: `NotesTableCompanion`, `TagsTableCompanion`, etc.
+- `DatabaseException` signature: `DatabaseException(String message, {Object? cause})`
+- **Claude may create/edit files locally** — never run git commands. All commits via GitHub Desktop.
 
 ---
 
 ## Pending decisions
 
-| Decision | Phase to resolve |
+| Decision | Phase |
 |---|---|
 | Category deletion policy when children exist (cascade vs re-parent) | 8 |
 | AI provider evaluation (Gemini free tier vs Groq) | 12 |
 
 ---
 
-## Phase 6 — What to build next
+## First-run instructions (Phase 6 state)
 
-**Title**: Voice-to-Text + Audio Recording/Playback
+```bash
+# No new packages added — flutter pub get not needed
+dart run build_runner build --delete-conflicting-outputs
+# Generates: database_providers.g.dart (updated), audio_editor_view_model.g.dart (new)
+flutter analyze   # expected: 0 issues
+flutter run       # tap FAB → Note Editor → tap mic button to start recording
+```
 
-**Audio spec**: AAC · 32 kbps · mono · 16 kHz · stored under `getApplicationDocumentsDirectory()/audio_notes/`
-
-**Scope**:
-
-1. Implement `AudioRecordingService` in `lib/services/audio/audio_recording_service.dart` (stub exists) — uses `flutter_sound` to record AAC, expose amplitude stream for waveform bars
-2. Implement `SpeechToTextService` in `lib/services/speech/speech_to_text_service.dart` (stub exists) — wraps `speech_to_text` v7
-3. Wire mic button in `MNTagRow` to `AudioRecordingService` via `NoteEditorScreen`
-4. Connect `_WaveformBars` to real amplitude stream (currently static bars)
-5. After recording stops, run `SpeechToTextService` → insert transcript at Quill cursor position
-6. Persist `AudioRecord` via `AudioRecordsDao` + a new `IAudioRecordRepository` / `LocalAudioRecordRepository`
-7. Handle microphone permission — catch `PermissionException` and show a snackbar
-8. `flutter analyze` = 0 issues
-9. Update `CLAUDE.md`, `DECISIONS.md`, `progress.md`, `THREAD_HANDOFF.md`
-
-**Files already in place**: `lib/services/audio/audio_recording_service.dart` (stub), `lib/services/speech/speech_to_text_service.dart` (stub), `AudioRecordsDao` fully implemented, `AudioRecord` model complete.
-
-**Before starting**: present a detailed implementation plan for developer approval.
+Expected: Tap mic → OS permission dialog on first use → grant → recording overlay appears
+with live timer and animated waveform bars. Speak → transcript text appears in the overlay.
+Tap the pulsing stop button → overlay disappears, transcript inserted into Quill editor,
+audio clip chip appears above the tag row. Tap play on the chip → audio plays back.
 
 ---
 
-## First-run instructions (current state)
+## Documentation completed (Post-Phase-6 session)
 
-```bash
-flutter pub get
-dart run build_runner build --delete-conflicting-outputs
-flutter analyze    # expected: 0 issues
-flutter run        # boots to NoteListScreen
-```
+The following doc work was completed after Phase 6 code was finished:
 
-Expected flow: Home screen shows "Your notes" with pinned/recent sections → tap amber FAB → Note Editor opens with Quill editor + format toolbar + tag row → type → "Saved" badge goes green after 0.8 s → tap back → returns to list. Tap search bar or Explore nav tab → Search screen opens with auto-focused text field → type to search → results appear as note cards.
+| File | What was done |
+|---|---|
+| `TESTING.md` | **Created.** Full manual testing guide: 14 sections, ~130 numbered checks, all Phases 1–6 features. Quick smoke test (~35 🔴 critical checks, ~15 min). Full regression (~130 checks, ~1 hr). Run `TESTING.md` smoke test before every commit. |
+| `DECISIONS.md` | D6.4 revised (file-based STT → simultaneous live STT); D6.5–D6.9 added; D2.8 corrected (3 repos → 4 repos + DB = 5 keepAlive providers). Phase 6 status ✅. |
+| `CLAUDE.md` | `TESTING.md` added to quick reference; on-boarding checklist updated to 10 steps including `flutter analyze` gate and TESTING.md post-phase smoke test; DB providers description corrected to 5 keepAlive. |
+| `README.md` | Replaced default Flutter stub with full project description, tech stack, architecture, phase status, getting-started guide, and documentation index. |
+| `progress.md` | Data providers lifecycle entry corrected from 4→5; Documentation section added covering all post-Phase-6 doc changes and testing philosophy for future phases. |
+
+---
+
+## Phase 7 — What to build next
+
+**Title**: Tags (freeform + autocomplete)
+
+**Scope** (from DECISIONS.md D7.1–D7.5):
+
+1. Replace the stub `_showAddTagDialog` in `NoteEditorScreen` with a proper chip input field
+   that shows live autocomplete from `ITagRepository.searchByPrefix`
+2. Selecting a suggestion assigns the existing tag; pressing enter with no match creates a new one
+3. Implement the full `TagsScreen` (UI Reference § 3.3) with density bars
+4. Enforce `AppConstants.maxTagsPerNote = 20` in the ViewModel
+5. `flutter analyze` = 0 issues
+6. Update all four doc files
+
+**Before starting Phase 7**, Claude must present a detailed plan for developer approval.
+
+---
+
+## Files to attach to new thread
+
+- `CLAUDE.md` — AI context (architecture, conventions, phase status)
+- `DECISIONS.md` — all architectural decisions (Phases 1–6 complete)
+- `progress.md` — phase log, decisions log, bugfix history
+- `MODUNOTE_UI_REFERENCE.md` — design spec (required before any UI work)
+- `THREAD_HANDOFF.md` — this file
+- `TESTING.md` — manual testing checklist (smoke test + full regression, Phases 1–6)

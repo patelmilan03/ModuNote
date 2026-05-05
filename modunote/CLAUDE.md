@@ -9,7 +9,7 @@
 ## Project Overview
 
 **App name**: ModuNote
-**Purpose**: Quick-capture ideation app for content creators and people who prefer speaking over typing for journalling.
+**Purpose**: Quick-capture ideation tool for a solo YouTube/Instagram content creator.
 **Platform**: Android (Flutter). iOS deferred.
 **Developer profile**: Junior Flutter developer. Background in Python / FastAPI / PostgreSQL. Has prior Flutter MVVM experience (VocalNote app).
 
@@ -174,7 +174,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | 3 | State management (Riverpod providers, base ViewModels) | ✅ Complete |
 | 4 | Note list screen | ✅ Complete |
 | 5 | Note editor screen (Quill) | ✅ Complete |
-| 6 | Voice-to-text + audio recording/playback | ⬜ Not started |
+| 6 | Voice-to-text + audio recording/playback | ✅ Complete |
 | 7 | Tags (freeform + autocomplete) | ⬜ Not started |
 | 8 | Categories (hierarchical folder tree) | ⬜ Not started |
 | 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ⬜ Not started |
@@ -210,10 +210,14 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `lib/core/constants/app_constants.dart` | Magic numbers and string keys |
 | `lib/presentation/router/app_router.dart` | Routes + ThemeModeNotifier |
 | `lib/data/datasources/local/app_database.dart` | `@DriftDatabase` — 5 tables, 4 DAOs, FTS5, migrations |
-| `lib/data/datasources/local/database_providers.dart` | Riverpod providers for DB + 3 repositories (all `keepAlive: true`) |
+| `lib/data/datasources/local/database_providers.dart` | Riverpod providers for DB + 4 repositories = 5 `keepAlive` providers total (`appDatabase`, `noteRepository`, `tagRepository`, `categoryRepository`, `audioRecordRepository`) |
+| `lib/data/datasources/file/audio_file_storage.dart` | File I/O for audio recordings (create dir, generate path, delete, size) |
+| `lib/services/audio/audio_recording_service.dart` | flutter_sound wrapper — record AAC, stream amplitude, playback |
+| `lib/services/speech/speech_to_text_service.dart` | speech_to_text wrapper — live dictation with Android timeout recovery |
 | `lib/data/datasources/local/converters/type_converters.dart` | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` |
 | `MODUNOTE_UI_REFERENCE.md` | Full pixel-level UI spec from Claude Design |
 | `progress.md` | Human-readable phase progress log |
+| `TESTING.md` | Manual testing checklist — smoke test (~35 checks, ~15 min) + full regression (~130 checks, ~1 hr) |
 
 ---
 
@@ -222,7 +226,10 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 1. Read `CLAUDE.md` (this file) — understand the architecture.
 2. Read `progress.md` — know what's been built and what's next.
 3. Read `THREAD_HANDOFF.md` — get the most recent session summary and next-phase scope.
-4. Read `MODUNOTE_UI_REFERENCE.md` — before touching any UI file.
-5. Run `flutter pub get` then `dart run build_runner build --delete-conflicting-outputs`.
-5. Run `flutter run` — should boot to NoteListScreen (Phase 4 — full note list UI).
-6. Ask the developer which phase to proceed with before writing any code.
+4. Read `DECISIONS.md` — all architectural decisions and their rationale.
+5. Read `MODUNOTE_UI_REFERENCE.md` — before touching any UI file.
+6. Run `flutter pub get` then `dart run build_runner build --delete-conflicting-outputs`.
+7. Run `flutter analyze` — must report 0 issues before writing any code.
+8. Run `flutter run` — boots to NoteListScreen; tap FAB → Note Editor; tap mic → recording overlay.
+9. Ask the developer which phase to proceed with before writing any code.
+10. After completing a phase, run the smoke test checks in `TESTING.md` before committing.

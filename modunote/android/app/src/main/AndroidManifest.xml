@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Microphone access: required by flutter_sound (recording) and speech_to_text (STT). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
         android:label="modunote"
         android:name="${applicationName}"
