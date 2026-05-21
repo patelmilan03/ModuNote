@@ -30,7 +30,7 @@
 | 4 | Note list screen | ✅ **Complete** | See details below |
 | 5 | Note editor screen (Quill) | ✅ **Complete** | See details below |
 | 6 | Voice-to-text + audio recording/playback | ✅ **Complete** | See details below |
-| 7 | Tags (freeform + autocomplete) | ⬜ Not started | — |
+| 7 | Tags (freeform + autocomplete) | ✅ **Complete** | See details below |
 | 8 | Categories (hierarchical folder tree) | ⬜ Not started | — |
 | 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ⬜ Not started | — |
 | 10 | Firebase preparation layer | ⬜ Not started | — |
@@ -407,6 +407,16 @@ Expected: Tapping FAB opens Note Editor with empty Quill editor. Title TextField
 #### `android/app/src/main/AndroidManifest.xml`
 - Added `<uses-permission android:name="android.permission.RECORD_AUDIO"/>`.
 
+### Post-Phase-6 flutter analyze Fixes
+
+Three `flutter analyze` issues found after moving Phase 6 files from Claude worktree to the main project directory. All fixed; `flutter analyze` now reports **0 issues**.
+
+| File | Issue | Fix |
+|---|---|---|
+| `lib/data/repositories/local/local_audio_record_repository.dart` | `unnecessary_import` — direct DAO import redundant (re-exported via `app_database.dart`) | Removed `import '../../datasources/local/daos/audio_records_dao.dart'` |
+| `lib/services/speech/speech_to_text_service.dart` | `deprecated_member_use` — `listenMode:` and `cancelOnError:` params on `_stt.listen()` deprecated in `speech_to_text ^7.0.0` | Wrapped in `listenOptions: SpeechListenOptions(listenMode: ListenMode.dictation, cancelOnError: false)` |
+| `lib/services/audio/audio_recording_service.dart` | `prefer_const_constructors` — `throw FileStorageException(...)` in `_assertInitialized()` missing `const` | Changed to `throw const FileStorageException(...)` |
+
 ### Architectural Decisions
 
 | Decision | Detail |
@@ -428,6 +438,72 @@ flutter run
 ```
 
 Expected: Tap FAB → Note Editor. Tap mic button → OS dialog (first launch) → grant → recording overlay with live timer + animated waveform bars. Speak → transcript text appears. Tap pulsing stop → overlay gone, words inserted into editor, audio chip appears above tag row. Tap play chip → audio plays back.
+
+---
+
+## Phase 7 — Tags (Freeform + Autocomplete) ✅
+
+**Completed**: Phase 7
+**Deliverable**: Live-autocomplete tag input in the Note Editor, full Tags screen with density bars, maxTagsPerNote enforcement.
+
+### Files Modified
+
+#### `lib/data/datasources/local/daos/tags_dao.dart`
+- Added `countNotesPerTag()` — `customSelect` raw SQL (`GROUP BY tag_id`) returns `Map<String, int>` of tagId → note count.
+
+#### `lib/data/repositories/interfaces/i_tag_repository.dart`
+- Added `getNoteCounts()` → `Future<Map<String, int>>` abstract method.
+
+#### `lib/data/repositories/local/local_tag_repository.dart`
+- Implemented `getNoteCounts()` delegating to `_tagsDao.countNotesPerTag()`. Wraps exceptions as `DatabaseException`.
+
+#### `lib/presentation/viewmodels/tag_list_view_model.dart`
+- Added `searchByPrefix(String prefix)` method — delegates to repo, never mutates state.
+- Added `findByName(String name)` method — delegates to repo, never mutates state.
+- Added `tagNoteCountsProvider` top-level `@riverpod` function (auto-disposed `FutureProvider<Map<String,int>>`). **build_runner required** (and run).
+
+#### `lib/presentation/views/tags/tags_screen.dart`
+- **Full rewrite** of Phase 1 placeholder. `TagsScreen extends ConsumerWidget`.
+- App bar: "Tags" (PJS 24/800) + `"N tags"` subtitle + 40×40 Add button (`primaryContainer`, br 14).
+- Tags list: outer card (card bg, 0.5px outline, br 20, p 6) with per-row density bars.
+- Each `_TagRow`: hash icon container (36×36, chipBg, br 12) + tag name column (PJS 15/700) + density bar (`LayoutBuilder`, h3, `primary` fill at 55% opacity) + count badge (Inter 12/600, surfaceContainer) + chevron.
+- Density: `fraction = count / maxCount`; `maxCount = max of all counts`, min 1.
+- Long-press row → delete confirmation dialog.
+- Add button → simple AlertDialog with TextField → `tagListViewModelProvider.notifier.insert(name)`.
+- Bottom nav pill (active tab 2) consistent with Phase 4 design.
+- Loading / Error / Empty states per conventions.
+
+#### `lib/presentation/views/note_editor/note_editor_screen.dart`
+- Replaced `_showAddTagDialog` (AlertDialog stub) + `_addTag(String name)` with `_onAddTagTap` that calls `showModalBottomSheet<Tag>` returning `_TagInputSheet`.
+- Added maxTagsPerNote guard in `_onAddTagTap` (SnackBar + early return).
+- Passes `maxTagsReached` to `MNTagRow`.
+- Added `_TagInputSheet` (`ConsumerStatefulWidget`): 200 ms debounce on `searchByPrefix`, suggestion list + "Create" tile, `findByName` on submit to distinguish existing vs new tag. Pops with `Tag`.
+- Added `_SuggestionTile` and `_CreateTile` private stateless widgets for the sheet's suggestion UI.
+- Added imports: `app_constants.dart`, `string_extensions.dart`.
+
+#### `lib/presentation/widgets/mn_tag_row.dart`
+- Added `maxTagsReached: bool` parameter (default `false`).
+- `_AddTagChip` gains `disabled: bool` parameter — renders at 40% opacity and ignores taps when disabled.
+
+### Architecture Decisions
+See DECISIONS.md D7.1–D7.10.
+
+### First-Run Instructions (Phase 7 state)
+
+```bash
+# build_runner was already run during Phase 7 implementation
+# No new packages needed
+flutter analyze   # expected: 0 issues ✅
+flutter run
+```
+
+Expected:
+- Note Editor → tap `+ tag` → bottom sheet opens with text field and autocomplete suggestions
+- Type a partial tag name → suggestions appear below the field
+- Select suggestion → existing tag added; submit new name → "Create #name" tile → creates + adds
+- At 20 tags: `+ tag` chip fades to 40% opacity; tapping shows SnackBar "Maximum 20 tags per note"
+- Tags tab in bottom nav → Tags screen with list of all tags, density bars, and note counts
+- Long-press a tag row → delete confirmation dialog → tag removed from all notes
 
 ---
 
@@ -476,9 +552,9 @@ The following documentation files were created or significantly updated after Ph
 
 | File | What changed |
 |---|---|
-| `CLAUDE.md` | Phase 6 status marked ✅; `audio_file_storage.dart`, `audio_recording_service.dart`, `speech_to_text_service.dart` added to quick reference; `database_providers.dart` description updated to 5 `keepAlive` providers; `TESTING.md` added to quick reference; on-boarding checklist expanded to 10 steps including `flutter analyze` gate and TESTING.md smoke test |
+| `CLAUDE.md` | Phase 6 status marked ✅; `audio_file_storage.dart`, `audio_recording_service.dart`, `speech_to_text_service.dart` added to quick reference; `database_providers.dart` description updated to 5 `keepAlive` providers; `TESTING.md` added to quick reference (15 sections); on-boarding checklist expanded to 10 steps including `flutter analyze` gate and TESTING.md smoke test |
 | `THREAD_HANDOFF.md` | Status header updated to "Phase 6 ✅ Complete. Proceed with Phase 7."; full "What was built (Phase 6)" section added; architecture decisions table updated with all Phase 6 entries; Phase 7 scope documented; first-run instructions updated; `TESTING.md` added to files-to-attach list |
-| `DECISIONS.md` | Phase 6 status changed from ⬜ to ✅; D6.4 revised from "file-based STT" to "simultaneous live STT + flutter_sound" with full rationale; D6.5 updated to reflect permission handling without `permission_handler` package; D6.7 added (Android STT timeout recovery pattern); D6.8 added (services lifecycle as plain Dart classes); D6.9 added (file deletion separation of concerns); D2.8 updated to reflect 5 keepAlive providers |
+| `DECISIONS.md` | Phase 6 status changed from ⬜ to ✅; D6.4 revised; D6.5–D6.9 added; D2.8 updated to 5 keepAlive providers; BUG-15–BUG-17 added (post-Phase-6 `flutter analyze` fixes: unnecessary import, deprecated STT params, missing `const`) |
 | `README.md` | Replaced default Flutter stub with full project description, tech stack table, architecture overview, phase status table, getting-started commands, and key documentation references |
 | `progress.md` | Phase 6 section added (this file); data providers lifecycle corrected from 4 to 5 |
 
@@ -486,7 +562,7 @@ The following documentation files were created or significantly updated after Ph
 
 | File | Purpose |
 |---|---|
-| `TESTING.md` | Full manual testing guide. 14 sections, ~130 numbered checks covering all Phases 1–6 features. Includes: app bootstrap, note list screen, note creation + auto-save, editor + toolbar (all 9 buttons), pinning/sections, search, voice recording (permission flow, waveform, STT, timeout recovery, stop + insert, clip chips), data persistence, themes (exact color token checks), navigation/routing, stub screens, edge cases, performance, and `flutter analyze` gate. Quick smoke test: ~35 🔴 CRITICAL checks in ~15 min. Full regression: ~130 checks in ~1 hr. |
+| `TESTING.md` | Full manual testing guide. **15 sections**, ~130 numbered checks covering all Phases 1–6 features. Includes: app bootstrap, note list screen, note creation + auto-save, editor + toolbar (all 9 buttons), pinning/sections, search, voice recording (permission flow, waveform, STT, timeout recovery, stop + insert, clip chips), data persistence, themes (exact color token checks), navigation/routing, stub screens, edge cases, performance, `flutter analyze` gate, and **Section 15 — Voice/STT deep verification** (exact Android on-device file paths, ADB commands for file listing + DB pulling, sqlite3 queries for `audio_records` table, logcat filtering). Quick smoke test: ~46 🔴 CRITICAL checks in ~20 min. Full regression: ~130 checks in ~1.5 hr. |
 
 ### Testing Philosophy (recorded for future phases)
 

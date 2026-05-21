@@ -18,6 +18,7 @@ class MNTagRow extends StatelessWidget {
     required this.onCategoryTap,
     required this.onMicTap,
     required this.isRecording,
+    this.maxTagsReached = false,
   });
 
   final List<String> tagIds;
@@ -28,6 +29,7 @@ class MNTagRow extends StatelessWidget {
   final VoidCallback onCategoryTap;
   final VoidCallback onMicTap;
   final bool isRecording;
+  final bool maxTagsReached;
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +64,11 @@ class MNTagRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                   ],
-                  _AddTagChip(onTap: onAddTagTap, isDark: isDark),
+                  _AddTagChip(
+                    onTap: maxTagsReached ? null : onAddTagTap,
+                    isDark: isDark,
+                    disabled: maxTagsReached,
+                  ),
                 ],
               ),
             ),
@@ -196,12 +202,18 @@ class _TagChip extends StatelessWidget {
   }
 }
 
-/// "+ tag" outlined chip that opens the tag input dialog.
+/// "+ tag" outlined chip that opens the tag input sheet.
+/// When [disabled] is true the chip renders at reduced opacity and ignores taps.
 class _AddTagChip extends StatelessWidget {
-  const _AddTagChip({required this.onTap, required this.isDark});
+  const _AddTagChip({
+    required this.onTap,
+    required this.isDark,
+    this.disabled = false,
+  });
 
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool isDark;
+  final bool disabled;
 
   @override
   Widget build(BuildContext context) {
@@ -211,25 +223,28 @@ class _AddTagChip extends StatelessWidget {
         isDark ? AppColors.darkOnSurfaceVariant : AppColors.lightOnSurfaceVariant;
 
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 24,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: outlineStrong,
-            width: 1,
-            style: BorderStyle.solid,
+      onTap: disabled ? null : onTap,
+      child: Opacity(
+        opacity: disabled ? 0.4 : 1.0,
+        child: Container(
+          height: 24,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: outlineStrong,
+              width: 1,
+              style: BorderStyle.solid,
+            ),
           ),
-        ),
-        child: Center(
-          child: Text(
-            '+ tag',
-            style: AppTypography.inter(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: variantColor,
+          child: Center(
+            child: Text(
+              '+ tag',
+              style: AppTypography.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: variantColor,
+              ),
             ),
           ),
         ),

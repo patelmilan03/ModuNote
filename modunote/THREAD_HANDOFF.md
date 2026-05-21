@@ -3,16 +3,17 @@
 
 ---
 
-## Status: Phase 6 ✅ Complete. Proceed with Phase 7.
+## Status: Phase 7 ✅ Complete. Proceed with Phase 8.
 
-Phase 6 is fully complete. The mic button in `NoteEditorScreen` now triggers real audio
-recording (`flutter_sound`) and live speech-to-text (`speech_to_text`) simultaneously.
-Waveform bars animate from live amplitude. Live transcript appears in the recording overlay.
-On stop, the transcript is inserted at the Quill cursor and an `AudioRecord` is saved to
-Drift. Audio clip chips appear above the tag row with play/pause/delete.
-`flutter analyze` must report **0 issues** after running build_runner.
-The developer must run `dart run build_runner build --delete-conflicting-outputs` before
-committing Phase 6 via GitHub Desktop.
+Phase 7 is fully complete. **`flutter analyze` reports 0 issues.**
+
+**What Phase 7 delivered:**
+- `NoteEditorScreen`: `_showAddTagDialog` (AlertDialog stub) replaced with `_TagInputSheet` — a `ConsumerStatefulWidget` bottom sheet with live autocomplete (200 ms debounce, `searchByPrefix`), suggestion tiles for existing tags, "Create #name" tile for new tags, and `findByName` to avoid duplicates.
+- `MNTagRow`: `maxTagsReached` parameter added; `+ tag` chip fades and ignores taps at the 20-tag limit.
+- `TagsScreen`: Full implementation (was Phase 1 placeholder). Tags list in an outer card with hash icon, density bars (`LayoutBuilder` + primary fill at 55% opacity), count badges, long-press delete. Bottom nav pill with active tab 2.
+- Data layer: `TagsDao.countNotesPerTag()` (raw SQL GROUP BY), `ITagRepository.getNoteCounts()`, `LocalTagRepository.getNoteCounts()`.
+- ViewModel: `TagListViewModel.searchByPrefix()`, `TagListViewModel.findByName()`, `tagNoteCountsProvider` (auto-disposed FutureProvider).
+- `build_runner` was run during Phase 7 (new `@riverpod` annotation on `tagNoteCountsProvider`). No re-run needed before committing.
 
 ---
 
@@ -353,20 +354,20 @@ Added `<uses-permission android:name="android.permission.RECORD_AUDIO"/>`.
 
 ---
 
-## First-run instructions (Phase 6 state)
+## First-run instructions (Phase 7 state)
 
 ```bash
 # No new packages added — flutter pub get not needed
 dart run build_runner build --delete-conflicting-outputs
-# Generates: database_providers.g.dart (updated), audio_editor_view_model.g.dart (new)
+# build_runner was run during Phase 7; re-running is safe and ensures generated files are current
 flutter analyze   # expected: 0 issues
-flutter run       # tap FAB → Note Editor → tap mic button to start recording
+flutter run
 ```
 
-Expected: Tap mic → OS permission dialog on first use → grant → recording overlay appears
-with live timer and animated waveform bars. Speak → transcript text appears in the overlay.
-Tap the pulsing stop button → overlay disappears, transcript inserted into Quill editor,
-audio clip chip appears above the tag row. Tap play on the chip → audio plays back.
+Expected:
+- Note Editor → tap `+ tag` → bottom sheet with text field; type to see autocomplete suggestions; submit new name to create; select existing to reuse.
+- At 20 tags: `+ tag` chip fades; tap shows SnackBar "Maximum 20 tags per note".
+- Bottom nav Tags tab → Tags screen with all tags, density bars proportional to note count, long-press to delete.
 
 ---
 
@@ -376,7 +377,7 @@ The following doc work was completed after Phase 6 code was finished:
 
 | File | What was done |
 |---|---|
-| `TESTING.md` | **Created.** Full manual testing guide: 14 sections, ~130 numbered checks, all Phases 1–6 features. Quick smoke test (~35 🔴 critical checks, ~15 min). Full regression (~130 checks, ~1 hr). Run `TESTING.md` smoke test before every commit. |
+| `TESTING.md` | **Created.** Full manual testing guide: **15 sections**, ~130 numbered checks, all Phases 1–6 features. Section 15 = voice/STT deep verification (ADB file paths, DB inspection, logcat filtering). Quick smoke test (~46 🔴 critical checks, ~20 min). Full regression (~130 checks, ~1.5 hr). Run smoke test before every commit. |
 | `DECISIONS.md` | D6.4 revised (file-based STT → simultaneous live STT); D6.5–D6.9 added; D2.8 corrected (3 repos → 4 repos + DB = 5 keepAlive providers). Phase 6 status ✅. |
 | `CLAUDE.md` | `TESTING.md` added to quick reference; on-boarding checklist updated to 10 steps including `flutter analyze` gate and TESTING.md post-phase smoke test; DB providers description corrected to 5 keepAlive. |
 | `README.md` | Replaced default Flutter stub with full project description, tech stack, architecture, phase status, getting-started guide, and documentation index. |
@@ -384,21 +385,22 @@ The following doc work was completed after Phase 6 code was finished:
 
 ---
 
-## Phase 7 — What to build next
+## Phase 8 — What to build next
 
-**Title**: Tags (freeform + autocomplete)
+**Title**: Categories (hierarchical folder tree)
 
-**Scope** (from DECISIONS.md D7.1–D7.5):
+**Scope** (from DECISIONS.md D8.1–D8.5):
 
-1. Replace the stub `_showAddTagDialog` in `NoteEditorScreen` with a proper chip input field
-   that shows live autocomplete from `ITagRepository.searchByPrefix`
-2. Selecting a suggestion assigns the existing tag; pressing enter with no match creates a new one
-3. Implement the full `TagsScreen` (UI Reference § 3.3) with density bars
-4. Enforce `AppConstants.maxTagsPerNote = 20` in the ViewModel
-5. `flutter analyze` = 0 issues
-6. Update all four doc files
+1. **Resolve pending decision PD-01** at the start: category deletion policy (cascade all descendants vs re-parent children). Update DECISIONS.md before writing any DAO code.
+2. Replace the stub category bottom sheet in `NoteEditorScreen` with `MNCategoryPickerSheet` (UI Reference § 3.5) — full adjacency-list tree, depth-indented rows, expand/collapse, "New category" row.
+3. `CategoryTreeViewModel` already has `insert`, `move`, `delete`. The DAO is already built. Phase 8 is primarily a UI phase.
+4. `AppConstants.maxCategoryDepth = 5` must be enforced in the ViewModel when creating nested categories.
+5. `flutter analyze` = 0 issues.
+6. Update all four doc files.
 
-**Before starting Phase 7**, Claude must present a detailed plan for developer approval.
+**Before starting Phase 8**, Claude must present a detailed plan and wait for developer approval.
+
+**⚠️ PD-01 must be resolved first** — the category deletion policy determines the DAO transaction logic for `CategoriesDao.deleteCategory`. Do not write DAO code until the developer chooses cascade or re-parent.
 
 ---
 

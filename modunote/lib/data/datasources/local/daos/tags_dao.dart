@@ -116,6 +116,18 @@ class TagsDao extends DatabaseAccessor<AppDatabase> with _$TagsDaoMixin {
     });
   }
 
+  /// Returns a map of tagId → note count across all tags that have ≥1 note.
+  Future<Map<String, int>> countNotesPerTag() async {
+    final rows = await customSelect(
+      'SELECT tag_id, COUNT(note_id) AS note_count FROM note_tags GROUP BY tag_id',
+      readsFrom: {noteTagsTable},
+    ).get();
+    return {
+      for (final r in rows)
+        r.read<String>('tag_id'): r.read<int>('note_count'),
+    };
+  }
+
   // ── Private helpers ────────────────────────────────────────────────────────
 
   /// Rebuilds the denormalised `tag_ids` TEXT column on the matching note row

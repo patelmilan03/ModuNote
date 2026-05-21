@@ -296,24 +296,41 @@ Both services are owned by `_NoteEditorScreenState` as instance fields. Their li
 
 ---
 
-## Phase 7 — Tags ⬜ Not Started
+## Phase 7 — Tags ✅ Complete
 
-### Pre-Decided Architecture
+### Pre-Decided Architecture (all implemented as designed)
 
 **D7.1 — Tag entry: freeform with live autocomplete**
-The tag input in the note editor is a `TextField` that shows a dropdown of existing tags matching the current prefix (via `ITagRepository.searchByPrefix`). Selecting a suggestion assigns the existing tag. Pressing enter/comma/space with no match creates a new tag. This is the standard "chip input" UX pattern.
+The tag input in the note editor is a `TextField` that shows a dropdown of existing tags matching the current prefix (via `ITagRepository.searchByPrefix`). Selecting a suggestion assigns the existing tag. Pressing enter with no match creates a new tag. Implemented as `_TagInputSheet` (`ConsumerStatefulWidget`) shown via `showModalBottomSheet<Tag>`. The sheet returns the `Tag` to add; the screen calls `NoteEditorViewModel.addTag(tag.id)` on receipt.
 
 **D7.2 — Tag names are normalised on every write**
 Before inserting a new tag or matching an existing one, the input is always passed through `StringExtensions.normalised` (`.toLowerCase().trim()`). The DB unique constraint on `tags.name` is case-insensitive by design because all values are normalised before write. Never store a tag without normalising first.
 
 **D7.3 — Tags screen shows density bars**
-Each tag row on the Tags screen shows a proportional density bar: width = `(tagNoteCount / maxNoteCount) * 100%`. The max is computed across all tags in the current list. This is a pure UI computation in the ViewModel — not stored in the DB.
+Each tag row on the Tags screen shows a proportional density bar: width = `(tagNoteCount / maxNoteCount) * 100%`. The max is computed across all tags in the current list. This is a pure UI computation in `TagsScreen.build()` — not stored in the DB. Counts come from `tagNoteCountsProvider` (`@riverpod FutureProvider → Map<String,int>`). Uses `LayoutBuilder` + a `Stack` of two `Container` widgets (track + fill). `maxCount` defaults to 1 when no tags have notes (avoids divide-by-zero).
 
 **D7.4 — Tag deletion cascades from UI only**
-Deleting a tag from the Tags screen calls `ITagRepository.delete(id)`. The `TagsDao` removes the tag from `tags`, removes all rows in `note_tags` for that tag, and syncs `tagIds` on affected notes via `_syncDenormalisedTagIds`. This is done inside a Drift transaction.
+Deleting a tag from the Tags screen calls `ITagRepository.delete(id)`. The `TagsDao` removes the tag from `tags`, removes all rows in `note_tags` for that tag, and syncs `tagIds` on affected notes via `_syncDenormalisedTagIds`. This is done inside a Drift transaction. Long-press on a tag row triggers a delete confirmation dialog.
 
 **D7.5 — Maximum 20 tags per note**
-`AppConstants.maxTagsPerNote = 20`. The tag input is disabled once a note has 20 tags. The ViewModel enforces this before calling the repository.
+`AppConstants.maxTagsPerNote = 20`. The `+ tag` chip in `MNTagRow` renders at 40% opacity and ignores taps when `maxTagsReached == true`. `_onAddTagTap` in `NoteEditorScreen` returns early with a SnackBar ("Maximum 20 tags per note") when the limit is reached.
+
+### Implementation Details
+
+**D7.6 — `_TagInputSheet` is a `ConsumerStatefulWidget` in `note_editor_screen.dart`**
+The sheet has its own `TextEditingController`, 200 ms debounce timer, and `_suggestions: List<Tag>` state. It calls `tagListViewModelProvider.notifier.searchByPrefix` on each change and `findByName` on submit to distinguish "use existing" from "create new". It pops with the `Tag` object. The screen does not see the sheet's internals — it only receives the result.
+
+**D7.7 — `tagNoteCountsProvider` is not `keepAlive`**
+By default, `@riverpod` providers are auto-disposed when their last listener unmounts. `tagNoteCountsProvider` is therefore recreated each time `TagsScreen` opens, ensuring note counts are always fresh on screen entry. No manual invalidation needed.
+
+**D7.8 — `TagListViewModel` gains query helper methods (no state mutation)**
+`searchByPrefix(prefix)` and `findByName(name)` delegate directly to the repo and do not set `state`. They are convenience methods for the `_TagInputSheet` view layer so the sheet never calls the repo directly (rule 4 compliance).
+
+**D7.9 — `TagsDao.countNotesPerTag` uses raw SQL GROUP BY**
+A `customSelect` query on `note_tags GROUP BY tag_id` with `COUNT(note_id)` returns note counts per tag. Tags with zero notes are not in the result map (default to 0 in the UI). This is a one-shot query, not a stream.
+
+**D7.10 — Tags screen bottom nav is per-screen (active tab index 2)**
+Consistent with Phase 4 (`NoteListScreen` has active tab 0). Phase 9's `ShellRoute` will replace all per-screen nav bars with a single persistent one.
 
 ---
 
@@ -477,6 +494,9 @@ Never deviate from these values. They are pixel-specified in the design system.
 | BUG-12 | 2 `prefer_const_constructors` lint warnings during Phase 4 NoteListScreen implementation. | 4 | ✅ Fixed | Applied `const` to the affected widget constructors during implementation. `flutter analyze` 0 issues. |
 | BUG-13 | `speech_to_text` v7 cannot transcribe audio files — original D6.4 architecture assumed file-based transcription ("STT runs after recording stops using the recorded file path"). This is not a code bug but a capability misunderstanding: `speech_to_text` v7 only performs live microphone recognition; it has no file transcription API. Running `recognize(audioFilePath)` is not supported. Discovered during Phase 6 planning. | 6 | ✅ Resolved | Architecture revised to simultaneous live STT + flutter_sound recording (confirmed by developer). D6.4 updated in DECISIONS.md. **Pitfall for future phases**: never assume `speech_to_text` can transcribe an audio file. If file-based transcription is ever needed, a separate backend endpoint (Whisper or Google STT API) is required. |
 | BUG-14 | Android STT engine silently stops recognising after ~7 seconds of silence and fires a `'notListening'` status event. Without recovery, long recordings would truncate the transcript mid-sentence. Not documented in the `speech_to_text` package README. | 6 | ✅ Fixed | Added `_onStatus` callback to `SpeechToTextService` that detects `'notListening'` while `_active == true` and restarts `_stt.listen()` after a 200 ms delay. This transparent restart is documented as D6.7. |
+| BUG-15 | `flutter analyze` post-Phase-6: `unnecessary_import` in `local_audio_record_repository.dart` — `import '../../datasources/local/daos/audio_records_dao.dart'` was redundant because `app_database.dart` already re-exports `AudioRecordsDao`. | 6 | ✅ Fixed | Removed the redundant import. Consistent with Phase 3 cleanup that removed all direct DAO imports from local repos (BUG-11). `app_database.dart` is the single import point for all Drift DAOs and tables. |
+| BUG-16 | `flutter analyze` post-Phase-6: `deprecated_member_use` in `speech_to_text_service.dart` — `listenMode` and `cancelOnError` passed as direct params to `_stt.listen()` were deprecated in `speech_to_text ^7.0.0`. The new API wraps them in `SpeechListenOptions`. `pauseFor` is not deprecated and stays as a direct param. | 6 | ✅ Fixed | Replaced `listenMode: ListenMode.dictation, cancelOnError: false` with `listenOptions: SpeechListenOptions(listenMode: ListenMode.dictation, cancelOnError: false)`. `SpeechListenOptions` is re-exported from `package:speech_to_text/speech_to_text.dart` — no new import required. |
+| BUG-17 | `flutter analyze` post-Phase-6: `prefer_const_constructors` in `audio_recording_service.dart` — `throw FileStorageException(...)` in `_assertInitialized()` was missing `const`. `FileStorageException` has a `const` constructor (`const FileStorageException(super.message, {super.cause})`). | 6 | ✅ Fixed | Changed `throw FileStorageException(...)` to `throw const FileStorageException(...)`. |
 
 ---
 

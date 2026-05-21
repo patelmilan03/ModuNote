@@ -175,7 +175,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | 4 | Note list screen | ✅ Complete |
 | 5 | Note editor screen (Quill) | ✅ Complete |
 | 6 | Voice-to-text + audio recording/playback | ✅ Complete |
-| 7 | Tags (freeform + autocomplete) | ⬜ Not started |
+| 7 | Tags (freeform + autocomplete) | ✅ Complete |
 | 8 | Categories (hierarchical folder tree) | ⬜ Not started |
 | 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ⬜ Not started |
 | 10 | Firebase preparation layer (stubs, SyncStatus) | ⬜ Not started |
@@ -217,7 +217,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `lib/data/datasources/local/converters/type_converters.dart` | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` |
 | `MODUNOTE_UI_REFERENCE.md` | Full pixel-level UI spec from Claude Design |
 | `progress.md` | Human-readable phase progress log |
-| `TESTING.md` | Manual testing checklist — smoke test (~35 checks, ~15 min) + full regression (~130 checks, ~1 hr) |
+| `TESTING.md` | Manual testing checklist — 15 sections, ~130 checks. Quick smoke test (~46 🔴 critical checks, ~20 min) + full regression (~130 checks, ~1.5 hr). Section 15 = voice/STT deep verification with ADB file + DB inspection commands. |
 
 ---
 
@@ -230,6 +230,6 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 5. Read `MODUNOTE_UI_REFERENCE.md` — before touching any UI file.
 6. Run `flutter pub get` then `dart run build_runner build --delete-conflicting-outputs`.
 7. Run `flutter analyze` — must report 0 issues before writing any code.
-8. Run `flutter run` — boots to NoteListScreen; tap FAB → Note Editor; tap mic → recording overlay.
+8. Run `flutter run` — boots to NoteListScreen; tap FAB → Note Editor; tap mic → recording overlay; tap Tags tab → Tags screen with density bars.
 9. Ask the developer which phase to proceed with before writing any code.
 10. After completing a phase, run the smoke test checks in `TESTING.md` before committing.

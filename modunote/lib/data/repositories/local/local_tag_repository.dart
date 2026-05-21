@@ -161,6 +161,15 @@ class LocalTagRepository implements ITagRepository {
     }
   }
 
+  @override
+  Future<Map<String, int>> getNoteCounts() async {
+    try {
+      return await _tagsDao.countNotesPerTag();
+    } on Exception catch (e) {
+      throw DatabaseException('Failed to get tag note counts', cause: e);
+    }
+  }
+
   // ── Mapping ────────────────────────────────────────────────────────────────
 
   Tag _rowToTag(TagRow row) => Tag(
