@@ -95,10 +95,18 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _currentNote = note;
 
     Document doc;
-    if (note != null && note.content['ops'] != null) {
+    if (note != null && note.content['ops'] is List) {
+      // Explicitly cast each op to Map<String, dynamic> so flutter_quill's
+      // fromJson receives the correct type regardless of what jsonDecode
+      // produced (List<dynamic> with Map<String, Object> elements can cause
+      // a silent type mismatch that drops list/checkbox block attributes).
+      final ops = (note.content['ops'] as List)
+          .map((op) => Map<String, dynamic>.from(op as Map))
+          .toList();
       try {
-        doc = Document.fromJson(note.content['ops'] as List);
-      } catch (_) {
+        doc = Document.fromJson(ops);
+      } catch (e, st) {
+        debugPrint('NoteEditor: failed to deserialize content: $e\n$st');
         doc = Document();
       }
       _titleController.text = note.title;
@@ -540,6 +548,14 @@ class _AudioClipsRow extends ConsumerStatefulWidget {
 
 class _AudioClipsRowState extends ConsumerState<_AudioClipsRow> {
   String? _playingId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Eagerly initialise so playback works even when the user opens a note
+    // with existing clips without tapping the mic first. init() is idempotent.
+    widget.audioService.init().ignore();
+  }
 
   @override
   void dispose() {
