@@ -14,16 +14,18 @@ import '../../datasources/local/app_database.dart';
 /// - Self-referential FK integrity (a category cannot be its own ancestor).
 ///   Enforced by [_assertNoCycle] before any move.
 ///
-/// Deletion policy (cascade vs re-parent) is deferred to Phase 8;
-/// [delete] currently only removes a leaf category and throws if the
-/// category has children.
+/// Deletion policy (PD-01, resolved Phase 8): re-parent.
+/// When a category is deleted, its direct children are re-parented to the
+/// deleted category's parent (or root if no parent). Notes whose categoryId
+/// equals the deleted category are set to null (Uncategorised).
 class LocalCategoryRepository implements ICategoryRepository {
   final CategoriesDao _categoriesDao;
+  final NotesDao _notesDao;
 
   /// Maximum nesting depth (root counts as depth 1).
   static const int _maxDepth = 5;
 
-  const LocalCategoryRepository(this._categoriesDao);
+  const LocalCategoryRepository(this._categoriesDao, this._notesDao);
 
   // ── Watch streams ──────────────────────────────────────────────────────────
 
@@ -150,15 +152,18 @@ class LocalCategoryRepository implements ICategoryRepository {
   @override
   Future<void> delete(String id) async {
     try {
-      // Phase 8 will add cascade / re-parent logic.
-      // For now: only leaf categories may be deleted.
+      // Re-parent policy (PD-01): move direct children to the deleted
+      // category's parent (grandparent), or to root if no grandparent.
+      // Notes assigned to the deleted category become Uncategorised (null).
+      final target = await _categoriesDao.findById(id);
+      final grandparentId = target?.parentId; // null = root
+
       final children = await _categoriesDao.findChildren(id);
-      if (children.isNotEmpty) {
-        throw const ValidationException(
-          'Cannot delete a category that has children. '
-          'Move or delete children first.',
-        );
+      for (final child in children) {
+        await _categoriesDao.moveCategory(child.id, grandparentId);
       }
+
+      await _notesDao.clearCategoryFromNotes(id);
       await _categoriesDao.deleteCategory(id);
     } on ValidationException {
       rethrow;

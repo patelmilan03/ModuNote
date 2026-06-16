@@ -22,6 +22,7 @@ import '../../viewmodels/category_tree_view_model.dart';
 import '../../viewmodels/note_editor_view_model.dart';
 import '../../viewmodels/tag_list_view_model.dart';
 import '../../widgets/mn_editor_toolbar.dart';
+import '../../widgets/mn_category_picker_sheet.dart';
 import '../../widgets/mn_tag_row.dart';
 
 /// Rich-text note editor.
@@ -229,17 +230,33 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     if (vmNote != null) setState(() => _currentNote = vmNote);
   }
 
-  // ─── Category stub ────────────────────────────────────────────────────────
+  // ─── Category picker ──────────────────────────────────────────────────────
 
-  void _showCategoryStub() {
-    showModalBottomSheet<void>(
+  Future<void> _onCategoryTap() async {
+    final result = await showModalBottomSheet<String>(
       context: context,
-      builder: (ctx) => Container(
-        height: 200,
-        padding: const EdgeInsets.all(24),
-        child: const Center(child: Text('Category picker — Phase 8')),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => MNCategoryPickerSheet(
+        currentCategoryId: _currentNote?.categoryId,
       ),
     );
+
+    // null = dismissed, "" = unassign, non-empty = category id
+    if (result == null || !mounted) return;
+
+    final newCategoryId = result.isEmpty ? null : result;
+    if (newCategoryId == _currentNote?.categoryId) return;
+
+    if (_currentNote == null) {
+      _debounce?.cancel();
+      await _performAutoSave();
+    }
+    if (!mounted || _currentNote == null) return;
+
+    await ref
+        .read(noteEditorViewModelProvider(noteId: widget.noteId).notifier)
+        .setCategory(newCategoryId);
   }
 
   // ─── Recording ────────────────────────────────────────────────────────────
@@ -497,7 +514,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
               categoryName: categoryName,
               onRemoveTag: _onRemoveTag,
               onAddTagTap: _onAddTagTap,
-              onCategoryTap: _showCategoryStub,
+              onCategoryTap: _onCategoryTap,
               onMicTap: _onMicTap,
               isRecording: _isRecording,
               maxTagsReached:

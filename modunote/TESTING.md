@@ -1,5 +1,5 @@
 # ModuNote — Complete Device Testing Guide
-> **Covers Phases 1–7** (all shipped code as of Phase 7 Tags completion).
+> **Covers Phases 1–8** (all shipped code as of Phase 8 Categories completion).
 > Every check is a pass/fail statement. Run on a **physical Android device**.
 > 🔴 = must pass before any commit. ⚠️ STUB = intentional placeholder for a future phase.
 
@@ -737,7 +737,7 @@ flutter run            # connect physical Android device first
 | # | Check | Expected |
 |---|---|---|
 | 26.1 ⚠️ STUB | Settings screen loads without crash | Some placeholder content visible |
-| 26.2 ⚠️ STUB | Tapping category chip → bottom sheet shows `"Category picker — Phase 8"` | No crash; stub text visible |
+| 26.2 ~~⚠️ STUB~~ | ~~Tapping category chip → bottom sheet shows `"Category picker — Phase 8"`~~ | ✅ Full picker implemented in Phase 8 — see Section 33 |
 | 26.3 ⚠️ STUB | Note editor `⋮` overflow button → tapping does nothing | No crash; no menu |
 | 26.4 | Note editor `⋮` does not navigate or pop the screen | Screen stays open |
 
@@ -954,6 +954,117 @@ adb logcat -s flutter
 | 32.10 | Recording stop logged with duration | `Duration: NNNNms` in log |
 | 32.11 | STT timeout recovery logged | `Status: notListening — restarting` after ~7 s silence |
 | 32.12 | Final result events logged | `Result: "spoken text" (final: true)` lines appear |
+
+---
+
+## Section 33 — Category Picker: Sheet UI (Phase 8)
+
+> Access by opening any note in the editor then tapping the **category chip** in the tag row.
+
+### 33A — Sheet Open
+
+| # | Check | Expected |
+|---|---|---|
+| 33.1 🔴 | Tapping category chip → `MNCategoryPickerSheet` slides up | Bottom sheet opens; no crash |
+| 33.2 | Sheet has a grabber (36×4 dp, `outlineStrong` colour, border-radius 2) | Visible at top of sheet |
+| 33.3 | Sheet corner radius: 28 dp top-left and top-right | Rounded top corners |
+| 33.4 | Sheet header reads `"Move to category"` (PJS 19/800/−0.3) | Bold heading visible |
+| 33.5 | Header subtitle reads `"Organise this note in your folder tree"` (Inter 12.5/400/muted) | Smaller muted text |
+| 33.6 | Close × button: 34×34 circle, `surfaceContainer` bg, 18 dp icon | Top-right of header |
+| 33.7 | Tapping × → sheet dismisses, no category change | Null result; note unchanged |
+| 33.8 | Swiping sheet down → sheet dismisses, no category change | Same null result |
+
+### 33B — "None" Row
+
+| # | Check | Expected |
+|---|---|---|
+| 33.9 🔴 | "None" row is the first item in the list | Above all category rows |
+| 33.10 | "None" row has `folder_off_outlined` icon | Folder-with-x icon |
+| 33.11 | Tapping "None" → sheet closes | Returns `""` (empty string = unassign) |
+| 33.12 🔴 | After tapping "None": category chip in editor shows default/unassigned state | `categoryName == null` |
+| 33.13 | When note has no category assigned: "None" row shows a checkmark `✓` | Pre-selected state |
+| 33.14 | When note has a category assigned: "None" row has no checkmark | Unselected |
+
+### 33C — Category Tree Rows
+
+| # | Check | Expected |
+|---|---|---|
+| 33.15 🔴 | Root-level categories appear with no indentation (or base 10 dp left padding) | Not indented |
+| 33.16 🔴 | Child categories indented by `10 + depth × 20` dp from left | e.g. depth 1 = 30 dp, depth 2 = 50 dp |
+| 33.17 | Category with children shows expand chevron (right-pointing) | `keyboard_arrow_right` icon visible |
+| 33.18 | Category without children shows no chevron (spacer instead) | No icon; row still aligns |
+| 33.19 🔴 | Tapping expand chevron → children appear below parent | Tree expands inline |
+| 33.20 | Tapping chevron again → children collapse | Tree collapses |
+| 33.21 | Tapping chevron does NOT select the category | Only the row tap selects |
+| 33.22 | Tapping a category row → sheet closes | Returns that category's id |
+| 33.23 🔴 | After tapping a category: category chip in editor shows that category's name | `categoryName == category.name` |
+| 33.24 | Selected row: `primaryContainer` background + check ✓ icon + bold name + `folder` (filled) icon | Highlighted selection |
+| 33.25 | Unselected rows: transparent background + `folder_outlined` icon | Normal appearance |
+| 33.26 | When opening sheet for a note with an assigned category: that category row shows checkmark | Pre-selected |
+| 33.27 | When opening sheet for a note with an assigned category AND it's nested: ancestor rows are pre-expanded | Selection visible without manual expansion |
+
+### 33D — "New Category" Row
+
+| # | Check | Expected |
+|---|---|---|
+| 33.28 🔴 | "New category" row is last in the list | Below all category rows |
+| 33.29 | Row has a border (1 dp `outlineStrong`), border-radius 14 | Distinct from tree rows |
+| 33.30 | Row has amber add button: 26×26 dp, border-radius 8, `accent` background, `+` icon | Small amber square-rounded button |
+| 33.31 | When a category is selected in the tree: row shows `"Under · <name>"` hint text | Context hint visible on right |
+| 33.32 | When no category is selected: no hint text shown | Right side empty |
+| 33.33 🔴 | Tapping "New category" → AlertDialog opens with text field | "New category" dialog title |
+| 33.34 | Dialog hint text shows parent context: `"Name (under <parent>)"` if a category is selected; `"Name (at root)"` otherwise | Contextual placeholder |
+| 33.35 🔴 | Submitting a name → new category created, tree updates | Category appears in tree |
+| 33.36 | New category created under the currently-selected parent (if one is selected) | Adjacency-list parent set correctly |
+| 33.37 | New category created at root if no category is selected (or "None" is selected) | `parentId = null` |
+| 33.38 | Submitting empty name → dialog closes, nothing created | Graceful no-op |
+| 33.39 | Tapping Cancel in dialog → no category created | Cancel works |
+
+### 33E — Sheet Scrolling & Constraints
+
+| # | Check | Expected |
+|---|---|---|
+| 33.40 | Sheet content area is scrollable when tree has many categories | `ListView` scrolls within `ConstrainedBox(maxHeight: 55% of screen)` |
+| 33.41 | Sheet does not exceed 55% of screen height | Content clips cleanly |
+| 33.42 | Keyboard safe area respected at bottom | Content not hidden by nav gestures |
+
+---
+
+## Section 34 — Category Picker: Assignment & Persistence (Phase 8)
+
+| # | Check | Expected |
+|---|---|---|
+| 34.1 🔴 | Assign a category to a note via picker → force-kill app, relaunch, open note → category chip still shows assigned category | `categoryId` committed to `notes` table |
+| 34.2 🔴 | Unassign a category ("None") → force-kill, relaunch → category chip shows default | `categoryId = null` persisted |
+| 34.3 | Assign category A, then re-open picker and assign category B → note shows B | Category replaced, not appended |
+| 34.4 | Note List screen: note card shows no category indication until Phase 9 decides card layout | No card regression |
+
+---
+
+## Section 35 — Category Deletion: Re-Parent Policy (Phase 8)
+
+> Create a small tree to test: Root → A → B (B is child of A). Add notes assigned to A.
+
+| # | Check | Expected |
+|---|---|---|
+| 35.1 🔴 | Delete category A (which has child B and assigned notes) — child B should now be at root | B appears with no parent (root level) |
+| 35.2 🔴 | Notes previously assigned to A → after delete, `categoryId = null` | Notes become Uncategorised |
+| 35.3 | Category B's sub-children (if any at depth 2) stay as children of B after A is deleted | Only direct children re-parented; deeper descendants unaffected |
+| 35.4 | Force-kill app after deletion, relaunch → re-parent state persisted | DB committed before kill |
+
+### 35A — DB Verification for Category Operations
+
+```sql
+-- In DB Browser Execute SQL tab
+SELECT id, name, parent_id, sort_order FROM categories ORDER BY parent_id NULLS FIRST, name;
+```
+
+| # | Check | Expected |
+|---|---|---|
+| 35.5 🔴 | After assigning a category to a note: `categories` row exists; `notes.category_id` matches | FK valid |
+| 35.6 | After unassigning: `notes.category_id` is NULL | Column nulled |
+| 35.7 | After deleting A (which had child B): A row absent; B row has `parent_id = NULL` (was A's parent) | Re-parent committed |
+| 35.8 | Notes that had `category_id = A.id` now have `category_id = NULL` | `clearCategoryFromNotes` ran |
 
 ---
 

@@ -143,4 +143,13 @@ class NotesDao extends DatabaseAccessor<AppDatabase> with _$NotesDaoMixin {
       NotesTableCompanion(tagIds: Value(tagIds)),
     );
   }
+
+  /// Sets [categoryId] to null on every note that currently belongs to
+  /// [categoryId]. Called by [LocalCategoryRepository.delete] before the
+  /// category row is removed so no note is left referencing a deleted category.
+  Future<void> clearCategoryFromNotes(String categoryId) async {
+    await (update(notesTable)
+          ..where((t) => t.categoryId.equals(categoryId)))
+        .write(const NotesTableCompanion(categoryId: Value(null)));
+  }
 }

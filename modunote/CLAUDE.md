@@ -74,7 +74,7 @@ lib/
     │   ├── search/search_screen.dart
     │   ├── tags/tags_screen.dart
     │   └── settings/settings_screen.dart
-    ├── widgets/                       # Shared widgets — mn_note_card.dart, mn_search_field.dart, mn_editor_toolbar.dart, mn_tag_row.dart (Phase 4+)
+    ├── widgets/                       # Shared widgets — mn_note_card.dart, mn_search_field.dart, mn_editor_toolbar.dart, mn_tag_row.dart, mn_category_picker_sheet.dart (Phase 4+)
     └── router/
         ├── app_router.dart            # GoRouter config, routerProvider, ThemeModeNotifier
         └── app_router.g.dart          # Generated — run `dart run build_runner build`
@@ -176,7 +176,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | 5 | Note editor screen (Quill) | ✅ Complete |
 | 6 | Voice-to-text + audio recording/playback | ✅ Complete |
 | 7 | Tags (freeform + autocomplete) | ✅ Complete |
-| 8 | Categories (hierarchical folder tree) | ⬜ Not started |
+| 8 | Categories (hierarchical folder tree) | ✅ Complete |
 | 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ⬜ Not started |
 | 10 | Firebase preparation layer (stubs, SyncStatus) | ⬜ Not started |
 | 11 | Backend API scaffolding (FastAPI stubs) | ⬜ Not started |

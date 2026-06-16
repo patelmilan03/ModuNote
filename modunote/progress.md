@@ -31,7 +31,7 @@
 | 5 | Note editor screen (Quill) | ✅ **Complete** | See details below |
 | 6 | Voice-to-text + audio recording/playback | ✅ **Complete** | See details below |
 | 7 | Tags (freeform + autocomplete) | ✅ **Complete** | See details below |
-| 8 | Categories (hierarchical folder tree) | ⬜ Not started | — |
+| 8 | Categories (hierarchical folder tree) | ✅ **Complete** | See details below |
 | 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ⬜ Not started | — |
 | 10 | Firebase preparation layer | ⬜ Not started | — |
 | 11 | Backend API scaffolding (FastAPI) | ⬜ Not started | — |
@@ -507,6 +507,73 @@ Expected:
 
 ---
 
+## Phase 8 — Categories (Hierarchical Folder Tree) ✅
+
+**Completed**: Phase 8
+**Deliverable**: Full category picker bottom sheet wired to the note editor. Re-parent deletion policy in the data layer.
+
+### Files Modified
+
+#### `lib/data/datasources/local/daos/notes_dao.dart`
+- Added `clearCategoryFromNotes(String categoryId)` — sets `categoryId = null` on all notes that reference the given category. Called by `LocalCategoryRepository.delete` before removing the category row.
+
+#### `lib/data/repositories/local/local_category_repository.dart`
+- Constructor extended from `(this._categoriesDao)` to `(this._categoriesDao, this._notesDao)`.
+- `delete(String id)` fully implemented (was leaf-only stub): walks ancestor chain for grandparent, re-parents all direct children via `moveCategory`, clears `categoryId` on affected notes, then deletes the category row.
+
+#### `lib/data/datasources/local/database_providers.dart`
+- `categoryRepository` provider body changed from `LocalCategoryRepository(db.categoriesDao)` to `LocalCategoryRepository(db.categoriesDao, db.notesDao)`.
+
+### Files Created
+
+#### `lib/presentation/widgets/mn_category_picker_sheet.dart`
+- `MNCategoryPickerSheet extends ConsumerStatefulWidget`. Constructor: `{required String? currentCategoryId}`.
+- State: `Set<String> _expandedIds` (pre-seeded by walking the ancestor chain of `currentCategoryId`), `String? _selectedId`.
+- Layout: grabber → header ("Move to category" + close ×) → constrained `ListView` (max 55% screen height).
+- Tree built by grouping categories by `parentId`; siblings sorted by `sortOrder` then name.
+- "None" row at top (unassigns category; returns `""`).
+- Category rows: `paddingLeft = 10.0 + depth * 20.0`, expand/collapse chevron, folder icon, selection checkmark. Tapping any row returns that category's id.
+- "New category" row at bottom: shows context hint (`Under · parentName` if a category is selected). Tapping opens an `AlertDialog` text field and calls `CategoryTreeViewModel.insert`.
+- Return value protocol: non-empty String = category id selected, empty String = unassigned, null = dismissed.
+
+#### `lib/presentation/views/note_editor/note_editor_screen.dart`
+- Added import for `mn_category_picker_sheet.dart`.
+- `_showCategoryStub` replaced with `_onCategoryTap`:
+  - Opens `MNCategoryPickerSheet` via `showModalBottomSheet<String>`.
+  - Interprets result: null = no-op, empty = `setCategory(null)`, non-empty = `setCategory(id)`.
+  - Auto-saves unsaved note before calling `setCategory` (mirrors `_onMicTap` pattern).
+- `onCategoryTap: _showCategoryStub` call site updated to `onCategoryTap: _onCategoryTap`.
+
+### Architectural Decisions
+
+| Decision | Detail |
+|---|---|
+| PD-01 resolved: re-parent | Children moved to grandparent (root if no grandparent); notes unassigned. Cascade rejected — avoids silent subtree deletion. |
+| Return value protocol | `String?` from modal: non-empty = assign, `""` = unassign, `null` = dismiss. Mirrors `pushNamed` conventions. |
+| `clearCategoryFromNotes` in `NotesDao` | Uses `Value(null)` in `NotesTableCompanion` to explicitly null-out the nullable column. Called before category row delete (foreign-key safe order). |
+| `_initExpanded` seeds from ancestor chain | On sheet open, walks `parentId` chain from `currentCategoryId` to root; adds each ancestor to `_expandedIds`. Current selection visible without user expansion. |
+| No build_runner required | No new `@riverpod` annotations; no Drift table structure change. All `.g.dart` files remain current from Phase 7. |
+| `flutter analyze` | **0 issues** after Phase 8. BUG-18 fixed: `noteEditorViewModelProvider` call used positional arg (wrong) — corrected to named `noteId:` param. |
+
+### First-Run Instructions (Phase 8 state)
+
+```bash
+# No new packages, no new @riverpod annotations
+# No build_runner run required
+flutter analyze   # expected: 0 issues
+flutter run
+```
+
+Expected:
+- Note Editor → tap category chip → `MNCategoryPickerSheet` opens as bottom sheet with full tree.
+- Tapping a category row assigns it; category chip label updates.
+- Tapping "None" row unassigns; chip label reverts to default "Category" label.
+- Tapping "New category" row → AlertDialog → type name → category created and tree updates.
+- Tapping × (close) or dismissing sheet → no change.
+- Delete a category via the picker's tree (when CategoryListScreen is built) → children re-parented, notes become Uncategorised.
+
+---
+
 ## Decisions Log (cross-phase)
 
 | Decision | Value | Phase set |
@@ -530,7 +597,7 @@ Expected:
 | ViewModel stream pattern | `build() → Stream<T>` for list VMs; Riverpod auto-wraps as `AsyncValue<T>` | 3 |
 | `NoteEditorViewModel` family param | Optional `noteId` build param; `_isNew` flag tracks first insert | 3 |
 | `SearchState` pattern | `Notifier<SearchState>` with query + `AsyncValue<List<Note>>` results; 300 ms debounce | 3 |
-| Category deletion policy | **TBD — Phase 8** | — |
+| Category deletion policy | **Re-parent children to grandparent/root; notes → Uncategorised** | 8 |
 | AI provider (Gemini vs Groq) | **TBD — Phase 12** | — |
 
 ---
@@ -539,7 +606,7 @@ Expected:
 
 | Decision | Phase to resolve |
 |---|---|
-| Category deletion policy when children exist (cascade vs re-parent) | 8 |
+| Category deletion policy when children exist | 8 ✅ Resolved: re-parent |
 | AI provider evaluation (Gemini free tier vs Groq) | 12 |
 
 ---

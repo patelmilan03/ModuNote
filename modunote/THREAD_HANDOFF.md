@@ -3,17 +3,16 @@
 
 ---
 
-## Status: Phase 7 ✅ Complete. Proceed with Phase 8.
+## Status: Phase 8 ✅ Complete. Proceed with Phase 9.
 
-Phase 7 is fully complete. **`flutter analyze` reports 0 issues.**
+Phase 8 is fully complete. **`flutter analyze` reports 0 issues.**
 
-**What Phase 7 delivered:**
-- `NoteEditorScreen`: `_showAddTagDialog` (AlertDialog stub) replaced with `_TagInputSheet` — a `ConsumerStatefulWidget` bottom sheet with live autocomplete (200 ms debounce, `searchByPrefix`), suggestion tiles for existing tags, "Create #name" tile for new tags, and `findByName` to avoid duplicates.
-- `MNTagRow`: `maxTagsReached` parameter added; `+ tag` chip fades and ignores taps at the 20-tag limit.
-- `TagsScreen`: Full implementation (was Phase 1 placeholder). Tags list in an outer card with hash icon, density bars (`LayoutBuilder` + primary fill at 55% opacity), count badges, long-press delete. Bottom nav pill with active tab 2.
-- Data layer: `TagsDao.countNotesPerTag()` (raw SQL GROUP BY), `ITagRepository.getNoteCounts()`, `LocalTagRepository.getNoteCounts()`.
-- ViewModel: `TagListViewModel.searchByPrefix()`, `TagListViewModel.findByName()`, `tagNoteCountsProvider` (auto-disposed FutureProvider).
-- `build_runner` was run during Phase 7 (new `@riverpod` annotation on `tagNoteCountsProvider`). No re-run needed before committing.
+**What Phase 8 delivered:**
+- Data layer: `NotesDao.clearCategoryFromNotes` (sets `categoryId = null` on notes before category delete). `LocalCategoryRepository.delete` fully implemented with re-parent policy (PD-01 resolved). Constructor extended to accept `NotesDao`. `database_providers.dart` updated to pass `db.notesDao`.
+- UI: `MNCategoryPickerSheet` (`ConsumerStatefulWidget`) — full adjacency-list tree with expand/collapse, depth-indented rows (`10 + depth × 20` px), "None" row (unassigns), "New category" row (AlertDialog, calls `CategoryTreeViewModel.insert`), ancestor pre-expansion on open.
+- `NoteEditorScreen`: `_showCategoryStub` replaced with `_onCategoryTap` — opens `MNCategoryPickerSheet`, handles all three return cases (null / empty / id), calls `NoteEditorViewModel.setCategory`.
+- No build_runner run required (no new `@riverpod` annotations; no Drift table change).
+- BUG-18 fixed: provider family call used positional arg; corrected to named `noteId:` param.
 
 ---
 
@@ -287,6 +286,48 @@ Added `<uses-permission android:name="android.permission.RECORD_AUDIO"/>`.
 
 ---
 
+## What was built (Phase 8)
+
+Categories — data layer + category picker bottom sheet.
+
+### Modified files
+
+#### `lib/data/datasources/local/daos/notes_dao.dart`
+- Added `clearCategoryFromNotes(String categoryId)` — bulk-nulls `categoryId` on all notes belonging to the deleted category. Called by `LocalCategoryRepository.delete` before the category row is removed.
+
+#### `lib/data/repositories/local/local_category_repository.dart`
+- Constructor: `const LocalCategoryRepository(this._categoriesDao, this._notesDao)` (was single-arg).
+- `delete(String id)` fully implemented with re-parent policy (PD-01 resolved): fetches grandparent id → moves all direct children → clears notes → deletes category.
+
+#### `lib/data/datasources/local/database_providers.dart`
+- `categoryRepository` provider: `LocalCategoryRepository(db.categoriesDao, db.notesDao)` (was single-arg).
+
+#### `lib/presentation/views/note_editor/note_editor_screen.dart`
+- Added import: `'../../widgets/mn_category_picker_sheet.dart'`
+- `_showCategoryStub` replaced with `_onCategoryTap`:
+  - `showModalBottomSheet<String>(... MNCategoryPickerSheet(currentCategoryId: ...))`
+  - Result: `null` = no-op, `""` = `setCategory(null)`, non-empty = `setCategory(id)`
+  - Auto-saves unsaved note before setCategory (same pattern as `_onMicTap`)
+- `onCategoryTap: _showCategoryStub` → `onCategoryTap: _onCategoryTap`
+
+### Created files
+
+#### `lib/presentation/widgets/mn_category_picker_sheet.dart`
+`MNCategoryPickerSheet extends ConsumerStatefulWidget`. Constructor: `{required String? currentCategoryId}`.
+
+Key implementation:
+- State: `_selectedId` (tracks current selection), `_expandedIds` (expand/collapse; pre-seeded with ancestor chain of `currentCategoryId` on first data load)
+- Tree building: groups categories by `parentId` in `_buildScrollableTree`; siblings sorted by `sortOrder` then `name`; rendered recursively via `addRows(parentId, depth)`
+- Row indentation: `paddingLeft = 10.0 + depth * 20.0`
+- "None" row: `folder_off_outlined` icon; pops with `""` (unassign)
+- Category rows: expand chevron (if has children) + folder icon + name; tapping pops with `category.id`; chevron tap toggles `_expandedIds` via `setState`
+- "New category" row: shows context hint when a category is selected; taps open `_showNewCategoryDialog` AlertDialog; submit calls `categoryTreeViewModelProvider.notifier.insert(name, parentId: _selectedId)`
+- Returns: non-empty String = assign, `""` = unassign, `null` = dismiss
+
+No build_runner required. `flutter analyze` = 0 issues.
+
+---
+
 ## Architecture decisions locked (Phases 1–6)
 
 | Decision | Value | Phase |
@@ -326,6 +367,10 @@ Added `<uses-permission android:name="android.permission.RECORD_AUDIO"/>`.
 | Services lifecycle | `AudioRecordingService` + `SpeechToTextService` are plain Dart classes owned by `_NoteEditorScreenState` — not `@riverpod` providers | 6 |
 | Audio clip chips | Displayed in `_AudioClipsRow` (ConsumerStatefulWidget) above MNTagRow | 6 |
 | `_AudioClipsRow` widget type | `ConsumerStatefulWidget` — needs provider watch + `_playingId` playback state | 6 |
+| PD-01: category deletion policy | Re-parent children to grandparent/root; notes set Uncategorised | 8 |
+| `MNCategoryPickerSheet` return value | `String?` from modal: non-empty = assign, `""` = unassign, `null` = dismiss | 8 |
+| Category picker expand seeding | Ancestor chain pre-expanded on sheet open so current selection is visible | 8 |
+| `clearCategoryFromNotes` | `NotesDao` method; `Value(null)` companion; called before category row delete | 8 |
 
 ---
 
@@ -349,25 +394,29 @@ Added `<uses-permission android:name="android.permission.RECORD_AUDIO"/>`.
 
 | Decision | Phase |
 |---|---|
-| Category deletion policy when children exist (cascade vs re-parent) | 8 |
+| Category deletion policy when children exist | 8 ✅ Resolved: re-parent |
 | AI provider evaluation (Gemini free tier vs Groq) | 12 |
 
 ---
 
-## First-run instructions (Phase 7 state)
+## First-run instructions (Phase 8 state)
 
 ```bash
-# No new packages added — flutter pub get not needed
-dart run build_runner build --delete-conflicting-outputs
-# build_runner was run during Phase 7; re-running is safe and ensures generated files are current
+# No new packages, no new @riverpod annotations
+# No build_runner run required — generated files are current from Phase 7
 flutter analyze   # expected: 0 issues
 flutter run
 ```
 
 Expected:
-- Note Editor → tap `+ tag` → bottom sheet with text field; type to see autocomplete suggestions; submit new name to create; select existing to reuse.
-- At 20 tags: `+ tag` chip fades; tap shows SnackBar "Maximum 20 tags per note".
-- Bottom nav Tags tab → Tags screen with all tags, density bars proportional to note count, long-press to delete.
+- Note Editor → tap category chip → `MNCategoryPickerSheet` opens as bottom sheet.
+- Sheet shows tree of all categories (empty tree if none created yet) + "None" row at top + "New category" row at bottom.
+- Tap "New category" → AlertDialog → type name → category created; tree updates.
+- Tap a category row → sheet closes; category chip label updates to that category name.
+- Tap "None" → sheet closes; category chip returns to default / unassigned state.
+- Tap × (close) or swipe away → sheet closes with no change.
+- Create nested categories (tap a category to select, then add new → created under selected parent).
+- Depth enforcement: trying to create a 6th level → `ValidationException` (sheet stays open, no crash).
 
 ---
 
@@ -385,22 +434,20 @@ The following doc work was completed after Phase 6 code was finished:
 
 ---
 
-## Phase 8 — What to build next
+## Phase 9 — What to build next
 
-**Title**: Categories (hierarchical folder tree)
+**Title**: Navigation + Theming (GoRouter ShellRoute, M3 bottom nav, theme persistence)
 
-**Scope** (from DECISIONS.md D8.1–D8.5):
+**Scope** (from DECISIONS.md D9.1–D9.5):
 
-1. **Resolve pending decision PD-01** at the start: category deletion policy (cascade all descendants vs re-parent children). Update DECISIONS.md before writing any DAO code.
-2. Replace the stub category bottom sheet in `NoteEditorScreen` with `MNCategoryPickerSheet` (UI Reference § 3.5) — full adjacency-list tree, depth-indented rows, expand/collapse, "New category" row.
-3. `CategoryTreeViewModel` already has `insert`, `move`, `delete`. The DAO is already built. Phase 8 is primarily a UI phase.
-4. `AppConstants.maxCategoryDepth = 5` must be enforced in the ViewModel when creating nested categories.
-5. `flutter analyze` = 0 issues.
-6. Update all four doc files.
+1. **GoRouter `ShellRoute`** — refactor `app_router.dart` to wrap Home (`/`), Explore (`/search`), Tags (`/tags`), Settings (`/settings`) in a `ShellRoute`. The Note Editor and Category Picker do not participate in the shell.
+2. **`MNBottomNav`** — extract the floating pill nav from per-screen `_BottomNav` implementations into a single shared widget rendered by the shell. Remove per-screen nav bars from `NoteListScreen`, `TagsScreen`, and the Search screen.
+3. **Theme persistence** — extend `ThemeModeNotifier` to read from and write to `SharedPreferences` using `AppConstants.prefThemeMode`. Add `shared_preferences` package to `pubspec.yaml`.
+4. **Settings screen** — replace placeholder with theme toggle (Light / Dark card grid, per D9.5).
+5. **`flutter analyze` = 0 issues**.
+6. **Update all doc files** post-completion.
 
-**Before starting Phase 8**, Claude must present a detailed plan and wait for developer approval.
-
-**⚠️ PD-01 must be resolved first** — the category deletion policy determines the DAO transaction logic for `CategoriesDao.deleteCategory`. Do not write DAO code until the developer chooses cascade or re-parent.
+**Before starting Phase 9**, Claude must present a detailed plan and wait for developer approval.
 
 ---
 

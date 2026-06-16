@@ -334,7 +334,7 @@ Consistent with Phase 4 (`NoteListScreen` has active tab 0). Phase 9's `ShellRou
 
 ---
 
-## Phase 8 — Categories ⬜ Not Started
+## Phase 8 — Categories ✅ Complete
 
 ### Pre-Decided Architecture
 
@@ -347,15 +347,34 @@ Categories are stored as a flat list with a nullable `parentId` (adjacency list 
 **D8.3 — Category picker is a bottom sheet**
 Assigning a category from the note editor opens a bottom sheet (`MNCategoryPickerSheet`) showing the full tree. Spec: `MODUNOTE_UI_REFERENCE.md § 3.5`. Tree rows are indented by `paddingLeft = 10.0 + depth * 20.0`. Expand/collapse state is local to the sheet (not persisted).
 
-**D8.4 ⚠️ PENDING: Category deletion policy**
-When a category with children is deleted, the behaviour is **not yet decided**. Two options:
-- **Cascade**: delete all descendants recursively and set `categoryId = null` on all affected notes.
-- **Re-parent**: move all direct children up to the deleted category's parent (or root if no parent).
-
-This decision must be made at the start of Phase 8 before writing any DAO code for `deleteCategory`. Update this file and `progress.md` when resolved.
+**D8.4 — PD-01 resolved: re-parent deletion policy**
+✅ Resolved at Phase 8 start (developer decision).
+When a category is deleted, its direct children are re-parented to the deleted category's parent (grandparent), or to root (`parentId = null`) if no grandparent. Notes whose `categoryId` equals the deleted category are set to `null` (Uncategorised). The alternative (cascade delete all descendants) was rejected — it would silently delete subtrees the user may want to keep.
 
 **D8.5 — `sortOrder` on categories**
 Categories have a `sortOrder: int` field for manual ordering within siblings. The default is insertion order (0, 1, 2, ...). Drag-to-reorder UI is deferred to a future version — Phase 8 only exposes alphabetical display.
+
+### Implementation Decisions
+
+**D8.6 — `clearCategoryFromNotes` added to `NotesDao`**
+A new `clearCategoryFromNotes(String categoryId)` method sets `categoryId = null` on all notes that currently reference the given category. It is called exclusively by `LocalCategoryRepository.delete` inside the deletion transaction. It uses `Value(null)` in a `NotesTableCompanion` — consistent with how Drift nulls out nullable columns. No annotation change was needed; `NotesDao` already declared `@DriftAccessor(tables: [NotesTable, NoteTagsTable])`.
+
+**D8.7 — `LocalCategoryRepository` constructor extended with `NotesDao`**
+The Phase 2 implementation of `LocalCategoryRepository` took only `CategoriesDao`. Phase 8 extends the constructor to `const LocalCategoryRepository(this._categoriesDao, this._notesDao)` so the repository can call `clearCategoryFromNotes` during deletion. The provider in `database_providers.dart` is updated to pass `db.notesDao` as the second argument. No build_runner run was needed (function body change only; annotation unchanged).
+
+**D8.8 — `MNCategoryPickerSheet` return value protocol**
+`MNCategoryPickerSheet` communicates its outcome via `Navigator.pop<String>`:
+- Non-empty `String` → the selected category id (assign that category)
+- Empty `String` `""` → the user chose "None" (unassign the category)
+- `null` → the sheet was dismissed with no change (tapped the X, swiped away, pressed back)
+
+The note editor's `_onCategoryTap` checks the result after `showModalBottomSheet` returns: `null` → no-op; empty string → `setCategory(null)`; non-empty → `setCategory(id)`.
+
+**D8.9 — `MNCategoryPickerSheet` expand state seeded from ancestor chain**
+On sheet open, `_initExpanded` walks up the ancestor chain of the current `categoryId` and adds each ancestor's id to `_expandedIds`. This ensures the currently-selected category is visible without the user having to manually expand its parent folders. Expand/collapse toggling persists for the duration of the sheet but is not saved between openings.
+
+**D8.10 — No build_runner run required for Phase 8**
+No new `@riverpod` annotations were added. No Drift table structure changed. The `database_providers.dart` change is in the function body only (annotation `@Riverpod(keepAlive: true)` unchanged). `notes_dao.dart` new method has no Drift generator annotation. All generated `.g.dart` files remain current from Phase 7.
 
 ---
 
@@ -497,6 +516,11 @@ Never deviate from these values. They are pixel-specified in the design system.
 | BUG-15 | `flutter analyze` post-Phase-6: `unnecessary_import` in `local_audio_record_repository.dart` — `import '../../datasources/local/daos/audio_records_dao.dart'` was redundant because `app_database.dart` already re-exports `AudioRecordsDao`. | 6 | ✅ Fixed | Removed the redundant import. Consistent with Phase 3 cleanup that removed all direct DAO imports from local repos (BUG-11). `app_database.dart` is the single import point for all Drift DAOs and tables. |
 | BUG-16 | `flutter analyze` post-Phase-6: `deprecated_member_use` in `speech_to_text_service.dart` — `listenMode` and `cancelOnError` passed as direct params to `_stt.listen()` were deprecated in `speech_to_text ^7.0.0`. The new API wraps them in `SpeechListenOptions`. `pauseFor` is not deprecated and stays as a direct param. | 6 | ✅ Fixed | Replaced `listenMode: ListenMode.dictation, cancelOnError: false` with `listenOptions: SpeechListenOptions(listenMode: ListenMode.dictation, cancelOnError: false)`. `SpeechListenOptions` is re-exported from `package:speech_to_text/speech_to_text.dart` — no new import required. |
 | BUG-17 | `flutter analyze` post-Phase-6: `prefer_const_constructors` in `audio_recording_service.dart` — `throw FileStorageException(...)` in `_assertInitialized()` was missing `const`. `FileStorageException` has a `const` constructor (`const FileStorageException(super.message, {super.cause})`). | 6 | ✅ Fixed | Changed `throw FileStorageException(...)` to `throw const FileStorageException(...)`. |
+| BUG-18 | Phase 8: `_onCategoryTap` used `noteEditorViewModelProvider(_currentNote!.id)` (positional arg) — wrong. The provider is a family with a **named** `noteId:` parameter; `@riverpod` code-gen always uses named params for family providers. Positional call triggers `extra_positional_arguments_could_be_named` at analysis time. | 8 | ✅ Fixed | Changed to `noteEditorViewModelProvider(noteId: widget.noteId)` — consistent with every other call site in the file. |
+| BUG-19 | GitHub issue #1: `_AudioClipsRowState._togglePlayback` silently failed on existing notes — `AudioRecordingService.startPlayback` calls `_assertInitialized()` which throws `FileStorageException` if `init()` has never been called. On a freshly-opened note (no mic tap), the service was never initialised, so playback produced no audio and no error UI. | 7 | ✅ Fixed (pre-Phase-8 commit) | Added `initState()` to `_AudioClipsRowState` that calls `widget.audioService.init().ignore()` eagerly. `init()` is already idempotent (`if (_initialized) return`), so this is safe to call unconditionally. |
+| BUG-20 | GitHub issue #2: Loading an existing note with rich-text formatting (lists, checkboxes) silently erased the formatting. Root cause: `_initControllers` cast `note.content['ops']` with a bare `as List` and wrapped `Document.fromJson` in `catch (_) { doc = Document(); }`. A type mismatch (`List<dynamic>` vs `List<Map<String,dynamic>>`) triggered the catch, returning a blank document — no error was ever surfaced to the developer. | 5 | ✅ Fixed (pre-Phase-8 commit) | Replaced bare cast with `.map((op) => Map<String,dynamic>.from(op as Map)).toList()`. Changed silent catch to `catch (e, st) { debugPrint('NoteEditor: failed to deserialize content: $e\n$st'); doc = Document(); }` so failures are visible in the log. |
+| BUG-21 | GitHub issue #3: Bottom nav tabs on `TagsScreen` did nothing when tapped — `_NavTab` had no `onTap` parameter and the `GestureDetector` wrapper was missing entirely. All tab buttons were inert. Discovered after Phase 7 committed `TagsScreen` with a copy of the Phase 4 `_BottomNav` that was never wired up. | 7 | ✅ Fixed (pre-Phase-8 commit) | Added `onTap: VoidCallback` and `activeIcon: IconData` to `_NavTab`; wrapped each tab in a `GestureDetector`; wired Home → `context.go(AppRoutes.home)`, Explore → `AppRoutes.search`, Tags → no-op (already active), Settings → `AppRoutes.settings`. Added `go_router` and `app_router` imports to `tags_screen.dart`. |
+| BUG-22 | Phase 8: `_selectedCategoryName()` fallback used `const Category(id: '', name: 'root', sortOrder: 0, createdAt: null)`. But `Category.createdAt` is declared `required DateTime createdAt` (non-nullable) — passing `null` is a compile error. Caught immediately when verifying the `Category` model before `flutter analyze` would have caught it. | 8 | ✅ Fixed | Rewrote `_selectedCategoryName()` to use `.where((c) => c.id == _selectedId)` and check `.isEmpty` — no fallback `Category` object needed. |
 
 ---
 
@@ -504,7 +528,7 @@ Never deviate from these values. They are pixel-specified in the design system.
 
 | ID | Decision | Phase to resolve | Options |
 |---|---|---|---|
-| PD-01 | Category deletion policy when children exist | 8 | Cascade delete all descendants / Re-parent children to grandparent |
+| PD-01 | Category deletion policy when children exist | 8 ✅ Resolved | **Re-parent children to grandparent** (cascade rejected — see D8.4) |
 | PD-02 | AI provider selection | 12 | Google Gemini free tier / Groq API |
 
 ---

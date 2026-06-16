@@ -35,7 +35,7 @@ ITagRepository tagRepository(Ref ref) {
 @Riverpod(keepAlive: true)
 ICategoryRepository categoryRepository(Ref ref) {
   final db = ref.watch(appDatabaseProvider);
-  return LocalCategoryRepository(db.categoriesDao);
+  return LocalCategoryRepository(db.categoriesDao, db.notesDao);
 }
 
 @Riverpod(keepAlive: true)
