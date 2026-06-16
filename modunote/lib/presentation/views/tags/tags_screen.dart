@@ -2,13 +2,11 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/models/tag.dart';
 import '../../viewmodels/tag_list_view_model.dart';
-import '../../router/app_router.dart';
 
 /// Tags management screen.
 /// Shows all tags with note-count density bars.
@@ -497,34 +495,10 @@ class _BottomNav extends StatelessWidget {
       padding: const EdgeInsets.all(6),
       child: Row(
         children: [
-          _NavTab(
-            icon: Icons.article_outlined,
-            activeIcon: Icons.article,
-            isActive: false,
-            isDark: isDark,
-            onTap: () => context.go(AppRoutes.home),
-          ),
-          _NavTab(
-            icon: Icons.explore_outlined,
-            activeIcon: Icons.explore,
-            isActive: false,
-            isDark: isDark,
-            onTap: () => context.go(AppRoutes.search),
-          ),
-          _NavTab(
-            icon: Icons.label_outline,
-            activeIcon: Icons.label,
-            isActive: true,
-            isDark: isDark,
-            onTap: () {},
-          ),
-          _NavTab(
-            icon: Icons.settings_outlined,
-            activeIcon: Icons.settings,
-            isActive: false,
-            isDark: isDark,
-            onTap: () => context.go(AppRoutes.settings),
-          ),
+          _NavTab(icon: Icons.notes, label: 'Home', isActive: false, isDark: isDark),
+          _NavTab(icon: Icons.explore, label: 'Explore', isActive: false, isDark: isDark),
+          _NavTab(icon: Icons.tag, label: 'Tags', isActive: true, isDark: isDark),
+          _NavTab(icon: Icons.settings, label: 'Settings', isActive: false, isDark: isDark),
         ],
       ),
     );
@@ -534,17 +508,15 @@ class _BottomNav extends StatelessWidget {
 class _NavTab extends StatelessWidget {
   const _NavTab({
     required this.icon,
-    required this.activeIcon,
+    required this.label,
     required this.isActive,
     required this.isDark,
-    required this.onTap,
   });
 
   final IconData icon;
-  final IconData activeIcon;
+  final String label;
   final bool isActive;
   final bool isDark;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -559,40 +531,34 @@ class _NavTab extends StatelessWidget {
         : AppColors.lightOnSurfaceVariant;
 
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Container(
-            decoration: isActive
-                ? BoxDecoration(
-                    color: primaryContainer,
-                    borderRadius: BorderRadius.circular(26),
-                  )
-                : null,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  isActive ? activeIcon : icon,
-                  size: 20,
-                  color: isActive ? onPrimaryContainer : variantColor,
-                ),
-                if (isActive) ...[
-                  const SizedBox(width: 6),
-                  Text(
-                    'Tags',
-                    style: AppTypography.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.1,
-                      color: onPrimaryContainer,
-                    ),
-                  ),
-                ],
-              ],
+      child: Container(
+        decoration: isActive
+            ? BoxDecoration(
+                color: primaryContainer,
+                borderRadius: BorderRadius.circular(26),
+              )
+            : null,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isActive ? onPrimaryContainer : variantColor,
             ),
-          ),
+            if (isActive) ...[
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppTypography.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.1,
+                  color: onPrimaryContainer,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
