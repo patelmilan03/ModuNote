@@ -27,50 +27,21 @@ class NoteListScreen extends ConsumerWidget {
       orElse: () => <String, String>{},
     );
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            // ── Scrollable content ─────────────────────────────────
-            Positioned.fill(
-              child: notesAsync.when(
-                data: (notes) {
-                  final pinned = notes.where((n) => n.isPinned).toList()
-                    ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-                  final recent = notes.where((n) => !n.isPinned).toList()
-                    ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-                  return _DataBody(
-                    pinned: pinned,
-                    recent: recent,
-                    tagMap: tagMap,
-                  );
-                },
-                loading: () => const _LoadingBody(),
-                error: (_, __) => _ErrorBody(
-                  onRetry: () =>
-                      ref.invalidate(noteListViewModelProvider),
-                ),
-              ),
-            ),
-            // ── Floating bottom nav ────────────────────────────────
-            const Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: EdgeInsets.only(bottom: 14),
-                child: _BottomNav(),
-              ),
-            ),
-            // ── FAB ───────────────────────────────────────────────
-            Positioned(
-              bottom: 96,
-              right: 20,
-              child: _Fab(
-                onTap: () => context.push(AppRoutes.newNote),
-              ),
-            ),
-          ],
-        ),
+    return notesAsync.when(
+      data: (notes) {
+        final pinned = notes.where((n) => n.isPinned).toList()
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        final recent = notes.where((n) => !n.isPinned).toList()
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        return _DataBody(
+          pinned: pinned,
+          recent: recent,
+          tagMap: tagMap,
+        );
+      },
+      loading: () => const _LoadingBody(),
+      error: (_, __) => _ErrorBody(
+        onRetry: () => ref.invalidate(noteListViewModelProvider),
       ),
     );
   }
@@ -106,7 +77,7 @@ class _DataBody extends StatelessWidget {
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: MNSearchField(
-          onTap: () => context.push(AppRoutes.search),
+          onTap: () => context.go(AppRoutes.search),
         ),
       ),
     ];
@@ -426,7 +397,7 @@ class _EmptyState extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: MNSearchField(
-            onTap: () => GoRouter.of(context).push(AppRoutes.search),
+            onTap: () => context.go(AppRoutes.search),
           ),
         ),
         Expanded(
@@ -463,149 +434,3 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Floating bottom nav
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _BottomNav extends StatelessWidget {
-  const _BottomNav();
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cs = Theme.of(context).colorScheme;
-    final card = isDark ? AppColors.darkCard : AppColors.lightCard;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: cs.outlineVariant, width: 0.5),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? const Color(0x59000000)
-                : const Color(0x0A1C1B2E),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _NavTab(
-            icon: Icons.article_outlined,
-            activeIcon: Icons.article,
-            isActive: true,
-            onTap: () {},
-          ),
-          _NavTab(
-            icon: Icons.explore_outlined,
-            activeIcon: Icons.explore,
-            isActive: false,
-            onTap: () => context.go(AppRoutes.search),
-          ),
-          _NavTab(
-            icon: Icons.label_outline,
-            activeIcon: Icons.label,
-            isActive: false,
-            onTap: () => context.go(AppRoutes.tags),
-          ),
-          _NavTab(
-            icon: Icons.settings_outlined,
-            activeIcon: Icons.settings,
-            isActive: false,
-            onTap: () => context.go(AppRoutes.settings),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NavTab extends StatelessWidget {
-  const _NavTab({
-    required this.icon,
-    required this.activeIcon,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final IconData activeIcon;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: isActive ? cs.primaryContainer : Colors.transparent,
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            isActive ? activeIcon : icon,
-            size: 22,
-            color: isActive ? cs.onPrimaryContainer : cs.onSurfaceVariant,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Amber FAB
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _Fab extends StatelessWidget {
-  const _Fab({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: AppColors.accent,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: const [
-            // rgba(245,158,11,0.55) ≈ 0x8C
-            BoxShadow(
-              color: Color(0x8CF59E0B),
-              blurRadius: 16,
-              spreadRadius: -4,
-              offset: Offset(0, 6),
-            ),
-            // rgba(28,27,46,0.12) ≈ 0x1F
-            BoxShadow(
-              color: Color(0x1F1C1B2E),
-              blurRadius: 4,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        child: const Icon(
-          Icons.add,
-          size: 26,
-          color: AppColors.accentOn,
-        ),
-      ),
-    );
-  }
-}

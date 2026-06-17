@@ -21,10 +21,11 @@
 |---|---|---|
 | State management | MVVM + Riverpod 2 | `flutter_riverpod`, `riverpod_annotation`, `riverpod_generator` |
 | Local DB | Repository pattern | `drift` v2, `drift_flutter`, `drift_dev` |
-| Navigation | Declarative | `go_router` v14 |
+| Navigation | Declarative + ShellRoute | `go_router` v14 |
 | Rich text | Delta JSON | `flutter_quill` v10 |
 | Audio | Record + playback | `flutter_sound` v9 (AAC 32kbps mono 16kHz) |
 | Voice-to-text | On-device | `speech_to_text` v7 |
+| Theme persistence | SharedPreferences | `shared_preferences` ^2.3.0 |
 | Fonts | Google Fonts | Plus Jakarta Sans (headings) + Inter (body) |
 | UUID | v4 | `uuid` v4 |
 
@@ -74,9 +75,9 @@ lib/
     │   ├── search/search_screen.dart
     │   ├── tags/tags_screen.dart
     │   └── settings/settings_screen.dart
-    ├── widgets/                       # Shared widgets — mn_note_card.dart, mn_search_field.dart, mn_editor_toolbar.dart, mn_tag_row.dart, mn_category_picker_sheet.dart (Phase 4+)
+    ├── widgets/                       # Shared widgets — mn_note_card.dart, mn_search_field.dart, mn_editor_toolbar.dart, mn_tag_row.dart, mn_category_picker_sheet.dart, mn_bottom_nav.dart (Phase 4+)
     └── router/
-        ├── app_router.dart            # GoRouter config, routerProvider, ThemeModeNotifier
+        ├── app_router.dart            # GoRouter config, ShellRoute, _AppShell, routerProvider, ThemeModeNotifier
         └── app_router.g.dart          # Generated — run `dart run build_runner build`
 ```
 
@@ -139,16 +140,16 @@ All raw token values are in `lib/core/theme/app_colors.dart`.
 
 ## Navigation Routes
 
-| Route | Screen |
-|---|---|
-| `/` | NoteListScreen |
-| `/note/new` | NoteEditorScreen (new) |
-| `/note/:id` | NoteEditorScreen (edit) |
-| `/search` | SearchScreen |
-| `/tags` | TagsScreen |
-| `/settings` | SettingsScreen |
+| Route | Screen | Shell? |
+|---|---|---|
+| `/` | NoteListScreen | ✅ ShellRoute tab 0 |
+| `/search` | SearchScreen | ✅ ShellRoute tab 1 |
+| `/tags` | TagsScreen | ✅ ShellRoute tab 2 |
+| `/settings` | SettingsScreen | ✅ ShellRoute tab 3 |
+| `/note/new` | NoteEditorScreen (new) | ❌ Full-screen push |
+| `/note/:id` | NoteEditorScreen (edit) | ❌ Full-screen push |
 
-Phase 9 will wrap these in a `ShellRoute` for the persistent bottom nav bar.
+The four shell tabs share a persistent `MNBottomNav` rendered by `_AppShell` in `app_router.dart`. Tab screens return body content only — no `Scaffold` or `SafeArea`. Note Editor routes are outside the shell and pushed via `context.push`.
 
 ---
 
@@ -177,7 +178,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | 6 | Voice-to-text + audio recording/playback | ✅ Complete |
 | 7 | Tags (freeform + autocomplete) | ✅ Complete |
 | 8 | Categories (hierarchical folder tree) | ✅ Complete |
-| 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ⬜ Not started |
+| 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ✅ Complete |
 | 10 | Firebase preparation layer (stubs, SyncStatus) | ⬜ Not started |
 | 11 | Backend API scaffolding (FastAPI stubs) | ⬜ Not started |
 | 12 | AI features (auto-tagging, summarisation) | ⬜ Not started |
@@ -208,7 +209,8 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `analysis_options.yaml` | Linting rules + custom_lint plugin |
 | `lib/core/theme/app_colors.dart` | Every design token |
 | `lib/core/constants/app_constants.dart` | Magic numbers and string keys |
-| `lib/presentation/router/app_router.dart` | Routes + ThemeModeNotifier |
+| `lib/presentation/widgets/mn_bottom_nav.dart` | Persistent floating pill bottom nav — 4 tabs, active pill indicator, `context.go` tab switching |
+| `lib/presentation/router/app_router.dart` | GoRouter config, `ShellRoute`, `_AppShell` (outer Scaffold+SafeArea), `ThemeModeNotifier` (theme persistence via SharedPreferences) |
 | `lib/data/datasources/local/app_database.dart` | `@DriftDatabase` — 5 tables, 4 DAOs, FTS5, migrations |
 | `lib/data/datasources/local/database_providers.dart` | Riverpod providers for DB + 4 repositories = 5 `keepAlive` providers total (`appDatabase`, `noteRepository`, `tagRepository`, `categoryRepository`, `audioRecordRepository`) |
 | `lib/data/datasources/file/audio_file_storage.dart` | File I/O for audio recordings (create dir, generate path, delete, size) |
@@ -217,7 +219,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `lib/data/datasources/local/converters/type_converters.dart` | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` |
 | `MODUNOTE_UI_REFERENCE.md` | Full pixel-level UI spec from Claude Design |
 | `progress.md` | Human-readable phase progress log |
-| `TESTING.md` | Manual testing checklist — 15 sections, ~130 checks. Quick smoke test (~46 🔴 critical checks, ~20 min) + full regression (~130 checks, ~1.5 hr). Section 15 = voice/STT deep verification with ADB file + DB inspection commands. |
+| `TESTING.md` | Manual testing checklist — 16 sections, ~145 checks. Quick smoke test (~46 🔴 critical checks, ~20 min) + full regression (~145 checks, ~1.5 hr). Section 15 = voice/STT deep verification with ADB file + DB inspection commands. Section 16 = Phase 9 bottom nav + theme persistence checks. |
 
 ---
 
@@ -228,8 +230,10 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 3. Read `THREAD_HANDOFF.md` — get the most recent session summary and next-phase scope.
 4. Read `DECISIONS.md` — all architectural decisions and their rationale.
 5. Read `MODUNOTE_UI_REFERENCE.md` — before touching any UI file.
-6. Run `flutter pub get` then `dart run build_runner build --delete-conflicting-outputs`.
+6. Run `flutter pub get` then `dart run build_runner build --delete-conflicting-outputs`. (`shared_preferences` was added in Phase 9 — always re-run after a new package.)
 7. Run `flutter analyze` — must report 0 issues before writing any code.
-8. Run `flutter run` — boots to NoteListScreen; tap FAB → Note Editor; tap mic → recording overlay; tap Tags tab → Tags screen with density bars.
+8. Run `flutter run` — boots to NoteListScreen with persistent bottom nav; tap FAB → Note Editor; tap mic → recording overlay; tap Tags tab → Tags screen with density bars; tap Settings tab → theme tiles.
 9. Ask the developer which phase to proceed with before writing any code.
 10. After completing a phase, run the smoke test checks in `TESTING.md` before committing.
+
+SPAWN A VERIFICATION SUBAGENT THAT VERIFIES THE RESULTS AFTER THE MAIN TASK HAS FINISHED. PASS THE SUBAGENT ALL THE MODIFIED FILES AND THE FULL LIST OF MANDATORY RULES. THE SUBAGENT MUST READ THE FILES FRESH AND CHECK EACH RULE LINE BY LINE. THE SUBAGENT MUST ALSO PRODUCE A CHECKLIST TABLE WITH ONE ROW PER RULE, A PASS OR FAIL STATUS ADN EXACAT EVIDENCE FOR EACH ITEM. BLOCK TASK COMPLETION ON ANY FAIL RESULT. RESTRICT THE SUBAGENT TO READ-ONLY TOOLS SO IT CANNOT CHANGE ANYTHING WHILE AUDITING. ENCAPSULATE THE VERFICICATION CHECKLIST IN A DEDICATED VALIDATOR SKILL SO EVERY TASK CAN REUSE THE RULES WITHOUT DUPLICATING THEM.

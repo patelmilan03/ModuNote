@@ -3,16 +3,20 @@
 
 ---
 
-## Status: Phase 8 ✅ Complete. Proceed with Phase 9.
+## Status: Phase 9 ✅ Complete. Proceed with Phase 10.
 
-Phase 8 is fully complete. **`flutter analyze` reports 0 issues.**
+Phase 9 is fully complete. **`flutter analyze` reports 0 issues.**
 
-**What Phase 8 delivered:**
-- Data layer: `NotesDao.clearCategoryFromNotes` (sets `categoryId = null` on notes before category delete). `LocalCategoryRepository.delete` fully implemented with re-parent policy (PD-01 resolved). Constructor extended to accept `NotesDao`. `database_providers.dart` updated to pass `db.notesDao`.
-- UI: `MNCategoryPickerSheet` (`ConsumerStatefulWidget`) — full adjacency-list tree with expand/collapse, depth-indented rows (`10 + depth × 20` px), "None" row (unassigns), "New category" row (AlertDialog, calls `CategoryTreeViewModel.insert`), ancestor pre-expansion on open.
-- `NoteEditorScreen`: `_showCategoryStub` replaced with `_onCategoryTap` — opens `MNCategoryPickerSheet`, handles all three return cases (null / empty / id), calls `NoteEditorViewModel.setCategory`.
-- No build_runner run required (no new `@riverpod` annotations; no Drift table change).
-- BUG-18 fixed: provider family call used positional arg; corrected to named `noteId:` param.
+**What Phase 9 delivered:**
+- **GoRouter `ShellRoute`**: `app_router.dart` rewritten with `ShellRoute` wrapping 4 tab routes. `_AppShell` private widget provides outer Scaffold + SafeArea + persistent `MNBottomNav`. Note Editor routes remain outside the shell.
+- **`MNBottomNav`**: new `lib/presentation/widgets/mn_bottom_nav.dart`. Floating pill widget. Active tab = `primaryContainer` bg + label; inactive = icon only. Uses `context.go` for tab switching.
+- **Theme persistence**: `ThemeModeNotifier` extended with `_loadPersistedMode()` (fire-and-forget from `build()`), `setLight/Dark/System()`, `_setAndPersist()`. SharedPreferences key: `AppConstants.prefThemeMode`. Package: `shared_preferences: ^2.3.0` added to `pubspec.yaml`.
+- **Settings screen**: full rewrite. No Scaffold (shell provides). Appearance card with two `_ThemeTile` widgets (Light/Dark). Selected tile: 2px `primary` border + `primaryContainer`. Mini preview shows each theme's card appearance. `_RadioDot` confirms selection. System mode = neither highlighted.
+- **Tab screens stripped of Scaffold/SafeArea**: `NoteListScreen`, `SearchScreen`, `TagsScreen` no longer have inner Scaffold. All per-screen `_BottomNav`/`_NavTab` classes removed.
+- **SearchScreen back button**: `context.pop()` → `context.go(AppRoutes.home)` (shell tab, not pushed route).
+- **Tags screen imports cleaned**: `go_router` and `app_router` imports removed after `_BottomNav` deletion.
+- **BUG-23 fixed**: `sort_child_properties_last` lint — `_AppShell(child: child, location: ...)` reordered to `_AppShell(location: ..., child: child)`.
+- `flutter pub get` → shared_preferences 2.5.5 + 6 platform packages. `build_runner` → 137 outputs. `flutter analyze` → 0 issues.
 
 ---
 
@@ -286,6 +290,50 @@ Added `<uses-permission android:name="android.permission.RECORD_AUDIO"/>`.
 
 ---
 
+## What was built (Phase 9)
+
+Navigation + Theming — GoRouter ShellRoute, persistent bottom nav, theme persistence, full Settings screen.
+
+### New files
+
+#### `lib/presentation/widgets/`
+- `mn_bottom_nav.dart` — `MNBottomNav extends StatelessWidget`. Props: `int activeIndex`. Floating pill 64px, card bg, br 32, outlineStrong 0.5px, 6px shadow. 4 `_NavTab` children (Home/Explore/Tags/Settings). Active: `primaryContainer` bg, br 26, icon + Inter 13/600 label. Inactive: transparent, icon only. All tabs use `context.go(route)`.
+
+### Modified files
+
+#### `pubspec.yaml`
+- Added `shared_preferences: ^2.3.0`.
+
+#### `lib/presentation/router/app_router.dart`
+- `router()` function now returns GoRouter with `ShellRoute` wrapping 4 tab routes, plus Note Editor routes outside the shell.
+- New `_AppShell extends StatelessWidget`: `Scaffold(body: SafeArea(Stack([Positioned.fill(child), Positioned(nav)])))`. `_tabIndex(String loc)` maps path → 0/1/2/3.
+- `ThemeModeNotifier` extended: `_loadPersistedMode()` (fire-and-forget from `build()`), `setLight()`, `setDark()`, `setSystem()`, `toggle()`, `_setAndPersist(ThemeMode)`. Reads/writes `AppConstants.prefThemeMode` key via `SharedPreferences`.
+
+#### `lib/presentation/views/settings/settings_screen.dart`
+- Full rewrite. Returns `ListView(padding: fromLTRB(20,8,20,150))`. No Scaffold.
+- `_SettingsAppBar` → "Settings" PJS 24/800/−0.5.
+- `_AppearanceCard` → Appearance card with `Row([_ThemeTile(Light), _ThemeTile(Dark)])`.
+- `_ThemeTile` → selected: 2px primary border + primaryContainer bg; unselected: 0.5px outlineStrong + surfaceContainer.
+- `_MiniPreview(h:56, br:10)` → simulated note card using hard-coded `AppColors.darkCard`/`lightCard`.
+- `_RadioDot` (18×18) → selected: primary fill + white circle icon; unselected: outlineStrong border.
+
+#### `lib/presentation/views/note_list/note_list_screen.dart`
+- `build()`: removed Scaffold/SafeArea wrapper → returns `Stack(...)` directly.
+- `_DataBody`, `_EmptyState`: `context.push(AppRoutes.search)` → `context.go(AppRoutes.search)`.
+- Removed `_BottomNav` + `_NavTab` private classes.
+
+#### `lib/presentation/views/search/search_screen.dart`
+- `build()`: removed Scaffold/SafeArea wrapper → returns `Column(...)` directly.
+- `onBack`: `context.pop()` → `context.go(AppRoutes.home)`.
+- Removed `_BottomNav` + `_NavTab` private classes.
+
+#### `lib/presentation/views/tags/tags_screen.dart`
+- `build()`: removed Scaffold/SafeArea wrapper → returns `Column(...)` directly.
+- Removed `_BottomNav` + `_NavTab` private classes.
+- Removed now-unused `go_router` and `app_router` imports.
+
+---
+
 ## What was built (Phase 8)
 
 Categories — data layer + category picker bottom sheet.
@@ -328,7 +376,7 @@ No build_runner required. `flutter analyze` = 0 issues.
 
 ---
 
-## Architecture decisions locked (Phases 1–6)
+## Architecture decisions locked (Phases 1–9)
 
 | Decision | Value | Phase |
 |---|---|---|
@@ -371,6 +419,12 @@ No build_runner required. `flutter analyze` = 0 issues.
 | `MNCategoryPickerSheet` return value | `String?` from modal: non-empty = assign, `""` = unassign, `null` = dismiss | 8 |
 | Category picker expand seeding | Ancestor chain pre-expanded on sheet open so current selection is visible | 8 |
 | `clearCategoryFromNotes` | `NotesDao` method; `Value(null)` companion; called before category row delete | 8 |
+| GoRouter `ShellRoute` for tabs | `_AppShell` provides Scaffold+SafeArea+`MNBottomNav`; tab screens return body content only | 9 |
+| `ThemeModeNotifier` stays `Notifier<ThemeMode>` | Synchronous build; fire-and-forget `_loadPersistedMode()` from `build()`; defaults to `ThemeMode.system` | 9 |
+| Tab nav uses `context.go` | Shell tabs are not pushed; use `go`. Note Editor uses `context.push`. SearchScreen back uses `go('/')`. | 9 |
+| Settings screen theme toggle | Two-tile card (Light/Dark); `ThemeMode.system` = neither tile highlighted | 9 |
+| `_MiniPreview` uses hard-coded `AppColors` | Preview must show correct theme colours regardless of active app theme | 9 |
+| `sort_child_properties_last` lint | `child:` must be last named parameter in all widget constructor calls | 9 |
 
 ---
 
@@ -399,24 +453,39 @@ No build_runner required. `flutter analyze` = 0 issues.
 
 ---
 
-## First-run instructions (Phase 8 state)
+## First-run instructions (Phase 9 state)
 
 ```bash
-# No new packages, no new @riverpod annotations
-# No build_runner run required — generated files are current from Phase 7
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
 flutter analyze   # expected: 0 issues
 flutter run
 ```
 
 Expected:
-- Note Editor → tap category chip → `MNCategoryPickerSheet` opens as bottom sheet.
-- Sheet shows tree of all categories (empty tree if none created yet) + "None" row at top + "New category" row at bottom.
-- Tap "New category" → AlertDialog → type name → category created; tree updates.
-- Tap a category row → sheet closes; category chip label updates to that category name.
-- Tap "None" → sheet closes; category chip returns to default / unassigned state.
-- Tap × (close) or swipe away → sheet closes with no change.
-- Create nested categories (tap a category to select, then add new → created under selected parent).
-- Depth enforcement: trying to create a 6th level → `ValidationException` (sheet stays open, no crash).
+- App boots to NoteListScreen with persistent floating pill bottom nav (Home tab active).
+- Tapping Explore/Tags/Settings → content swaps, active pill highlights correct tab; nav persists.
+- Tapping FAB → Note Editor opens full-screen (no bottom nav). Back → returns to Home.
+- Settings tab → Appearance card with Light/Dark tiles. Tap Light → app theme switches; tile border highlights.
+- Kill + restart app → previously chosen theme restored from SharedPreferences.
+- Default (first launch) → ThemeMode.system; neither tile highlighted.
+
+---
+
+## Phase 10 — What to build next
+
+**Title**: Firebase Preparation Layer
+
+**Scope** (from DECISIONS.md D10.1–D10.4):
+
+1. **Firebase SDK scaffold** — add `firebase_core`, `cloud_firestore` to `pubspec.yaml`. Add `google-services.json` placeholder + setup instructions. No live Firebase calls in Phase 10.
+2. **`FirebaseNoteRepository` stub** — implements `INoteRepository` with all methods throwing `UnimplementedError`. Lives at `lib/data/repositories/remote/firebase_note_repository.dart`.
+3. **`SyncedNoteRepository` stub** — wraps both `LocalNoteRepository` and `FirebaseNoteRepository`. Delegates everything to local in Phase 10. Lives at `lib/data/repositories/synced/synced_note_repository.dart`.
+4. **Wire `SyncStatus`** — verify `SyncStatus.local` is set on all note inserts/updates. Add `SyncStatus.pending` path in `save()` when sync is toggled on (toggle is a feature flag in Phase 10, off by default).
+5. **`flutter analyze` = 0 issues**.
+6. **Update all doc files** post-completion.
+
+**Before starting Phase 10**, Claude must present a detailed plan and wait for developer approval.
 
 ---
 

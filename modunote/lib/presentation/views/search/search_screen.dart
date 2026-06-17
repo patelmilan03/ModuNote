@@ -46,42 +46,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       orElse: () => <String, String>{},
     );
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                _SearchBar(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  isDark: isDark,
-                  cs: cs,
-                  onChanged: (q) =>
-                      ref.read(searchViewModelProvider.notifier).setQuery(q),
-                  onBack: () => context.pop(),
-                ),
-                Expanded(
-                  child: _SearchBody(
-                    state: searchState,
-                    tagMap: tagMap,
-                    onNoteTap: (id) => context.push(AppRoutes.editNotePath(id)),
-                  ),
-                ),
-              ],
-            ),
-            // ── Floating bottom nav ──────────────────────────────────
-            const Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: EdgeInsets.only(bottom: 14),
-                child: _BottomNav(),
-              ),
-            ),
-          ],
+    return Column(
+      children: [
+        _SearchBar(
+          controller: _controller,
+          focusNode: _focusNode,
+          isDark: isDark,
+          cs: cs,
+          onChanged: (q) =>
+              ref.read(searchViewModelProvider.notifier).setQuery(q),
+          onBack: () => context.go(AppRoutes.home),
         ),
-      ),
+        Expanded(
+          child: _SearchBody(
+            state: searchState,
+            tagMap: tagMap,
+            onNoteTap: (id) => context.push(AppRoutes.editNotePath(id)),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -324,104 +307,3 @@ class _SearchError extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Floating bottom nav — Explore tab active
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _BottomNav extends StatelessWidget {
-  const _BottomNav();
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cs = Theme.of(context).colorScheme;
-    final card = isDark ? AppColors.darkCard : AppColors.lightCard;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: cs.outlineVariant, width: 0.5),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? const Color(0x59000000)
-                : const Color(0x0A1C1B2E),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _NavTab(
-            icon: Icons.article_outlined,
-            activeIcon: Icons.article,
-            isActive: false,
-            onTap: () => context.go(AppRoutes.home),
-          ),
-          _NavTab(
-            icon: Icons.explore_outlined,
-            activeIcon: Icons.explore,
-            isActive: true,
-            onTap: () {},
-          ),
-          _NavTab(
-            icon: Icons.label_outline,
-            activeIcon: Icons.label,
-            isActive: false,
-            onTap: () => context.go(AppRoutes.tags),
-          ),
-          _NavTab(
-            icon: Icons.settings_outlined,
-            activeIcon: Icons.settings,
-            isActive: false,
-            onTap: () => context.go(AppRoutes.settings),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NavTab extends StatelessWidget {
-  const _NavTab({
-    required this.icon,
-    required this.activeIcon,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final IconData activeIcon;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: isActive ? cs.primaryContainer : Colors.transparent,
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            isActive ? activeIcon : icon,
-            size: 22,
-            color: isActive ? cs.onPrimaryContainer : cs.onSurfaceVariant,
-          ),
-        ),
-      ),
-    );
-  }
-}

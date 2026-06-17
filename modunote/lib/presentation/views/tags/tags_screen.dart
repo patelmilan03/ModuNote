@@ -2,12 +2,10 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/models/tag.dart';
-import '../../router/app_router.dart';
 import '../../viewmodels/tag_list_view_model.dart';
 
 /// Tags management screen.
@@ -22,68 +20,51 @@ class TagsScreen extends ConsumerWidget {
     final countsAsync = ref.watch(tagNoteCountsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBg : AppColors.lightBg,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _TagsAppBar(
-                  tagCount: tagsAsync.valueOrNull?.length ?? 0,
-                  isDark: isDark,
-                  onAdd: () => _showAddTagDialog(context, ref, isDark),
-                ),
-                Expanded(
-                  child: tagsAsync.when(
-                    data: (tags) => _buildTagList(
-                      context,
-                      ref,
-                      tags,
-                      countsAsync.valueOrNull ?? {},
-                      isDark,
-                    ),
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (e, _) => Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Failed to load tags',
-                            style: AppTypography.inter(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: isDark
-                                  ? AppColors.darkOnSurface
-                                  : AppColors.lightOnSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextButton(
-                            onPressed: () =>
-                                ref.invalidate(tagListViewModelProvider),
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _TagsAppBar(
+          tagCount: tagsAsync.valueOrNull?.length ?? 0,
+          isDark: isDark,
+          onAdd: () => _showAddTagDialog(context, ref, isDark),
+        ),
+        Expanded(
+          child: tagsAsync.when(
+            data: (tags) => _buildTagList(
+              context,
+              ref,
+              tags,
+              countsAsync.valueOrNull ?? {},
+              isDark,
+            ),
+            loading: () =>
+                const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Failed to load tags',
+                    style: AppTypography.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: isDark
+                          ? AppColors.darkOnSurface
+                          : AppColors.lightOnSurface,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () =>
+                        ref.invalidate(tagListViewModelProvider),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
             ),
-            // Floating bottom nav pill — active tab index 2 (Tags).
-            // Phase 9 replaces this with a persistent ShellRoute nav.
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 14,
-              child: _BottomNav(isDark: isDark),
-            ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -465,142 +446,3 @@ class _TagRow extends StatelessWidget {
   }
 }
 
-// ─── Bottom Nav ────────────────────────────────────────────────────────────────
-
-class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.isDark});
-
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    final cardBg = isDark ? AppColors.darkCard : AppColors.lightCard;
-    final outlineStrong =
-        isDark ? AppColors.darkOutlineStrong : AppColors.lightOutlineStrong;
-
-    return Container(
-      height: 64,
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: outlineStrong, width: 0.5),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.35)
-                : const Color(0xFF1C1B2E).withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(6),
-      child: Row(
-        children: [
-          _NavTab(
-            icon: Icons.article_outlined,
-            activeIcon: Icons.article,
-            label: 'Home',
-            isActive: false,
-            isDark: isDark,
-            onTap: () => context.go(AppRoutes.home),
-          ),
-          _NavTab(
-            icon: Icons.explore_outlined,
-            activeIcon: Icons.explore,
-            label: 'Explore',
-            isActive: false,
-            isDark: isDark,
-            onTap: () => context.go(AppRoutes.search),
-          ),
-          _NavTab(
-            icon: Icons.label_outline,
-            activeIcon: Icons.label,
-            label: 'Tags',
-            isActive: true,
-            isDark: isDark,
-            onTap: () {},
-          ),
-          _NavTab(
-            icon: Icons.settings_outlined,
-            activeIcon: Icons.settings,
-            label: 'Settings',
-            isActive: false,
-            isDark: isDark,
-            onTap: () => context.go(AppRoutes.settings),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NavTab extends StatelessWidget {
-  const _NavTab({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.isActive,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final bool isActive;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final primaryContainer = isDark
-        ? AppColors.darkPrimaryContainer
-        : AppColors.lightPrimaryContainer;
-    final onPrimaryContainer = isDark
-        ? AppColors.darkOnPrimaryContainer
-        : AppColors.lightOnPrimaryContainer;
-    final variantColor = isDark
-        ? AppColors.darkOnSurfaceVariant
-        : AppColors.lightOnSurfaceVariant;
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Container(
-            decoration: isActive
-                ? BoxDecoration(
-                    color: primaryContainer,
-                    borderRadius: BorderRadius.circular(26),
-                  )
-                : null,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  isActive ? activeIcon : icon,
-                  size: 20,
-                  color: isActive ? onPrimaryContainer : variantColor,
-                ),
-                if (isActive) ...[
-                  const SizedBox(width: 6),
-                  Text(
-                    label,
-                    style: AppTypography.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.1,
-                      color: onPrimaryContainer,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

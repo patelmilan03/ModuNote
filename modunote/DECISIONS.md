@@ -378,24 +378,41 @@ No new `@riverpod` annotations were added. No Drift table structure changed. The
 
 ---
 
-## Phase 9 — Navigation + Theming ⬜ Not Started
+## Phase 9 — Navigation + Theming ✅ Complete
 
-### Pre-Decided Architecture
+### Pre-Decided Architecture (all implemented as designed)
 
 **D9.1 — GoRouter `ShellRoute` for persistent bottom nav bar**
-Phase 9 refactors the GoRouter config in `app_router.dart` to wrap the four main tabs (Home, Explore, Tags, Settings) in a `ShellRoute`. The shell widget renders `MNBottomNav` persistently and swaps the child based on the current route. The Note Editor and Category Picker do not participate in the shell — they are full-screen routes pushed on top.
+`app_router.dart` wraps the four main tabs (Home `/`, Explore `/search`, Tags `/tags`, Settings `/settings`) in a `ShellRoute`. `_AppShell` renders `MNBottomNav` persistently and swaps the tab body based on the current route. Note Editor routes (`/note/new`, `/note/:id`) are `GoRoute` entries outside the shell — full-screen routes accessed via `context.push`.
 
 **D9.2 — Bottom nav bar is a custom floating pill**
-`MNBottomNav` is a custom widget, not `BottomNavigationBar` or `NavigationBar` from Material. It is positioned as an absolutely-positioned overlay using a `Stack` in the shell widget. Spec: `MODUNOTE_UI_REFERENCE.md § 2.1`. It has 4 tabs: Home (index 0), Explore (index 1), Tags (index 2), Settings (index 3).
+`MNBottomNav` is a new `StatelessWidget` at `lib/presentation/widgets/mn_bottom_nav.dart`. It is positioned via `Positioned(left:16, right:16, bottom:14)` in the `_AppShell`'s `Stack`. Props: `int activeIndex`. 4 tabs: Home (0), Explore (1), Tags (2), Settings (3). Active tab: `primaryContainer` bg + `br:26` pill + label (Inter 13/600). Inactive: icon only on transparent bg. Uses `context.go` for tab switching.
 
 **D9.3 — Theme persistence via SharedPreferences**
-`ThemeModeNotifier` (created in Phase 1) is extended in Phase 9 to read from and write to SharedPreferences using the key `AppConstants.prefThemeMode`. On app start, it reads the saved value. On toggle, it writes the new value. The persistence logic lives in the Notifier's `build()` method and `set*` methods.
+`ThemeModeNotifier.build()` remains synchronous (`Notifier<ThemeMode>`) — fires `_loadPersistedMode()` as fire-and-forget from `build()`, returning `ThemeMode.system` as the first-frame default. Writes happen via `_setAndPersist(ThemeMode)` which sets `state` immediately (instant UI update) then writes to SharedPreferences. Key: `AppConstants.prefThemeMode = 'theme_mode'`. Package added: `shared_preferences: ^2.3.0`.
 
-**D9.4 — `ColorScheme.fromSeed` with manual overrides**
-Material 3's `ColorScheme.fromSeed` is used as the base but several tokens are manually overridden to match the design spec exactly. Light mode: `surface → #FEFBFF`, `surfaceContainer → #F4F0FA`. Dark mode: `surface → #1C1B2E`, `surfaceContainer → #2A2942`. These are already set in `AppTheme` from Phase 1 — Phase 9 completes the full `NavigationBar`, `Card`, `Chip`, `FloatingActionButton`, and `BottomSheet` theme overrides.
+**D9.4 — `_AppShell` provides outer Scaffold + SafeArea; tab screens return content only**
+`_AppShell extends StatelessWidget` is a private class in `app_router.dart`. It wraps the child in `Scaffold(body: SafeArea(child: Stack([Positioned.fill(child), Positioned(nav)])))`. Tab screens (`NoteListScreen`, `SearchScreen`, `TagsScreen`, `SettingsScreen`) no longer have their own `Scaffold`/`SafeArea` — they return body content directly. This avoids nested Scaffold issues. FAB remains inside `NoteListScreen` (Home-only concern, not shell concern).
 
 **D9.5 — Settings screen theme toggle uses two-option card, not a Switch**
-The theme toggle on the Settings screen is a two-card grid (Light / Dark), not a Switch widget. The "System" option is exposed only via a third hidden state — if the current mode is `ThemeMode.system`, neither card is highlighted. Spec: `MODUNOTE_UI_REFERENCE.md § 3.6`.
+`settings_screen.dart` is a full rewrite of the Phase 1 placeholder. Returns `ListView` (no Scaffold). Contains an Appearance card with two `_ThemeTile` widgets (Light / Dark). Selected tile: 2 px `primary` border + `primaryContainer` bg. Unselected: 0.5 px `outlineStrong` + `surfaceContainer` bg. Mini preview shows simulated note card in each theme's card colour. If `ThemeMode.system`, neither tile is highlighted — system is a hidden third state.
+
+### Implementation Details
+
+**D9.6 — Tab navigation uses `context.go`; Note Editor uses `context.push`**
+All 4 tab routes use `context.go(route)` — they are shell children, not pushed onto the GoRouter stack. Note Editor and Category Picker are pushed with `context.push`. SearchScreen's back arrow now calls `context.go(AppRoutes.home)` instead of `context.pop()` because `/search` is a shell tab, not a pushed route.
+
+**D9.7 — `MNBottomNav` active index derived from `state.uri.path` in shell builder**
+`_AppShell._tabIndex(String loc)` maps location strings to indices: `/search` → 1, `/tags` → 2, `/settings` → 3, everything else → 0. Passed as `location: state.uri.path` from the ShellRoute builder.
+
+**D9.8 — `_AppShell` and `MNBottomNav` are `StatelessWidget`, not `ConsumerWidget`**
+Neither watches Riverpod providers — `_AppShell` uses only `Theme.of(context)` for scaffold background colour. The convention "screen widgets extend ConsumerWidget" applies to screen-level widgets only, not internal layout helpers.
+
+**D9.9 — Tags screen `go_router` and `app_router` imports removed post-refactor**
+After removing the per-screen `_BottomNav`/`_NavTab` classes, `tags_screen.dart` no longer references `go_router` or `AppRoutes` — both imports removed to maintain `flutter analyze = 0 issues`.
+
+**D9.10 — `sort_child_properties_last` lint requires `child:` param to be last**
+Flutter's `sort_child_properties_last` rule requires `child:` (and `children:`) named parameters to appear last in widget constructor calls. The ShellRoute builder initially called `_AppShell(child: child, location: ...)` — the lint flagged it. Fixed to `_AppShell(location: state.uri.path, child: child)`. All future widget constructors with `child:` must put it last.
 
 ---
 
@@ -521,6 +538,7 @@ Never deviate from these values. They are pixel-specified in the design system.
 | BUG-20 | GitHub issue #2: Loading an existing note with rich-text formatting (lists, checkboxes) silently erased the formatting. Root cause: `_initControllers` cast `note.content['ops']` with a bare `as List` and wrapped `Document.fromJson` in `catch (_) { doc = Document(); }`. A type mismatch (`List<dynamic>` vs `List<Map<String,dynamic>>`) triggered the catch, returning a blank document — no error was ever surfaced to the developer. | 5 | ✅ Fixed (pre-Phase-8 commit) | Replaced bare cast with `.map((op) => Map<String,dynamic>.from(op as Map)).toList()`. Changed silent catch to `catch (e, st) { debugPrint('NoteEditor: failed to deserialize content: $e\n$st'); doc = Document(); }` so failures are visible in the log. |
 | BUG-21 | GitHub issue #3: Bottom nav tabs on `TagsScreen` did nothing when tapped — `_NavTab` had no `onTap` parameter and the `GestureDetector` wrapper was missing entirely. All tab buttons were inert. Discovered after Phase 7 committed `TagsScreen` with a copy of the Phase 4 `_BottomNav` that was never wired up. | 7 | ✅ Fixed (pre-Phase-8 commit) | Added `onTap: VoidCallback` and `activeIcon: IconData` to `_NavTab`; wrapped each tab in a `GestureDetector`; wired Home → `context.go(AppRoutes.home)`, Explore → `AppRoutes.search`, Tags → no-op (already active), Settings → `AppRoutes.settings`. Added `go_router` and `app_router` imports to `tags_screen.dart`. |
 | BUG-22 | Phase 8: `_selectedCategoryName()` fallback used `const Category(id: '', name: 'root', sortOrder: 0, createdAt: null)`. But `Category.createdAt` is declared `required DateTime createdAt` (non-nullable) — passing `null` is a compile error. Caught immediately when verifying the `Category` model before `flutter analyze` would have caught it. | 8 | ✅ Fixed | Rewrote `_selectedCategoryName()` to use `.where((c) => c.id == _selectedId)` and check `.isEmpty` — no fallback `Category` object needed. |
+| BUG-23 | Phase 9: `sort_child_properties_last` lint error in `app_router.dart` ShellRoute builder. Initial call was `_AppShell(child: child, location: state.uri.path)` — Flutter lint requires `child:` to be the last named parameter. Flagged by `flutter analyze` (1 issue). | 9 | ✅ Fixed | Reordered to `_AppShell(location: state.uri.path, child: child)`. Rule applies to all widget constructors — `child:` and `children:` must always be last. |
 
 ---
 

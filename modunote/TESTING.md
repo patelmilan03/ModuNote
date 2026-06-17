@@ -1,5 +1,5 @@
 # ModuNote — Complete Device Testing Guide
-> **Covers Phases 1–8** (all shipped code as of Phase 8 Categories completion).
+> **Covers Phases 1–9** (all shipped code as of Phase 9 Navigation + Theming completion).
 > Every check is a pass/fail statement. Run on a **physical Android device**.
 > 🔴 = must pass before any commit. ⚠️ STUB = intentional placeholder for a future phase.
 
@@ -1068,11 +1068,154 @@ SELECT id, name, parent_id, sort_order FROM categories ORDER BY parent_id NULLS 
 
 ---
 
-## Section 33 — `flutter analyze` Gate
+## Section 36 — Persistent Bottom Nav (Phase 9)
+
+> The shell `_AppShell` renders `MNBottomNav` across all 4 tab routes. Note Editor is outside the shell.
+
+### 36A — Visual Appearance
 
 | # | Check | Expected |
 |---|---|---|
-| 33.1 🔴 | `flutter analyze` returns **`No issues found!`** | Zero errors, zero warnings, zero infos |
+| 36.1 🔴 | Bottom nav visible on NoteListScreen without tapping anything | Floating pill persistent at bottom |
+| 36.2 🔴 | Bottom nav visible on SearchScreen (Explore tab) | Still present after tab switch |
+| 36.3 🔴 | Bottom nav visible on TagsScreen | Still present |
+| 36.4 🔴 | Bottom nav visible on SettingsScreen | Still present |
+| 36.5 | Bottom nav height: 64 dp | Visible pill height |
+| 36.6 | Bottom nav positioned 14 dp above bottom edge of SafeArea | Gap between pill and edge |
+| 36.7 | Bottom nav left/right margin: 16 dp | Pill floats, not full-bleed |
+| 36.8 | Bottom nav background: `card` colour | `#FFFFFF` light / `#232238` dark |
+| 36.9 | Bottom nav border-radius: 32 dp | Fully-rounded pill ends |
+| 36.10 | Bottom nav border: 0.5 px `outlineStrong` | Very thin visible border |
+| 36.11 | Bottom nav shadow: 6 dp blur | Slight elevation shadow |
+
+### 36B — Active Tab Indicator
+
+| # | Check | Expected |
+|---|---|---|
+| 36.12 🔴 | Home tab active on launch: `primaryContainer` pill behind home icon + "Home" label | Purple pill, label visible |
+| 36.13 🔴 | Active tab label visible (Inter 13/600/+0.1) | Text appears below icon in active tab only |
+| 36.14 | Active tab pill: `primaryContainer` bg, border-radius 26 | Rounded pill within the nav bar |
+| 36.15 | Active tab icon: `onPrimaryContainer` colour | Dark icon on light-purple pill |
+| 36.16 | Inactive tab icons: `onSurfaceVariant` colour | Greyed out icons, no label |
+| 36.17 | Exactly one tab is active at a time | No double-highlight edge case |
+
+### 36C — Tab Switching
+
+| # | Check | Expected |
+|---|---|---|
+| 36.18 🔴 | Tap Explore tab → SearchScreen loads; Explore pill highlights | Nav switches; active indicator moves |
+| 36.19 🔴 | Tap Tags tab → TagsScreen loads; Tags pill highlights | Same |
+| 36.20 🔴 | Tap Settings tab → SettingsScreen loads; Settings pill highlights | Same |
+| 36.21 🔴 | Tap Home tab from any tab → NoteListScreen; Home pill highlights | Same |
+| 36.22 | Tapping the already-active tab → no crash or re-navigation | Safe no-op |
+| 36.23 | Switching tabs quickly (rapid taps) → no crash | Debounce not required; GoRouter handles it |
+| 36.24 | After switching tabs, scroll position in previous tab is NOT preserved | Shell rebuilds child on each tab switch |
+
+### 36D — Shell vs. Push Behaviour
+
+| # | Check | Expected |
+|---|---|---|
+| 36.25 🔴 | Tap FAB on Home → Note Editor opens full-screen; bottom nav NOT visible | Editor is outside the shell |
+| 36.26 🔴 | Press back from Note Editor → returns to Home; bottom nav reappears | Shell resumes |
+| 36.27 | Open note from Search results → Note Editor opens; bottom nav NOT visible | Same: editor is outside shell |
+| 36.28 | Press back from note opened from Search → returns to Search (Explore tab active) | Correct origin screen |
+| 36.29 | Category picker bottom sheet opens over Settings/Home → nav still behind sheet | Sheet is modal overlay, not shell child |
+
+---
+
+## Section 37 — Settings Screen & Theme Tiles (Phase 9)
+
+> Access via the **Settings** tab (rightmost in bottom nav).
+
+### 37A — Screen Layout
+
+| # | Check | Expected |
+|---|---|---|
+| 37.1 🔴 | Settings tab loads without crash | No red error banner |
+| 37.2 🔴 | Settings tab active (index 3) in bottom nav | `primaryContainer` pill behind Settings icon + "Settings" label |
+| 37.3 | Screen has no inner Scaffold — shell's Scaffold is the only one | No nested-Scaffold warning in logcat |
+| 37.4 | "Settings" heading: Plus Jakarta Sans 24/800/−0.5 | Bold, same size as Tags heading |
+| 37.5 | Screen scrollable via ListView | Content scrolls if screen is small |
+| 37.6 | ListView bottom padding 150 dp | Content not hidden behind bottom nav |
+
+### 37B — Appearance Card
+
+| # | Check | Expected |
+|---|---|---|
+| 37.7 🔴 | Appearance card visible below heading | Card with rounded corners |
+| 37.8 | Card background: `card` colour (`#FFFFFF` light / `#232238` dark) | Distinct from screen background |
+| 37.9 | Card border: 0.5 px `outline` | Very thin border |
+| 37.10 | Card border-radius: 22 dp | Noticeably rounded |
+| 37.11 | Card padding: 16 dp | Internal spacing |
+| 37.12 | Card title: "Appearance" (PJS 15/700/`onSurface`) | Bold section title |
+| 37.13 | Card subtitle: "Choose how ModuNote looks on your device." (Inter 12.5/400/`onSurfaceMuted`) | Smaller muted subtitle |
+
+### 37C — Theme Tiles
+
+| # | Check | Expected |
+|---|---|---|
+| 37.14 🔴 | Two tiles visible side-by-side: "Light" (left) and "Dark" (right) | Equal-width tiles in a Row |
+| 37.15 | Tile gap: 10 dp | Small gap between tiles |
+| 37.16 | Each tile: border-radius 16 dp | Moderately rounded |
+| 37.17 | Each tile: padding `fromLTRB(14, 14, 14, 12)` | Balanced internal spacing |
+| 37.18 | **Selected tile**: 2 px `primary` border + `primaryContainer` background | Clear selection indicator |
+| 37.19 | **Unselected tile**: 0.5 px `outlineStrong` border + `surfaceContainer` background | Subtler appearance |
+
+### 37D — Mini Preview
+
+| # | Check | Expected |
+|---|---|---|
+| 37.20 | Each tile has a mini preview at top: height 56 dp, border-radius 10 | Small card preview |
+| 37.21 | Light tile mini preview always uses **light card colour** (`#FFFFFF`) as background | Regardless of current app theme |
+| 37.22 | Dark tile mini preview always uses **dark card colour** (`#232238`) as background | Always dark background in preview |
+| 37.23 | Mini preview has simulated title line + two body lines + amber accent dot | 3 skeleton lines visible |
+| 37.24 | Accent dot: 7×7 dp circle, `#F59E0B` amber | Small amber circle in top-right of preview |
+| 37.25 | Second body line is shorter than first (60 dp fixed width) | Simulates real note card text wrapping |
+
+### 37E — Tile Row (Icon + Label + Radio Dot)
+
+| # | Check | Expected |
+|---|---|---|
+| 37.26 | Tile row has: icon (16 dp) + label (PJS 14/700, Expanded) + radio dot (18×18) | Three items in row |
+| 37.27 | Light tile icon: `light_mode_outlined` | Sun outline icon |
+| 37.28 | Dark tile icon: `dark_mode_outlined` | Moon outline icon |
+| 37.29 | **Selected tile**: icon and label use `onPrimaryContainer` colour | Dark colour on light-purple background |
+| 37.30 | **Unselected tile**: icon = `onSurfaceVariant`, label = `onSurface` | Standard grey colours |
+| 37.31 | **Selected radio dot**: `primary` fill + white 8 dp `Icons.circle` inside | Filled purple circle with white dot |
+| 37.32 | **Unselected radio dot**: `outlineStrong` border 1.5 px, transparent fill | Empty circle border |
+
+### 37F — Tile Selection Interaction
+
+| # | Check | Expected |
+|---|---|---|
+| 37.33 🔴 | Tapping Light tile → Light tile becomes selected (2px border + primaryContainer bg) | Instant visual change |
+| 37.34 🔴 | Tapping Dark tile → Dark tile becomes selected | Instant visual change |
+| 37.35 🔴 | Tapping Light → entire app theme switches to light mode | All screens update immediately |
+| 37.36 🔴 | Tapping Dark → entire app theme switches to dark mode | All screens update immediately |
+| 37.37 | When app is in `ThemeMode.system` (default on first launch): **neither tile is selected** | No border highlight on either tile |
+| 37.38 | After tapping Light: switching OS to dark mode → app stays light (user override) | Explicit choice overrides system |
+
+---
+
+## Section 38 — Theme Persistence (Phase 9)
+
+| # | Check | Expected |
+|---|---|---|
+| 38.1 🔴 | Tap Light tile → force-kill app (`adb shell am force-stop com.modunote.app`) → relaunch → Light tile is still selected; app is in light mode | SharedPreferences write confirmed |
+| 38.2 🔴 | Tap Dark tile → force-kill → relaunch → Dark tile selected; app is in dark mode | Same for dark mode |
+| 38.3 | Fresh install (first launch): neither tile highlighted; app follows OS theme | Default `ThemeMode.system` |
+| 38.4 🔴 | Select Dark → relaunch → entire app (Note List, Editor, Tags, Search) renders in dark colours | Theme applied globally on startup |
+| 38.5 | Select Light → navigate to Note Editor → editor is in light mode | Theme consistent across all screens |
+| 38.6 | Select Dark → open Note Editor → editor in dark mode → go back → Settings tab still shows Dark selected | State persists within session |
+| 38.7 | Uninstall app → reinstall → Settings shows neither tile selected (system default) | SharedPreferences cleared on uninstall |
+
+---
+
+## Section 39 — `flutter analyze` Gate
+
+| # | Check | Expected |
+|---|---|---|
+| 39.1 🔴 | `flutter analyze` returns **`No issues found!`** | Zero errors, zero warnings, zero infos |
 
 Run this before every commit. Do not commit if any issues are reported.
 
@@ -1084,19 +1227,19 @@ The following are placeholder implementations for future phases. Do not report a
 
 | Item | Planned Phase |
 |---|---|
-| Settings screen is a placeholder | Phase 9 |
-| Category picker bottom sheet shows stub text | Phase 8 |
+| ~~Settings screen is a placeholder~~ | ✅ Full Settings screen shipped in Phase 9 |
+| ~~Category picker bottom sheet shows stub text~~ | ✅ Full picker implemented in Phase 8 |
+| ~~Bottom nav active-tab highlight is hardcoded per screen~~ | ✅ Persistent `ShellRoute` nav shipped in Phase 9 |
+| ~~Theme preference resets on app restart~~ | ✅ SharedPreferences persistence shipped in Phase 9 |
 | Note editor `⋮` overflow does nothing | Future |
-| Bottom nav active-tab highlight is hardcoded per screen | Phase 9 (GoRouter ShellRoute) |
-| Theme preference resets on app restart | Phase 9 (SharedPreferences) |
 | `SyncStatus` on notes is always `"local"` | Phase 10 |
 | No note deletion or archiving UI | Not yet spec'd |
 | Note pin/unpin not exposed in UI | Not yet spec'd |
-| Chevron on Tags screen row taps do nothing | Phase 8+ |
+| Chevron on Tags screen row taps do nothing | Future |
 
 ---
 
-## Quick Smoke Test — ~25 min (~55 critical checks)
+## Quick Smoke Test — ~25 min (~65 critical checks)
 
 Run only 🔴 CRITICAL checks after each commit:
 
@@ -1123,13 +1266,15 @@ Section 20:  20.1, 20.2, 20.3, 20.6
 Section 21:  21.1, 21.6, 21.8
 Section 23:  23.1, 23.2, 23.3, 23.4
 Section 25:  25.1, 25.2, 25.3, 25.5
-Section 33:  33.1
+Section 36:  36.1, 36.12, 36.18, 36.19, 36.20, 36.21, 36.25, 36.26
+Section 37:  37.1, 37.2, 37.7, 37.14, 37.33, 37.34, 37.35, 37.36
+Section 38:  38.1, 38.2, 38.4
+Section 39:  39.1
 ```
 
 ---
 
 ## Full Regression — ~2.5 hr
 
-Run all numbered checks in all 33 sections before tagging a release or beginning a new phase.
-Pay special attention to Sections 12–15 (Phase 7 Tags) and Sections 29–32 (ADB verification),
-as these cover the most recently added functionality.
+Run all numbered checks in all 39 sections before tagging a release or beginning a new phase.
+Pay special attention to Sections 36–38 (Phase 9 Navigation + Theming) and Sections 29–32 (ADB verification).

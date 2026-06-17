@@ -32,7 +32,7 @@
 | 6 | Voice-to-text + audio recording/playback | ✅ **Complete** | See details below |
 | 7 | Tags (freeform + autocomplete) | ✅ **Complete** | See details below |
 | 8 | Categories (hierarchical folder tree) | ✅ **Complete** | See details below |
-| 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ⬜ Not started | — |
+| 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ✅ **Complete** | See details below |
 | 10 | Firebase preparation layer | ⬜ Not started | — |
 | 11 | Backend API scaffolding (FastAPI) | ⬜ Not started | — |
 | 12 | AI features | ⬜ Not started | Deferred — post full app |
@@ -574,6 +574,90 @@ Expected:
 
 ---
 
+## Phase 9 — Navigation + Theming ✅
+
+**Completed**: Phase 9
+**Deliverable**: Persistent `MNBottomNav` floating pill across all 4 tabs via GoRouter `ShellRoute`. Full Settings screen with Light/Dark theme tiles. Theme persistence to SharedPreferences. All per-screen `_BottomNav` implementations removed. `flutter analyze = 0 issues`.
+
+### Files Created
+
+#### `lib/presentation/widgets/`
+- `mn_bottom_nav.dart` — `MNBottomNav extends StatelessWidget`. Props: `int activeIndex`. 64px height, card bg, `br:32`, `outlineStrong` 0.5px border, 6px shadow. 4 `Expanded` `_NavTab` children. Active tab: `primaryContainer` bg + `br:26` pill + icon + label (Inter 13/600/+0.1). Inactive: transparent bg + icon only (`onSurfaceVariant`). All tabs call `context.go(route)` for navigation. Spec: `MODUNOTE_UI_REFERENCE.md § 2.5`.
+
+### Files Modified
+
+#### `pubspec.yaml`
+- Added `shared_preferences: ^2.3.0` (runtime dep, under utilities section).
+
+#### `lib/presentation/router/app_router.dart`
+- **Full rewrite of `router()` function**: added `ShellRoute` wrapping the 4 tab `GoRoute` entries. Note Editor routes remain outside the shell.
+- **New `_AppShell extends StatelessWidget`**: private shell widget. Provides outer `Scaffold(body: SafeArea(child: Stack([Positioned.fill(child), Positioned(nav)])))`. `_tabIndex(String loc)` derives active index from location string.
+- **`ThemeModeNotifier` extended**: added `_loadPersistedMode()` (fire-and-forget from `build()`), `setLight()`, `setDark()`, `setSystem()`, `toggle()`, `_setAndPersist(ThemeMode)`. Reads/writes `AppConstants.prefThemeMode` key via `SharedPreferences`.
+- New imports: `shared_preferences`, `app_constants.dart`, `mn_bottom_nav.dart`.
+
+#### `lib/presentation/views/settings/settings_screen.dart`
+- **Full rewrite** of Phase 1 placeholder. No `Scaffold` (shell provides it). Returns `ListView(padding: fromLTRB(20,8,20,150))`.
+- Children: `_SettingsAppBar` ("Settings" PJS 24/800/−0.5) + `_AppearanceCard`.
+- `_AppearanceCard`: card bg, 0.5px outline, `br:22`, padding 16. Title (PJS 15/700) + subtitle (Inter 12.5). Row of two `_ThemeTile` widgets.
+- `_ThemeTile`: selected = 2px `primary` border + `primaryContainer` bg; unselected = 0.5px `outlineStrong` + `surfaceContainer`. Column: `_MiniPreview(h:56, br:10)` + row(icon + label + `_RadioDot`).
+- `_MiniPreview`: simulated note card using each theme's card/line colours (hard-coded `AppColors.darkCard` / `AppColors.lightCard` so preview is always correct regardless of active theme).
+- `_RadioDot`: 18×18 circle; selected = `cs.primary` fill + white `Icons.circle(8px)`; unselected = `outlineStrong` 1.5px border.
+
+#### `lib/presentation/views/note_list/note_list_screen.dart`
+- `NoteListScreen.build()`: removed `Scaffold(body: SafeArea(child: Stack(...)))` wrapper; now returns `Stack(...)` directly (shell provides Scaffold + SafeArea).
+- `_DataBody.build()`: `context.push(AppRoutes.search)` → `context.go(AppRoutes.search)` on `MNSearchField.onTap`.
+- `_EmptyState.build()`: same change on `MNSearchField.onTap`.
+- Removed `_BottomNav` and `_NavTab` private classes entirely.
+
+#### `lib/presentation/views/search/search_screen.dart`
+- `SearchScreen.build()`: removed `Scaffold(body: SafeArea(child: Stack(...)))` wrapper; now returns `Column(...)` directly.
+- `onBack` callback: `context.pop()` → `context.go(AppRoutes.home)` (shell tabs have no stack to pop).
+- Removed `_BottomNav` and `_NavTab` private classes entirely.
+
+#### `lib/presentation/views/tags/tags_screen.dart`
+- `TagsScreen.build()`: removed `Scaffold(backgroundColor:..., body: SafeArea(child: Stack(...)))` wrapper; now returns `Column(...)` directly.
+- Removed `_BottomNav` and `_NavTab` private classes entirely.
+- Removed now-unused imports: `package:go_router/go_router.dart` and `../../router/app_router.dart`.
+
+### Architectural Decisions
+
+| Decision | Detail |
+|---|---|
+| `ShellRoute` for tab persistence | `_AppShell` wraps the 4 tab routes; provides outer Scaffold + SafeArea + MNBottomNav. Note Editor routes outside the shell. |
+| Tab screens: no inner Scaffold | Tab screens return body content only — shell provides the Scaffold. Avoids nested-Scaffold Material warnings. |
+| `ThemeModeNotifier` stays `Notifier<ThemeMode>` | Kept synchronous; fire-and-forget `_loadPersistedMode()` from `build()`. Default = `ThemeMode.system` for first frame. |
+| `context.go` for tab nav | Tab routes are shell children; pushed via `go`. Note Editor uses `context.push`. SearchScreen back = `go('/home')`. |
+| `_AppShell._tabIndex` from location string | Active tab index derived from `state.uri.path` in ShellRoute builder — no additional state. |
+| `sort_child_properties_last` lint | `child:` param must be last in widget constructor calls. Caught by `flutter analyze` during Phase 9 (BUG-23). |
+| `_MiniPreview` uses hard-coded `AppColors` | Preview must always look like the correct theme's card regardless of the user's current theme. Can't use `Theme.of(context)` here. |
+
+### Post-Phase-9 build results
+
+```
+flutter pub get           # shared_preferences 2.5.5 + 6 platform packages added
+dart run build_runner build --delete-conflicting-outputs   # 137 outputs in 28s
+flutter analyze           # No issues found! ✅
+```
+
+### First-Run Instructions (Phase 9 state)
+
+```bash
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+flutter analyze   # expected: 0 issues
+flutter run       # Persistent bottom nav across all 4 tabs; Settings → Light/Dark theme tiles
+```
+
+Expected:
+- App boots to NoteListScreen with floating pill bottom nav (Home active).
+- Tapping Explore / Tags / Settings tabs — nav persists, content swaps, active pill highlights correct tab.
+- Tapping FAB → Note Editor opens (full-screen, no bottom nav). Back → returns to Home with nav.
+- Settings tab → two theme tiles (Light / Dark). Tapping Light → entire app switches to light mode; tile border highlights.
+- Killing + restarting the app → previously chosen theme is restored from SharedPreferences.
+- `ThemeMode.system` (default): neither tile is highlighted.
+
+---
+
 ## Decisions Log (cross-phase)
 
 | Decision | Value | Phase set |
@@ -598,6 +682,10 @@ Expected:
 | `NoteEditorViewModel` family param | Optional `noteId` build param; `_isNew` flag tracks first insert | 3 |
 | `SearchState` pattern | `Notifier<SearchState>` with query + `AsyncValue<List<Note>>` results; 300 ms debounce | 3 |
 | Category deletion policy | **Re-parent children to grandparent/root; notes → Uncategorised** | 8 |
+| Navigation shell | GoRouter `ShellRoute` — `_AppShell` provides Scaffold+SafeArea+`MNBottomNav`; tab screens return body only | 9 |
+| Theme persistence | `shared_preferences` — `ThemeModeNotifier` reads on build, writes on set; key `theme_mode` | 9 |
+| Settings theme toggle | Two-tile card (Light / Dark); System = hidden third state (neither highlighted) | 9 |
+| Tab navigation | `context.go` for tabs; `context.push` for Note Editor; `context.go(home)` for SearchScreen back | 9 |
 | AI provider (Gemini vs Groq) | **TBD — Phase 12** | — |
 
 ---
