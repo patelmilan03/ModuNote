@@ -22,12 +22,14 @@
 | State management | MVVM + Riverpod 2 | `flutter_riverpod`, `riverpod_annotation`, `riverpod_generator` |
 | Local DB | Repository pattern | `drift` v2, `drift_flutter`, `drift_dev` |
 | Navigation | Declarative + ShellRoute | `go_router` v14 |
+| Floating bottom bar | Hide-on-scroll + scroll-to-top | `flutter_floating_bottom_bar` ^2.0.0 |
 | Rich text | Delta JSON | `flutter_quill` v10 |
 | Audio | Record + playback | `flutter_sound` v9 (AAC 32kbps mono 16kHz) |
 | Voice-to-text | On-device | `speech_to_text` v7 |
 | Theme persistence | SharedPreferences | `shared_preferences` ^2.3.0 |
 | Fonts | Google Fonts | Plus Jakarta Sans (headings) + Inter (body) |
 | UUID | v4 | `uuid` v4 |
+| Remote API client | HTTP wrapper | `http` ^1.2.0 — `RemoteNoteService` |
 
 **Rule**: ViewModels (`AsyncNotifier` / `Notifier`) depend on repository **interfaces** only — never on Drift DAOs directly. Views (`ConsumerWidget`) depend on ViewModels only.
 
@@ -58,14 +60,18 @@ lib/
 │   │   └── audio_record.dart
 │   ├── repositories/
 │   │   ├── interfaces/                # Abstract contracts (INoteRepository etc.)
-│   │   └── local/                     # Drift implementations (Phase 2)
+│   │   ├── local/                     # Drift implementations (Phase 2)
+│   │   ├── remote/                    # Firebase stubs (Phase 10) — FirebaseNoteRepository
+│   │   └── synced/                    # Sync wrapper (Phase 10) — SyncedNoteRepository
 │   └── datasources/
 │       ├── local/                     # Drift DAOs + AppDatabase (Phase 2)
 │       └── file/                      # AudioFileStorage (Phase 6)
 │
 ├── services/
 │   ├── speech/speech_to_text_service.dart   # Phase 6
-│   └── audio/audio_recording_service.dart   # Phase 6
+│   ├── audio/audio_recording_service.dart   # Phase 6
+│   ├── auth/firebase_auth_service.dart      # Phase 10ext — silent anonymous sign-in
+│   └── remote/remote_note_service.dart      # Phase 11 — HTTP client for FastAPI backend
 │
 └── presentation/
     ├── viewmodels/                    # AsyncNotifier classes (Phase 3+)
@@ -77,7 +83,7 @@ lib/
     │   └── settings/settings_screen.dart
     ├── widgets/                       # Shared widgets — mn_note_card.dart, mn_search_field.dart, mn_editor_toolbar.dart, mn_tag_row.dart, mn_category_picker_sheet.dart, mn_bottom_nav.dart (Phase 4+)
     └── router/
-        ├── app_router.dart            # GoRouter config, ShellRoute, _AppShell, routerProvider, ThemeModeNotifier
+        ├── app_router.dart            # GoRouter config, ShellRoute, _AppShell (ConsumerStatefulWidget+WidgetsBindingObserver), routerProvider, ThemeModeNotifier
         └── app_router.g.dart          # Generated — run `dart run build_runner build`
 ```
 
@@ -179,8 +185,8 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | 7 | Tags (freeform + autocomplete) | ✅ Complete |
 | 8 | Categories (hierarchical folder tree) | ✅ Complete |
 | 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ✅ Complete |
-| 10 | Firebase preparation layer (stubs, SyncStatus) | ⬜ Not started |
-| 11 | Backend API scaffolding (FastAPI stubs) | ⬜ Not started |
+| 10 | Firebase preparation + live sync (anon auth, Firestore writes, SyncStatus badge, AppLifecycle) | ✅ Complete |
+| 11 | Backend API scaffolding (FastAPI stubs) | ✅ Complete |
 | 12 | AI features (auto-tagging, summarisation) | ⬜ Not started |
 
 ---
@@ -209,31 +215,66 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `analysis_options.yaml` | Linting rules + custom_lint plugin |
 | `lib/core/theme/app_colors.dart` | Every design token |
 | `lib/core/constants/app_constants.dart` | Magic numbers and string keys |
-| `lib/presentation/widgets/mn_bottom_nav.dart` | Persistent floating pill bottom nav — 4 tabs, active pill indicator, `context.go` tab switching |
-| `lib/presentation/router/app_router.dart` | GoRouter config, `ShellRoute`, `_AppShell` (outer Scaffold+SafeArea), `ThemeModeNotifier` (theme persistence via SharedPreferences) |
+| `lib/presentation/widgets/mn_bottom_nav.dart` | Floating pill bottom nav — 4 icon-only tabs with 60 px center gap (FAB notch), active `primaryContainer` pill, `context.go` tab switching |
+| `lib/presentation/router/app_router.dart` | GoRouter config, `ShellRoute`, `_AppShell` (uses `BottomBar` for hide-on-scroll + amber scroll-to-top icon), `_NavFab` (center notch FAB → new note), `ThemeModeNotifier` |
 | `lib/data/datasources/local/app_database.dart` | `@DriftDatabase` — 5 tables, 4 DAOs, FTS5, migrations |
-| `lib/data/datasources/local/database_providers.dart` | Riverpod providers for DB + 4 repositories = 5 `keepAlive` providers total (`appDatabase`, `noteRepository`, `tagRepository`, `categoryRepository`, `audioRecordRepository`) |
+| `lib/data/datasources/local/database_providers.dart` | 6 `keepAlive` providers: `appDatabase`, `syncedNoteRepository` (typed `SyncedNoteRepository`), `noteRepository` (typed `INoteRepository`, delegates to synced), `tagRepository`, `categoryRepository`, `audioRecordRepository` |
 | `lib/data/datasources/file/audio_file_storage.dart` | File I/O for audio recordings (create dir, generate path, delete, size) |
 | `lib/services/audio/audio_recording_service.dart` | flutter_sound wrapper — record AAC, stream amplitude, playback |
 | `lib/services/speech/speech_to_text_service.dart` | speech_to_text wrapper — live dictation with Android timeout recovery |
+| `lib/services/auth/firebase_auth_service.dart` | Singleton — `signInAnonymously()` (idempotent). Called from `main.dart`. |
+| `lib/services/remote/remote_note_service.dart` | HTTP client for the FastAPI backend — `suggestTags()` + `summariseNote()` (both stub-level; called in Phase 12). Plain Dart class, not a Riverpod provider. Default base URL `http://10.0.2.2:8000/api/v1` (Android emulator loopback). |
+| `lib/firebase_options.dart` | STUB (gitignored). Replace by running `flutterfire configure`. |
 | `lib/data/datasources/local/converters/type_converters.dart` | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` |
+| `lib/data/repositories/remote/firebase_note_repository.dart` | Live Firestore write impl — `insert`/`update`/`archive`/`delete`/`togglePin` via Firestore set. Reads remain `UnimplementedError`. |
+| `lib/data/repositories/synced/synced_note_repository.dart` | Sync wrapper — all standard ops delegate to local; `syncNote(id)` + `syncAllPending()` push to Firestore |
+| `firestore.rules` | Firestore security rules (deploy manually in Firebase Console) |
 | `MODUNOTE_UI_REFERENCE.md` | Full pixel-level UI spec from Claude Design |
 | `progress.md` | Human-readable phase progress log |
-| `TESTING.md` | Manual testing checklist — 16 sections, ~145 checks. Quick smoke test (~46 🔴 critical checks, ~20 min) + full regression (~145 checks, ~1.5 hr). Section 15 = voice/STT deep verification with ADB file + DB inspection commands. Section 16 = Phase 9 bottom nav + theme persistence checks. |
+| `TESTING.md` | Manual testing checklist — 40 sections, ~175+ checks. Quick smoke test (~50 🔴 critical checks, ~20 min) + full regression (~175+ checks, ~1.5 hr). Section 40 = Firebase sync checks. |
+
+---
+
+## Session Context Log (`session_context.md`)
+
+`session_context.md` lives in the project root and is a **running log for the current session**. It is gitignored — never committed.
+
+**Rule: append to `session_context.md` immediately whenever the user asks you to implement, update, remove, or diagnose/fix a malfunctioning feature or any other change that modifies project functionality.** Record the exact wording of the request plus the date/time. Do not paraphrase.
+
+Format each entry as:
+
+```
+[YYYY-MM-DD HH:MM] <exact user request verbatim>
+```
+
+Do not wipe or truncate `session_context.md` at any point — entries accumulate across the session so the full request history is available if the context window is compressed.
+
+**Rule: once the user accepts/confirms a feature or change, append the relevant knowledge from that work into the appropriate permanent `.md` file(s).** Use the session_context.md entry for that request as the source of truth for what was done. Target files:
+
+| What was built / decided | Append to |
+|---|---|
+| New architectural decision or trade-off | `DECISIONS.md` |
+| Phase completion or feature milestone | `progress.md` |
+| Key facts the next session must know | `THREAD_HANDOFF.md` |
+| New manual test steps for the feature | `TESTING.md` |
+| New package, route, folder, or convention | `CLAUDE.md` itself |
+
+Write only what is new — do not duplicate content already in the target file. Keep entries concise and factual (no session-specific wording like "in this session we…").
 
 ---
 
 ## On-boarding Checklist (new dev / new AI session)
 
+0. **Check for `session_context.md`** in the project root. If it exists and is non-empty, read it FIRST before any other file — it contains the verbatim log of every feature/fix request made in the current in-progress session and overrides or extends the permanent docs.
 1. Read `CLAUDE.md` (this file) — understand the architecture.
 2. Read `progress.md` — know what's been built and what's next.
 3. Read `THREAD_HANDOFF.md` — get the most recent session summary and next-phase scope.
 4. Read `DECISIONS.md` — all architectural decisions and their rationale.
 5. Read `MODUNOTE_UI_REFERENCE.md` — before touching any UI file.
-6. Run `flutter pub get` then `dart run build_runner build --delete-conflicting-outputs`. (`shared_preferences` was added in Phase 9 — always re-run after a new package.)
+6. Run `flutter pub get` then `dart run build_runner build --delete-conflicting-outputs`. (`shared_preferences` added in Phase 9, `flutter_floating_bottom_bar ^2.0.0` added post-Phase-9, `firebase_core` + `cloud_firestore` + `firebase_auth` added Phase 10, `http ^1.2.0` added Phase 11 — always re-run after a new package.) **Phase 10ext**: run `flutterfire configure` first if `lib/firebase_options.dart` is still the placeholder stub.
 7. Run `flutter analyze` — must report 0 issues before writing any code.
-8. Run `flutter run` — boots to NoteListScreen with persistent bottom nav; tap FAB → Note Editor; tap mic → recording overlay; tap Tags tab → Tags screen with density bars; tap Settings tab → theme tiles.
+8. Run `flutter run` — boots to NoteListScreen with persistent floating nav; amber `+` FAB in nav center taps to open Note Editor; scrolling content hides nav and shows amber up-arrow scroll-to-top; tap mic → recording overlay; tap Tags tab → Tags screen with density bars; tap Settings tab → theme tiles.
 9. Ask the developer which phase to proceed with before writing any code.
 10. After completing a phase, run the smoke test checks in `TESTING.md` before committing.
 
-SPAWN A VERIFICATION SUBAGENT THAT VERIFIES THE RESULTS AFTER THE MAIN TASK HAS FINISHED. PASS THE SUBAGENT ALL THE MODIFIED FILES AND THE FULL LIST OF MANDATORY RULES. THE SUBAGENT MUST READ THE FILES FRESH AND CHECK EACH RULE LINE BY LINE. THE SUBAGENT MUST ALSO PRODUCE A CHECKLIST TABLE WITH ONE ROW PER RULE, A PASS OR FAIL STATUS ADN EXACAT EVIDENCE FOR EACH ITEM. BLOCK TASK COMPLETION ON ANY FAIL RESULT. RESTRICT THE SUBAGENT TO READ-ONLY TOOLS SO IT CANNOT CHANGE ANYTHING WHILE AUDITING. ENCAPSULATE THE VERFICICATION CHECKLIST IN A DEDICATED VALIDATOR SKILL SO EVERY TASK CAN REUSE THE RULES WITHOUT DUPLICATING THEM.
+SPAWN A VERIFICATION SUBAGENT AFTER THE MAIN TASK FINISHES. SCOPE IT TO ONLY THE DART SOURCE FILES (lib/**/*.dart) THAT WERE ACTUALLY EDITED IN THE CURRENT SESSION — DO NOT PASS ANY .md FILES. THE SUBAGENT MUST READ EACH SCOPED FILE FRESH AND CHECK EACH MANDATORY RULE LINE BY LINE. IT MUST PRODUCE A CHECKLIST TABLE WITH ONE ROW PER RULE, A PASS OR FAIL STATUS, AND EXACT EVIDENCE (QUOTE + LINE NUMBER) FOR EACH ITEM. BLOCK TASK COMPLETION ON ANY FAIL RESULT. RESTRICT THE SUBAGENT TO READ-ONLY TOOLS SO IT CANNOT CHANGE ANYTHING WHILE AUDITING.

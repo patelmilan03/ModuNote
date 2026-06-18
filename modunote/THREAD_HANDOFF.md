@@ -3,20 +3,68 @@
 
 ---
 
-## Status: Phase 9 ✅ Complete. Proceed with Phase 10.
+## Status: Phase 11 ✅ Complete. Proceed with Phase 12.
 
-Phase 9 is fully complete. **`flutter analyze` reports 0 issues.**
+Phase 10 (Firebase preparation + live sync extension) is fully complete. **`flutter analyze` reports 0 issues.**
+
+**`flutterfire configure` has already been run** — `lib/firebase_options.dart` contains real credentials for project `modunote-ba654`. Firebase is active. Anonymous sign-in works. No manual Firebase setup required on this machine.
+
+**DB schema is version 2** — FTS5 triggers were corrected and a migration runs automatically on first app launch after updating. The FTS index is rebuilt during migration. No data loss.
+
+**What Phase 10 extension (live Firebase sync) delivered:**
+- **`.gitignore` secured**: added `google-services.json`, `android/app/google-services.json`, `lib/firebase_options.dart`, `session_context.md`. All sensitive Firebase config files are now gitignored before generation.
+- **`firebase_auth: ^5.7.0`** added to `pubspec.yaml`. Firebase packages resolved: `firebase_core 3.15.2` + `cloud_firestore 5.6.12` + `firebase_auth 5.7.0`.
+- **`lib/firebase_options.dart`** — STUB with placeholder values (gitignored). Replaced by `flutterfire configure` with real project credentials.
+- **`lib/services/auth/firebase_auth_service.dart`** — singleton, `signInAnonymously()` (idempotent). Called from `main.dart` before `runApp`.
+- **`lib/main.dart`** — now calls `Firebase.initializeApp()` + `FirebaseAuthService().signInAnonymously()` inside a try-catch before `runApp`. App boots normally even if Firebase fails.
+- **`FirebaseNoteRepository`** fully implemented (live Firestore). Write methods (`insert`, `update`, `archive`, `delete`, `togglePin`) use Firestore upsert (`set()`). Read methods (`watchAll`, `findById`, etc.) remain `UnimplementedError` — reads stay local-only. UID fetched lazily via `FirebaseAuth.instance.currentUser?.uid`; all writes silently skip if uid is null.
+- **`SyncedNoteRepository`** extended with `syncNote(noteId)` → read local → write remote → update local `syncStatus` → return new status; and `syncAllPending()` → find all non-synced notes → sync each. Removed `syncEnabled` flag and `unused_field` ignore comment — `_remote` is now actively used.
+- **`syncedNoteRepositoryProvider`** added to `database_providers.dart` (typed as `SyncedNoteRepository`, not `INoteRepository`). `noteRepositoryProvider` now delegates to it via `ref.watch(syncedNoteRepositoryProvider)`.
+- **`NoteEditorViewModel.syncNote(String noteId)`** — calls `syncedNoteRepositoryProvider.syncNote()`, updates ViewModel state with new `SyncStatus`, returns it.
+- **`NoteEditorScreen._onBack()`** — after local save: set badge to "Syncing…", await `viewModel.syncNote()`, update badge, then pop.
+- **`_SaveBadge`** extended from 2 states to 4: `isDirty=true` → "Saving…" (muted dot); `local` → "Local" (grey dot); `pending` → "Syncing…" (amber dot); `synced` → "Synced" (green dot).
+- **`_AppShell`** converted from `StatelessWidget` to `ConsumerStatefulWidget` with `WidgetsBindingObserver`. On `AppLifecycleState.paused` (app background): calls `syncedNoteRepositoryProvider.syncAllPending().ignore()` (best-effort fire-and-forget).
+- **`firestore.rules`** created at project root — deploy in Firebase Console → Firestore → Rules tab. Scopes all data to the anonymous UID.
+- **Security scan completed**: GitHub repo clean (no credentials). All generated Firebase config files now gitignored.
+- `build_runner` → 145 outputs. `flutter analyze` → 0 issues.
+
+**What Phase 10 (stub phase) also delivered:**
+- `FirebaseNoteRepository` stub (now replaced with live implementation).
+- `SyncedNoteRepository` stub (now extended with sync methods).
+- `firebase_core` + `cloud_firestore` packages (now joined by `firebase_auth`).
+
+---
+
+## Bug Fix Applied (Post-Phase 10 Extension) — BUG-FTS5
+
+**Symptom**: Notes with heavy formatting (H1/H2/bold/italic/checkboxes/lists) had their first save succeed (INSERT — note appeared on home screen) but all subsequent auto-saves (UPDATEs) were silently rolled back. Home-screen timestamps never updated. Badge incorrectly showed "Local" even on failure.
+
+**Root causes**:
+1. FTS5 AFTER UPDATE trigger used `UPDATE notes_fts SET…` — invalid SQL for external content FTS5 tables. SQLite requires `INSERT INTO notes_fts(notes_fts,…) VALUES('delete',…)` + new INSERT. The invalid trigger caused every `UPDATE notes` to roll back.
+2. `_performAutoSave` had a dead `catch (_)` block — `save()` catches `AppException` internally without rethrowing, so `_isDirty` was always reset to `false` (badge lied).
+
+**Files changed**:
+- `lib/data/datasources/local/app_database.dart` — `schemaVersion` bumped **1 → 2**; FTS5 UPDATE + DELETE triggers rewritten; `onUpgrade(from < 2)` migration drops broken triggers, recreates correct ones, runs `'rebuild'` to repair FTS index.
+- `lib/presentation/viewmodels/note_editor_view_model.dart` — `debugPrint` added to save catch block.
+- `lib/presentation/views/note_editor/note_editor_screen.dart` — `_performAutoSave` now reads `vmState.hasError` after `save()` and returns early on failure, keeping `_isDirty = true` so badge shows "Saving…" on failure. `debugPrint` logs failures.
+
+**No build_runner re-run required** — no `@riverpod` annotations or Drift table structure changed.
+
+---
+
+## What was built (Phase 9 + post-Phase-9 refinements)
 
 **What Phase 9 delivered:**
-- **GoRouter `ShellRoute`**: `app_router.dart` rewritten with `ShellRoute` wrapping 4 tab routes. `_AppShell` private widget provides outer Scaffold + SafeArea + persistent `MNBottomNav`. Note Editor routes remain outside the shell.
-- **`MNBottomNav`**: new `lib/presentation/widgets/mn_bottom_nav.dart`. Floating pill widget. Active tab = `primaryContainer` bg + label; inactive = icon only. Uses `context.go` for tab switching.
+- **GoRouter `ShellRoute`**: `app_router.dart` rewritten with `ShellRoute` wrapping 4 tab routes. `_AppShell` private widget provides outer Scaffold + `BottomBar` (floating nav) + `MNBottomNav`. Note Editor routes remain outside the shell.
+- **`MNBottomNav`**: new `lib/presentation/widgets/mn_bottom_nav.dart`. Floating pill widget, icon-only tabs (no labels), 60 px center gap for FAB notch. Active tab = `primaryContainer` bg + icon (22 dp). Uses `context.go` for tab switching.
+- **`_NavFab`**: amber 52 px circle with amber glow shadow, positioned `top: -20` above the nav pill via `Positioned` in `_AppShell`'s `Stack`. Calls `context.push(AppRoutes.newNote)`. Sole entry point for new note creation — visible on all 4 shell tabs.
+- **`flutter_floating_bottom_bar ^2.0.0`**: `_AppShell` uses `BottomBar` — nav hides when scrolling down, slides back on scroll up. When hidden, an amber 52 px scroll-to-top button appears (matches FAB style). No `ScrollController` wiring needed — package listens to scroll notifications from any descendant scrollable.
 - **Theme persistence**: `ThemeModeNotifier` extended with `_loadPersistedMode()` (fire-and-forget from `build()`), `setLight/Dark/System()`, `_setAndPersist()`. SharedPreferences key: `AppConstants.prefThemeMode`. Package: `shared_preferences: ^2.3.0` added to `pubspec.yaml`.
 - **Settings screen**: full rewrite. No Scaffold (shell provides). Appearance card with two `_ThemeTile` widgets (Light/Dark). Selected tile: 2px `primary` border + `primaryContainer`. Mini preview shows each theme's card appearance. `_RadioDot` confirms selection. System mode = neither highlighted.
 - **Tab screens stripped of Scaffold/SafeArea**: `NoteListScreen`, `SearchScreen`, `TagsScreen` no longer have inner Scaffold. All per-screen `_BottomNav`/`_NavTab` classes removed.
+- **`NoteListScreen` FAB removed**: old `_Fab` widget and `Stack`/`Positioned` wrapper replaced by direct `notesAsync.when(...)` return. Nav `_NavFab` is now the sole FAB.
 - **SearchScreen back button**: `context.pop()` → `context.go(AppRoutes.home)` (shell tab, not pushed route).
-- **Tags screen imports cleaned**: `go_router` and `app_router` imports removed after `_BottomNav` deletion.
-- **BUG-23 fixed**: `sort_child_properties_last` lint — `_AppShell(child: child, location: ...)` reordered to `_AppShell(location: ..., child: child)`.
-- `flutter pub get` → shared_preferences 2.5.5 + 6 platform packages. `build_runner` → 137 outputs. `flutter analyze` → 0 issues.
+- `flutter pub get` → `shared_preferences` + `flutter_floating_bottom_bar` + `motor` added. `build_runner` → 137 outputs. `flutter analyze` → 0 issues.
 
 ---
 
@@ -100,6 +148,7 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
   Future<void> addTag(String tagId)        // uses tagRepositoryProvider + reloads note
   Future<void> removeTag(String tagId)     // uses tagRepositoryProvider + reloads note
   Future<void> setCategory(String? categoryId)  // constructs Note directly (no copyWith)
+  Future<SyncStatus> syncNote(String noteId)    // Phase 10ext — pushes to Firestore, updates SyncStatus
 }
 ```
 
@@ -297,7 +346,7 @@ Navigation + Theming — GoRouter ShellRoute, persistent bottom nav, theme persi
 ### New files
 
 #### `lib/presentation/widgets/`
-- `mn_bottom_nav.dart` — `MNBottomNav extends StatelessWidget`. Props: `int activeIndex`. Floating pill 64px, card bg, br 32, outlineStrong 0.5px, 6px shadow. 4 `_NavTab` children (Home/Explore/Tags/Settings). Active: `primaryContainer` bg, br 26, icon + Inter 13/600 label. Inactive: transparent, icon only. All tabs use `context.go(route)`.
+- `mn_bottom_nav.dart` — `MNBottomNav extends StatelessWidget`. Props: `int activeIndex`. Floating pill 64px, card bg, br 32, outlineStrong 0.5px, 6px shadow. Row of 4 `_NavTab` children (Home/Explore/[60 dp gap]/Tags/Settings). Active: `primaryContainer` bg, br 26, icon only (22 dp). Inactive: transparent, icon only. No label text on any tab. All tabs use `context.go(route)`.
 
 ### Modified files
 
@@ -419,12 +468,24 @@ No build_runner required. `flutter analyze` = 0 issues.
 | `MNCategoryPickerSheet` return value | `String?` from modal: non-empty = assign, `""` = unassign, `null` = dismiss | 8 |
 | Category picker expand seeding | Ancestor chain pre-expanded on sheet open so current selection is visible | 8 |
 | `clearCategoryFromNotes` | `NotesDao` method; `Value(null)` companion; called before category row delete | 8 |
-| GoRouter `ShellRoute` for tabs | `_AppShell` provides Scaffold+SafeArea+`MNBottomNav`; tab screens return body content only | 9 |
+| GoRouter `ShellRoute` for tabs | `_AppShell` provides Scaffold+`BottomBar`+`MNBottomNav`; tab screens return body content only | 9 |
 | `ThemeModeNotifier` stays `Notifier<ThemeMode>` | Synchronous build; fire-and-forget `_loadPersistedMode()` from `build()`; defaults to `ThemeMode.system` | 9 |
 | Tab nav uses `context.go` | Shell tabs are not pushed; use `go`. Note Editor uses `context.push`. SearchScreen back uses `go('/')`. | 9 |
 | Settings screen theme toggle | Two-tile card (Light/Dark); `ThemeMode.system` = neither tile highlighted | 9 |
 | `_MiniPreview` uses hard-coded `AppColors` | Preview must show correct theme colours regardless of active app theme | 9 |
 | `sort_child_properties_last` lint | `child:` must be last named parameter in all widget constructor calls | 9 |
+| `flutter_floating_bottom_bar` for nav | `BottomBar` in `_AppShell` hides nav on scroll-down; shows amber scroll-to-top button when hidden | 9+ |
+| `_NavFab` center notch | 52 dp amber circle in `Stack(Positioned(top:-20))` above `MNBottomNav`; `context.push(newNote)` | 9+ |
+| Icon-only tabs | Removed label text from `_NavTab`; all tabs show `Center(child: Icon(size:22))` only | 9+ |
+| `BottomBar.icon` for scroll-to-top | `BackToTopIconBuilder (w,h) => Icon(keyboard_arrow_up_rounded, size: w*1.4)` — no separate state needed | 9+ |
+| Firebase repo seam | `noteRepositoryProvider` → `ref.watch(syncedNoteRepositoryProvider)`; single shared instance | 10 |
+| `syncedNoteRepositoryProvider` typed `SyncedNoteRepository` | Typed provider exposes `syncNote`/`syncAllPending` methods unavailable on `INoteRepository` | 10ext |
+| Anonymous auth — no login UI | `FirebaseAuthService().signInAnonymously()` in `main.dart`; UID scopes Firestore data | 10ext |
+| Reads stay local-only | `FirebaseNoteRepository` read methods remain `UnimplementedError`; Firestore has no FTS5 | 10ext |
+| Sync on note-close + app-background | `_onBack()` calls `viewModel.syncNote()`; `_AppShell` AppLifecycle → `syncAllPending()` on paused | 10ext |
+| `_SaveBadge` 4 states | Saving/Local/Syncing/Synced — grey/amber/green dots matching SyncStatus | 10ext |
+| `_AppShell` → `ConsumerStatefulWidget` | Needs `WidgetsBindingObserver` for AppLifecycle; `ref` for `syncedNoteRepositoryProvider` | 10ext |
+| Firebase init try-catch in main.dart | App boots normally even if Firebase fails (e.g. before `flutterfire configure` is run) | 10ext |
 
 ---
 
@@ -453,7 +514,24 @@ No build_runner required. `flutter analyze` = 0 issues.
 
 ---
 
-## First-run instructions (Phase 9 state)
+## First-run instructions (Phase 10 extension state)
+
+### Firebase setup status
+`flutterfire configure` has already been run on this machine. `lib/firebase_options.dart` contains real credentials (project: `modunote-ba654`). Anonymous Authentication and Firestore are enabled. **Skip the one-time setup steps below unless moving to a new machine.**
+
+### One-time Firebase setup (new machine only — skip if already done)
+
+1. Create Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
+2. Add Android app — package name: `com.modunote.app`
+3. Enable **Firestore Database** (start in production mode)
+4. Enable **Authentication → Sign-in method → Anonymous**
+5. Deploy Firestore security rules from `firestore.rules` (Rules tab in Firebase Console)
+6. Install FlutterFire CLI: `dart pub global activate flutterfire_cli`
+7. In the `modunote/` directory: `flutterfire configure` — select your project + Android only
+   - This generates `lib/firebase_options.dart` (real values, replaces stub) + `android/app/google-services.json` + patches Gradle files
+   - ⚠️ Both generated files are gitignored — do NOT commit them. They must be re-generated on each new machine.
+
+### Code setup
 
 ```bash
 flutter pub get
@@ -462,30 +540,58 @@ flutter analyze   # expected: 0 issues
 flutter run
 ```
 
-Expected:
-- App boots to NoteListScreen with persistent floating pill bottom nav (Home tab active).
-- Tapping Explore/Tags/Settings → content swaps, active pill highlights correct tab; nav persists.
-- Tapping FAB → Note Editor opens full-screen (no bottom nav). Back → returns to Home.
-- Settings tab → Appearance card with Light/Dark tiles. Tap Light → app theme switches; tile border highlights.
-- Kill + restart app → previously chosen theme restored from SharedPreferences.
-- Default (first launch) → ThemeMode.system; neither tile highlighted.
+### Expected behaviour after Firebase setup
+- App boots, anonymous sign-in fires silently in background.
+- All note operations still go through local Drift (auto-save every 800 ms).
+- Opening a note → badge shows "Local". Pressing back → badge briefly shows "Syncing…" → then "Synced" (if Firebase configured) or stays "Local" (if Firebase unavailable).
+- Pressing home button (app background) triggers `syncAllPending()` for any unsynced notes.
+- Floating pill bottom nav, amber `+` FAB, hide-on-scroll, Settings theme toggle — all Phase 9 behaviour unchanged.
+
+### If Firebase is not yet configured (stub still in place)
+App boots and runs normally. Sync calls are wrapped in try-catch and fail silently. Badge will show "Local" permanently until Firebase is set up.
 
 ---
 
-## Phase 10 — What to build next
+## What was built (Phase 11)
 
-**Title**: Firebase Preparation Layer
+**Backend** (`modunote-api/` — sibling directory at same level as `modunote/`):
+- `main.py` — FastAPI app with CORS middleware, mounts `/api/v1` router, `GET /health`
+- `requirements.txt` — fastapi, uvicorn, sqlalchemy[asyncio], asyncpg, alembic, pydantic, pydantic-settings, python-jose, httpx
+- `docker-compose.yml` — PostgreSQL 16 on port 5432, DB `modunote_dev`
+- `.env.example` — `DATABASE_URL`, `SECRET_KEY`, `DEV_MODE=true`, `ALLOWED_ORIGINS`
+- `core/config.py` — `Settings(BaseSettings)` reads `.env`
+- `core/auth.py` — `verify_token`: bypasses JWT when `DEV_MODE=true`, returns `"dev-user-local"`
+- `routers/notes.py` — `POST /api/v1/notes/{id}/tags/suggest` → 501; `POST /api/v1/notes/{id}/summary` → 501
+- `models/note.py` — Pydantic `TagSuggestRequest/Response`, `SummaryRequest/Response`
+- `db/models.py` — SQLAlchemy `Note` model stub (id, user_id, title, content, sync_status, timestamps)
+- `alembic.ini` + `alembic/env.py` — async Alembic env reads `DATABASE_URL` from settings
+- `alembic/versions/.gitkeep` — placeholder; first real migration in Phase 12
 
-**Scope** (from DECISIONS.md D10.1–D10.4):
+**Flutter** (`modunote/`):
+- `pubspec.yaml` — added `http: ^1.2.0`
+- `lib/core/errors/app_exception.dart` — added `RemoteServiceException` to sealed class
+- `lib/services/remote/remote_note_service.dart` — `RemoteNoteService` plain Dart class; `suggestTags()` + `summariseNote()` both throw `UnimplementedError` (server returns 501). Base URL: `http://10.0.2.2:8000/api/v1`.
 
-1. **Firebase SDK scaffold** — add `firebase_core`, `cloud_firestore` to `pubspec.yaml`. Add `google-services.json` placeholder + setup instructions. No live Firebase calls in Phase 10.
-2. **`FirebaseNoteRepository` stub** — implements `INoteRepository` with all methods throwing `UnimplementedError`. Lives at `lib/data/repositories/remote/firebase_note_repository.dart`.
-3. **`SyncedNoteRepository` stub** — wraps both `LocalNoteRepository` and `FirebaseNoteRepository`. Delegates everything to local in Phase 10. Lives at `lib/data/repositories/synced/synced_note_repository.dart`.
-4. **Wire `SyncStatus`** — verify `SyncStatus.local` is set on all note inserts/updates. Add `SyncStatus.pending` path in `save()` when sync is toggled on (toggle is a feature flag in Phase 10, off by default).
-5. **`flutter analyze` = 0 issues**.
-6. **Update all doc files** post-completion.
+`flutter analyze` = 0 issues. No build_runner run required (no new @riverpod annotations).
 
-**Before starting Phase 10**, Claude must present a detailed plan and wait for developer approval.
+---
+
+## Phase 12 — What to build next
+
+**Title**: AI Features (Auto-tagging + Note Summarisation)
+
+**Scope** (from DECISIONS.md D12.1–D12.5):
+
+1. **AI provider selection** (PD-02 — resolve at Phase 12 start): Evaluate Google Gemini free tier vs Groq API for tag suggestion and summarisation. Decision affects backend `services/ai_service.py` only — Flutter code is unchanged regardless.
+2. **Backend `services/ai_service.py`**: Implement `suggest_tags(title, content) → list[str]` and `summarise(title, content) → str` using the chosen AI provider. Replace the 501 stubs in `routers/notes.py` with real calls.
+3. **First Alembic migration**: `alembic revision --autogenerate -m "create_notes"` → `alembic upgrade head` to create the `notes` table in PostgreSQL.
+4. **Flutter `RemoteNoteService`**: Implement real `suggestTags()` and `summariseNote()` (remove `UnimplementedError` stubs). Both calls fire-and-forget after note save — never block the save flow (D12.4).
+5. **Smart auto-tagging UI**: After `_onBack()` saves + syncs, call `suggestTags` in background. On response, show a dismissible "Suggested tags" banner below the note card on the list screen. User can accept or dismiss each tag individually.
+6. **Note summarisation**: Add "Summarise" overflow menu item to `NoteEditorScreen`. On tap, call `summariseNote()` and insert result as a Quill blockquote at document top.
+7. **`flutter analyze` = 0 issues**.
+8. **Update all doc files** post-completion.
+
+**Before starting Phase 12**, Claude must present a detailed plan and wait for developer approval. Resolve PD-02 (AI provider) at the start of that session.
 
 ---
 

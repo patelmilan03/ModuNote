@@ -1,5 +1,5 @@
 # ModuNote — Complete Device Testing Guide
-> **Covers Phases 1–9** (all shipped code as of Phase 9 Navigation + Theming completion).
+> **Covers Phases 1–9 + post-Phase-9 UI refinements** (floating nav, center FAB notch, icon-only tabs, hide-on-scroll).
 > Every check is a pass/fail statement. Run on a **physical Android device**.
 > 🔴 = must pass before any commit. ⚠️ STUB = intentional placeholder for a future phase.
 
@@ -77,31 +77,41 @@ flutter run            # connect physical Android device first
 | 3.5 | Nav pill has a 0.5 px `outlineStrong`-coloured border | Visible thin border around entire pill |
 | 3.6 | Nav pill casts a subtle shadow (very faint in light, stronger in dark) | Slightly elevated appearance |
 | 3.7 | Four tabs visible left-to-right: Home, Explore, Tags, Settings | Correct icons in correct order |
-| 3.8 🔴 | **Home tab** is active on Note List screen | `primaryContainer` background pill behind the icon + label |
-| 3.9 | Active tab shows icon (20 dp) in `onPrimaryContainer` colour | Darker on the light purple pill |
-| 3.10 | Active tab shows its label text to the right of the icon | "Home" text visible, Inter 13/600/onPrimaryContainer/+0.1 |
-| 3.11 | Inactive tabs show no label text, no background pill | Icon only, `onSurfaceVariant` colour |
+| 3.8 🔴 | **Home tab** is active on Note List screen | `primaryContainer` background pill behind the icon |
+| 3.9 | Active tab shows icon (22 dp) in `onPrimaryContainer` colour | Darker on the light purple pill |
+| 3.10 | Active tab shows **icon only** — no label text | Labels were removed in post-Phase-9 refinement |
+| 3.11 | Inactive tabs show icon only, no label, no background pill | Icon only, `onSurfaceVariant` colour |
 | 3.12 | Inactive tab icons are 20 dp, `onSurfaceVariant` colour | Lighter grey than active icon |
 | 3.13 🔴 | Tapping **Explore** tab navigates to Search screen | Explore/Search screen loads |
 | 3.14 🔴 | Tapping **Tags** tab navigates to Tags screen | Tags screen loads (Phase 7 full UI) |
 | 3.15 | Tapping **Settings** tab navigates to Settings screen | Settings stub screen loads |
 | 3.16 | Tapping **Home** tab from any other tab returns to Note List | Home screen appears |
 | 3.17 | Nav pill does not overlap note cards when scrolling | Cards visible up to the nav pill's top edge |
+| 3.18 | Center gap (60 dp) visible between left two and right two tabs | Space for the FAB notch |
+| 3.19 🔴 | Amber FAB protrudes above the center of the nav pill | `_NavFab` positioned `top: -20` via `Positioned` in a `Stack` |
+| 3.20 | Nav FAB is 52×52 dp, circle shape | Circular, not square-rounded |
+| 3.21 | Nav FAB casts an amber glow shadow | `AppColors.accent` at 40% opacity |
+| 3.22 🔴 | When scrolling a long list **down**: nav pill + FAB slide out of view | `flutter_floating_bottom_bar` hide-on-scroll |
+| 3.23 | Scroll-to-top button appears after nav hides: amber 52×52 circle with `keyboard_arrow_up` icon | Matches `_NavFab` size and colour; no separate layout widget needed |
+| 3.24 🔴 | Tapping scroll-to-top button scrolls the active list back to the top | Provided by `BottomBar.icon` callback |
+| 3.25 | Scrolling back **up** → nav pill + FAB slide back in; scroll-to-top button hides | Hide/show transition animated (240 ms easeInOut) |
 
 ---
 
-## Section 4 — Note List Screen: Floating Action Button (FAB)
+## Section 4 — Note List Screen: Center Nav FAB
+
+> The previous bottom-right `_Fab` was removed in the post-Phase-9 refinement. The sole FAB is now embedded in the nav bar notch.
 
 | # | Check | Expected |
 |---|---|---|
-| 4.1 🔴 | Amber FAB visible in the lower-right corner of the screen | Above bottom nav, right-aligned |
-| 4.2 | FAB position: bottom 96 dp from screen bottom, right 20 dp from edge | Floats above nav pill |
-| 4.3 | FAB is 56×56 dp, border-radius 18 | Square-ish rounded corners, not a circle |
-| 4.4 | FAB background is amber `#F59E0B` in both light and dark mode | Does not change with theme |
-| 4.5 | FAB icon is `+` (add), 26 dp, `accentOn` colour (`#1C1B2E`) | Dark icon on amber background |
-| 4.6 | FAB casts an amber-tinted shadow | Warm glow underneath the button |
-| 4.7 🔴 | Tapping FAB opens Note Editor screen with empty title and body | New note editor; no previous content |
-| 4.8 | Tapping FAB from Explore or Tags screen routes to `/note/new` | Editor works from any tab |
+| 4.1 🔴 | Amber FAB visible in the **center** of the bottom nav bar | Protrudes above the pill's top edge |
+| 4.2 | FAB is 52×52 dp, fully circular | Circle shape (not square-rounded corners) |
+| 4.3 | FAB background is amber `#F59E0B` in both light and dark mode | Does not change with theme |
+| 4.4 | FAB icon is `+` (add_rounded), 26 dp, `accentOn` colour (`#1C1B2E`) | Dark icon on amber background |
+| 4.5 | FAB casts an amber-tinted shadow (blurRadius 14, offset 0/4) | Warm glow below the button |
+| 4.6 🔴 | Tapping FAB opens Note Editor screen with empty title and body | New note editor; no previous content |
+| 4.7 🔴 | Nav FAB visible on all 4 shell tabs (Home, Explore, Tags, Settings) | Persists via `_AppShell` Stack |
+| 4.8 | **No separate floating FAB** exists anywhere on screen | `_Fab` widget was removed from `NoteListScreen` |
 
 ---
 
@@ -192,7 +202,7 @@ flutter run            # connect physical Android device first
 | # | Check | Expected |
 |---|---|---|
 | 6.17 🔴 | Empty DB: centred empty state UI visible | No crash; "No notes yet" visible |
-| 6.18 | FAB is still visible on empty state | User can create a note |
+| 6.18 | Center nav FAB is still visible on empty state | User can create a note via the nav notch FAB |
 | 6.19 | Bottom nav is still visible on empty state | Navigation accessible |
 
 ---
@@ -718,7 +728,7 @@ flutter run            # connect physical Android device first
 | # | Check | Expected |
 |---|---|---|
 | 25.1 🔴 | App launches at `/` (NoteListScreen) | Home screen on cold start |
-| 25.2 🔴 | FAB → `/note/new` | New note editor (no pre-loaded content) |
+| 25.2 🔴 | Center nav FAB → `/note/new` | New note editor (no pre-loaded content) |
 | 25.3 🔴 | Tapping a note card → `/note/:id` | Correct note loaded by ID |
 | 25.4 🔴 | Back from editor → returns to the screen that launched the editor | No wrong destination |
 | 25.5 🔴 | Back button (hardware or ←) in editor → auto-save flushes before pop | No data loss |
@@ -1092,11 +1102,11 @@ SELECT id, name, parent_id, sort_order FROM categories ORDER BY parent_id NULLS 
 
 | # | Check | Expected |
 |---|---|---|
-| 36.12 🔴 | Home tab active on launch: `primaryContainer` pill behind home icon + "Home" label | Purple pill, label visible |
-| 36.13 🔴 | Active tab label visible (Inter 13/600/+0.1) | Text appears below icon in active tab only |
+| 36.12 🔴 | Home tab active on launch: `primaryContainer` pill behind home icon | Purple pill visible |
+| 36.13 | Active tab shows **icon only** — no label text (labels removed post-Phase-9) | Icon centred in pill; no "Home" text |
 | 36.14 | Active tab pill: `primaryContainer` bg, border-radius 26 | Rounded pill within the nav bar |
-| 36.15 | Active tab icon: `onPrimaryContainer` colour | Dark icon on light-purple pill |
-| 36.16 | Inactive tab icons: `onSurfaceVariant` colour | Greyed out icons, no label |
+| 36.15 | Active tab icon: 22 dp, `onPrimaryContainer` colour | Dark icon on light-purple pill |
+| 36.16 | Inactive tab icons: 22 dp, `onSurfaceVariant` colour | Greyed out icons, no label, no pill |
 | 36.17 | Exactly one tab is active at a time | No double-highlight edge case |
 
 ### 36C — Tab Switching
@@ -1115,11 +1125,28 @@ SELECT id, name, parent_id, sort_order FROM categories ORDER BY parent_id NULLS 
 
 | # | Check | Expected |
 |---|---|---|
-| 36.25 🔴 | Tap FAB on Home → Note Editor opens full-screen; bottom nav NOT visible | Editor is outside the shell |
+| 36.25 🔴 | Tap center nav FAB on any tab → Note Editor opens full-screen; bottom nav NOT visible | Editor is outside the shell |
 | 36.26 🔴 | Press back from Note Editor → returns to Home; bottom nav reappears | Shell resumes |
 | 36.27 | Open note from Search results → Note Editor opens; bottom nav NOT visible | Same: editor is outside shell |
 | 36.28 | Press back from note opened from Search → returns to Search (Explore tab active) | Correct origin screen |
 | 36.29 | Category picker bottom sheet opens over Settings/Home → nav still behind sheet | Sheet is modal overlay, not shell child |
+
+### 36E — BottomBar Hide-on-Scroll & Scroll-to-Top (post-Phase-9)
+
+> Provided by `flutter_floating_bottom_bar ^2.0.0`. `BottomBarScrollBehavior(hideOnScroll: true, deltaThreshold: 8)`.
+
+| # | Check | Expected |
+|---|---|---|
+| 36.30 🔴 | Scroll Note List **down** past 8 dp delta → nav pill + center FAB slide out of view | Smooth hide animation (240 ms easeInOut) |
+| 36.31 🔴 | While nav is hidden: amber scroll-to-top button appears at bottom-center | 52 dp amber circle with up-arrow icon |
+| 36.32 | Scroll-to-top button style: same amber colour and size as the center FAB | Visually consistent |
+| 36.33 | Scroll-to-top up-arrow icon: `keyboard_arrow_up_rounded`, approx 73 dp (w × 1.4) | Large clear arrow |
+| 36.34 🔴 | Tapping scroll-to-top button scrolls list back to top | First card/app bar becomes visible |
+| 36.35 🔴 | Scrolling **up** from anywhere → nav pill + center FAB slide back in; scroll-to-top button hides | Reverse animation |
+| 36.36 | Hide/show transition is curved (easeInOut) and takes 240 ms | Not instant; smooth slide |
+| 36.37 | Short list that doesn't scroll (e.g. 1–2 notes) → nav never hides | Only hides when scroll delta exceeds threshold |
+| 36.38 | Tags screen with many tags: scrolling down → nav hides; scrolling up → nav reappears | Works on all 4 shell tabs |
+| 36.39 | `ScrollController` wiring is NOT required in tab screens | `BottomBar` detects scroll via `NotificationListener` internally |
 
 ---
 
@@ -1132,7 +1159,7 @@ SELECT id, name, parent_id, sort_order FROM categories ORDER BY parent_id NULLS 
 | # | Check | Expected |
 |---|---|---|
 | 37.1 🔴 | Settings tab loads without crash | No red error banner |
-| 37.2 🔴 | Settings tab active (index 3) in bottom nav | `primaryContainer` pill behind Settings icon + "Settings" label |
+| 37.2 🔴 | Settings tab active (index 3) in bottom nav | `primaryContainer` pill behind Settings icon (icon only, no label) |
 | 37.3 | Screen has no inner Scaffold — shell's Scaffold is the only one | No nested-Scaffold warning in logcat |
 | 37.4 | "Settings" heading: Plus Jakarta Sans 24/800/−0.5 | Bold, same size as Tags heading |
 | 37.5 | Screen scrollable via ListView | Content scrolls if screen is small |
@@ -1221,6 +1248,86 @@ Run this before every commit. Do not commit if any issues are reported.
 
 ---
 
+## Section 40 — Phase 10: Firebase Preparation Layer
+
+> Phase 10 adds no visible UI changes. Checks here verify the abstraction seam is correct and does not break existing behaviour.
+
+| # | Check | Expected |
+|---|---|---|
+| 40.1 🔴 | App boots without crash after adding Firebase packages | `NoteListScreen` appears; no red error banners, no `UnimplementedError` in logs |
+| 40.2 🔴 | `flutter analyze` reports 0 issues | No errors, warnings, or infos |
+| 40.3 🔴 | Creating a new note saves successfully (auto-save works) | Note appears in list after returning to Home |
+| 40.4 🔴 | Existing notes still load correctly on the Home screen | Pinned / Recent sections visible; tag chips resolve |
+| 40.5 🔴 | Note editor opens an existing note and saves changes | Title + content changes persist after back |
+| 40.6 | `SyncStatus` on all notes is `"local"` in the DB | Verify via ADB: `SELECT id, sync_status FROM notes;` — all rows show `local` |
+| 40.7 | `logcat` shows no `UnimplementedError` during normal operation | `SyncedNoteRepository` delegates to local; `FirebaseNoteRepository` is never called |
+| 40.8 | No `Firebase` or `Firestore` log output during app session | No Firebase SDK activity — `Firebase.initializeApp()` is not called |
+
+---
+
+## Section 41 — Phase 11: Backend Scaffold Verification
+
+> Phase 11 adds the FastAPI backend scaffold and `RemoteNoteService` stub. No AI features work yet — all backend AI endpoints return 501. Checks here verify the scaffold starts cleanly and the Flutter app is unaffected.
+
+### 41A — Flutter App (No Regression)
+
+| # | Check | Expected |
+|---|---|---|
+| 41.1 🔴 | App boots without crash after adding `http` package | `NoteListScreen` appears; no red error banners |
+| 41.2 🔴 | `flutter analyze` reports 0 issues | No errors, warnings, or infos |
+| 41.3 🔴 | All existing note operations work (create, edit, auto-save, sync) | No regression from `http` package addition |
+| 41.4 | `RemoteNoteService` class exists at `lib/services/remote/remote_note_service.dart` | File present; no import errors |
+| 41.5 | `RemoteServiceException` is part of the sealed `AppException` hierarchy | Compiles; `flutter analyze` passes |
+
+### 41B — Backend Server (Local Dev)
+
+> Requires Python 3.11+, Docker Desktop running.
+
+```bash
+cd modunote-api/
+docker-compose up -d
+python -m venv venv && venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+uvicorn main:app --reload
+```
+
+| # | Check | Expected |
+|---|---|---|
+| 41.6 🔴 | `docker-compose up -d` starts PostgreSQL without error | Container running on port 5432 |
+| 41.7 🔴 | `pip install -r requirements.txt` succeeds with no dependency conflicts | All packages installed |
+| 41.8 🔴 | `uvicorn main:app --reload` starts without error | `Uvicorn running on http://127.0.0.1:8000` in terminal |
+| 41.9 🔴 | `GET http://localhost:8000/health` → `{"status": "ok"}` | Health check passes |
+| 41.10 🔴 | Swagger UI accessible at `http://localhost:8000/docs` | Interactive API docs load; no 404 |
+
+### 41C — AI Endpoint Stubs (501 behaviour)
+
+> Use Swagger UI or curl to test. No auth token needed when `DEV_MODE=true`.
+
+```bash
+curl -X POST http://localhost:8000/api/v1/notes/test-id/tags/suggest \
+  -H "Content-Type: application/json" \
+  -d '{"title": "My note", "content": "Some content"}'
+```
+
+| # | Check | Expected |
+|---|---|---|
+| 41.11 🔴 | `POST /api/v1/notes/{id}/tags/suggest` → HTTP 501 | `{"detail": "Tag suggestion not implemented — Phase 12"}` |
+| 41.12 🔴 | `POST /api/v1/notes/{id}/summary` → HTTP 501 | `{"detail": "Note summarisation not implemented — Phase 12"}` |
+| 41.13 | Both endpoints visible in Swagger UI under the `notes` tag | Two POST entries listed |
+| 41.14 | Swagger shows correct request body schema: `title` (str) + `content` (str) | Pydantic models reflected in docs |
+| 41.15 | Swagger shows correct response schema: `suggested_tags` (list) / `summary` (str) | Response models reflected in docs |
+
+### 41D — Auth Bypass (DEV_MODE)
+
+| # | Check | Expected |
+|---|---|---|
+| 41.16 | With `DEV_MODE=true` in `.env`: calling endpoints without `Authorization` header → 501 (not 401) | Auth bypassed; reaches stub handler |
+| 41.17 | With `DEV_MODE=false` in `.env` (restart server): calling without token → HTTP 401 | `{"detail": "Missing token"}` |
+| 41.18 | With `DEV_MODE=false` + any `Authorization: Bearer fake-token` → HTTP 501 | Token present; JWT validation not yet wired (raises 501) |
+
+---
+
 ## Known Intentional Stubs (Not Bugs)
 
 The following are placeholder implementations for future phases. Do not report as bugs:
@@ -1231,8 +1338,10 @@ The following are placeholder implementations for future phases. Do not report a
 | ~~Category picker bottom sheet shows stub text~~ | ✅ Full picker implemented in Phase 8 |
 | ~~Bottom nav active-tab highlight is hardcoded per screen~~ | ✅ Persistent `ShellRoute` nav shipped in Phase 9 |
 | ~~Theme preference resets on app restart~~ | ✅ SharedPreferences persistence shipped in Phase 9 |
+| ~~`SyncStatus` on notes is always `"local"`~~ | ✅ Confirmed correct in Phase 10 — will stay `local` until Phase 11/12 enables sync |
+| `FirebaseNoteRepository` throws `UnimplementedError` on read methods | Reads stay local — intentional (D10.11) |
+| `RemoteNoteService.suggestTags` and `summariseNote` throw `UnimplementedError` | Phase 12 — server returns 501 until AI is wired |
 | Note editor `⋮` overflow does nothing | Future |
-| `SyncStatus` on notes is always `"local"` | Phase 10 |
 | No note deletion or archiving UI | Not yet spec'd |
 | Note pin/unpin not exposed in UI | Not yet spec'd |
 | Chevron on Tags screen row taps do nothing | Future |
@@ -1270,11 +1379,13 @@ Section 36:  36.1, 36.12, 36.18, 36.19, 36.20, 36.21, 36.25, 36.26
 Section 37:  37.1, 37.2, 37.7, 37.14, 37.33, 37.34, 37.35, 37.36
 Section 38:  38.1, 38.2, 38.4
 Section 39:  39.1
+Section 40:  40.1, 40.2, 40.3, 40.4, 40.5
+Section 41:  41.1, 41.2, 41.3, 41.8, 41.9, 41.11, 41.12
 ```
 
 ---
 
 ## Full Regression — ~2.5 hr
 
-Run all numbered checks in all 39 sections before tagging a release or beginning a new phase.
-Pay special attention to Sections 36–38 (Phase 9 Navigation + Theming) and Sections 29–32 (ADB verification).
+Run all numbered checks in all 40 sections before tagging a release or beginning a new phase.
+Pay special attention to Sections 36–38 (Phase 9 Navigation + Theming), Sections 29–32 (ADB verification), Section 40 (Phase 10 Firebase scaffold), and Section 41 (Phase 11 backend scaffold).

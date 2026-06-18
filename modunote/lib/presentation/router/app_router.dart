@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
+import '../../data/datasources/local/database_providers.dart';
 import '../views/note_list/note_list_screen.dart';
 import '../views/note_editor/note_editor_screen.dart';
 import '../views/search/search_screen.dart';
@@ -85,12 +86,38 @@ GoRouter router(Ref ref) {
 
 /// Shell scaffold shared by the 4 tab routes.
 /// Provides the outer [Scaffold], [SafeArea], and persistent [MNBottomNav].
+/// Listens to [AppLifecycleState.paused] to trigger best-effort Firebase sync.
 /// Tab screens return their body content only — no inner Scaffold or SafeArea.
-class _AppShell extends StatelessWidget {
+class _AppShell extends ConsumerStatefulWidget {
   const _AppShell({required this.child, required this.location});
 
   final Widget child;
   final String location;
+
+  @override
+  ConsumerState<_AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<_AppShell>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      ref.read(syncedNoteRepositoryProvider).syncAllPending().ignore();
+    }
+  }
 
   static int _tabIndex(String loc) {
     if (loc.startsWith('/search')) return 1;
@@ -132,12 +159,12 @@ class _AppShell extends StatelessWidget {
           duration: Duration(milliseconds: 240),
           curve: Curves.easeInOut,
         ),
-        body: SafeArea(child: child),
+        body: SafeArea(child: widget.child),
         child: Stack(
           alignment: Alignment.center,
           clipBehavior: Clip.none,
           children: [
-            MNBottomNav(activeIndex: _tabIndex(location)),
+            MNBottomNav(activeIndex: _tabIndex(widget.location)),
             Positioned(
               top: -20,
               child: _NavFab(onTap: () => context.push(AppRoutes.newNote)),

@@ -54,6 +54,9 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   Note? _currentNote;
   bool _controllersInitialized = false;
 
+  // ─── Sync status ──────────────────────────────────────────────────────────
+  SyncStatus _syncStatus = SyncStatus.local;
+
   // ─── Audio / recording ────────────────────────────────────────────────────
   final AudioRecordingService _audioService = AudioRecordingService();
   final SpeechToTextService _sttService = SpeechToTextService();
@@ -94,6 +97,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     if (_controllersInitialized) return;
     _controllersInitialized = true;
     _currentNote = note;
+    _syncStatus = note?.syncStatus ?? SyncStatus.local;
 
     Document doc;
     if (note != null && note.content['ops'] is List) {
@@ -170,6 +174,15 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           .read(noteEditorViewModelProvider(noteId: widget.noteId).notifier)
           .save(note);
     } catch (_) {
+      return;
+    }
+
+    // save() catches AppException internally and sets AsyncError without
+    // rethrowing — check state explicitly so failures keep _isDirty = true.
+    final vmState =
+        ref.read(noteEditorViewModelProvider(noteId: widget.noteId));
+    if (vmState.hasError) {
+      debugPrint('NoteEditorScreen: auto-save failed: ${vmState.error}');
       return;
     }
 
@@ -415,6 +428,14 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       _debounce?.cancel();
       await _performAutoSave();
     }
+    // Sync to Firebase after local save is complete.
+    if (mounted && _currentNote != null) {
+      setState(() => _syncStatus = SyncStatus.pending);
+      final newStatus = await ref
+          .read(noteEditorViewModelProvider(noteId: widget.noteId).notifier)
+          .syncNote(_currentNote!.id);
+      if (mounted) setState(() => _syncStatus = newStatus);
+    }
     if (mounted) context.pop();
   }
 
@@ -482,6 +503,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           children: [
             _EditorAppBar(
               isDirty: _isDirty,
+              syncStatus: _syncStatus,
               isDark: isDark,
               titleController: _titleController,
               onBack: _onBack,
@@ -743,12 +765,14 @@ class _AudioClipChip extends StatelessWidget {
 class _EditorAppBar extends StatelessWidget {
   const _EditorAppBar({
     required this.isDirty,
+    required this.syncStatus,
     required this.isDark,
     required this.titleController,
     required this.onBack,
   });
 
   final bool isDirty;
+  final SyncStatus syncStatus;
   final bool isDark;
   final TextEditingController titleController;
   final VoidCallback onBack;
@@ -793,7 +817,7 @@ class _EditorAppBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          _SaveBadge(isDirty: isDirty, isDark: isDark),
+          _SaveBadge(isDirty: isDirty, syncStatus: syncStatus, isDark: isDark),
           const SizedBox(width: 6),
           _CircleIconButton(
             icon: Icons.more_vert,
@@ -835,10 +859,17 @@ class _CircleIconButton extends StatelessWidget {
 }
 
 class _SaveBadge extends StatelessWidget {
-  const _SaveBadge({required this.isDirty, required this.isDark});
+  const _SaveBadge({
+    required this.isDirty,
+    required this.syncStatus,
+    required this.isDark,
+  });
 
   final bool isDirty;
+  final SyncStatus syncStatus;
   final bool isDark;
+
+  static const Color _localGrey = Color(0xFF9E9E9E);
 
   @override
   Widget build(BuildContext context) {
@@ -847,7 +878,26 @@ class _SaveBadge extends StatelessWidget {
         : AppColors.lightSurfaceContainer;
     final mutedColor =
         isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
-    final dotColor = isDirty ? mutedColor : AppColors.savedGreen;
+
+    final Color dotColor;
+    final String label;
+
+    if (isDirty) {
+      dotColor = mutedColor;
+      label = 'Saving…';
+    } else {
+      switch (syncStatus) {
+        case SyncStatus.pending:
+          dotColor = AppColors.accent;
+          label = 'Syncing…';
+        case SyncStatus.synced:
+          dotColor = AppColors.savedGreen;
+          label = 'Synced';
+        default:
+          dotColor = _localGrey;
+          label = 'Local';
+      }
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
@@ -865,7 +915,7 @@ class _SaveBadge extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           Text(
-            isDirty ? 'Saving…' : 'Saved',
+            label,
             style: AppTypography.inter(
               fontSize: 11.5,
               fontWeight: FontWeight.w500,

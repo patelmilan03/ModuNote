@@ -132,7 +132,13 @@ class _AppBarSection extends StatelessWidget {
   const _AppBarSection();
 
   static const _days = [
-    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
   ];
 
   @override
@@ -164,7 +170,7 @@ class _AppBarSection extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Your notes',
+                  'ModuNote',
                   style: AppTypography.plusJakartaSans(
                     fontSize: 26,
                     fontWeight: FontWeight.w800,
@@ -433,4 +439,3 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
-

@@ -58,7 +58,7 @@ class AppDatabase extends _$AppDatabase {
       driftDatabase(name: 'modunote.db');
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -67,8 +67,34 @@ class AppDatabase extends _$AppDatabase {
           await _createFtsVirtualTableAndTriggers();
         },
         onUpgrade: (Migrator m, int from, int to) async {
-          // No-op for schema version 1.
-          // Add versioned migration steps here in Phase 10.
+          if (from < 2) {
+            // Fix FTS5 UPDATE and DELETE triggers — the original triggers used
+            // UPDATE/DELETE SQL on the virtual table which is not valid for
+            // external content FTS5 tables. Replace with the correct
+            // 'delete' special INSERT form documented by SQLite.
+            await customStatement('DROP TRIGGER IF EXISTS notes_fts_update');
+            await customStatement('DROP TRIGGER IF EXISTS notes_fts_delete');
+            await customStatement('''
+              CREATE TRIGGER IF NOT EXISTS notes_fts_update
+              AFTER UPDATE ON notes BEGIN
+                INSERT INTO notes_fts(notes_fts, rowid, title, content)
+                  VALUES('delete', old.rowid, old.title, old.content);
+                INSERT INTO notes_fts(rowid, title, content)
+                  VALUES(new.rowid, new.title, new.content);
+              END
+            ''');
+            await customStatement('''
+              CREATE TRIGGER IF NOT EXISTS notes_fts_delete
+              AFTER DELETE ON notes BEGIN
+                INSERT INTO notes_fts(notes_fts, rowid, title, content)
+                  VALUES('delete', old.rowid, old.title, old.content);
+              END
+            ''');
+            // Rebuild the FTS index from the current notes table to correct
+            // any stale entries left by the broken triggers.
+            await customStatement(
+                "INSERT INTO notes_fts(notes_fts) VALUES('rebuild')");
+          }
         },
       );
 
@@ -97,22 +123,25 @@ class AppDatabase extends _$AppDatabase {
       END
     ''');
 
-    // AFTER UPDATE trigger — refreshes the FTS entry when a note is modified.
+    // AFTER UPDATE trigger — removes old FTS entry then inserts the new one.
+    // Must use the FTS5 'delete' special INSERT (not SQL UPDATE/DELETE) for
+    // external content tables; plain UPDATE/DELETE on notes_fts is unsupported.
     await customStatement('''
       CREATE TRIGGER IF NOT EXISTS notes_fts_update
       AFTER UPDATE ON notes BEGIN
-        UPDATE notes_fts
-        SET title   = new.title,
-            content = new.content
-        WHERE rowid = new.rowid;
+        INSERT INTO notes_fts(notes_fts, rowid, title, content)
+          VALUES('delete', old.rowid, old.title, old.content);
+        INSERT INTO notes_fts(rowid, title, content)
+          VALUES(new.rowid, new.title, new.content);
       END
     ''');
 
-    // BEFORE DELETE trigger — removes the FTS entry before the note is deleted.
+    // AFTER DELETE trigger — removes the FTS entry after the note is deleted.
     await customStatement('''
       CREATE TRIGGER IF NOT EXISTS notes_fts_delete
-      BEFORE DELETE ON notes BEGIN
-        DELETE FROM notes_fts WHERE rowid = old.rowid;
+      AFTER DELETE ON notes BEGIN
+        INSERT INTO notes_fts(notes_fts, rowid, title, content)
+          VALUES('delete', old.rowid, old.title, old.content);
       END
     ''');
   }

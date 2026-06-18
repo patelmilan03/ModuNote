@@ -414,9 +414,38 @@ After removing the per-screen `_BottomNav`/`_NavTab` classes, `tags_screen.dart`
 **D9.10 — `sort_child_properties_last` lint requires `child:` param to be last**
 Flutter's `sort_child_properties_last` rule requires `child:` (and `children:`) named parameters to appear last in widget constructor calls. The ShellRoute builder initially called `_AppShell(child: child, location: ...)` — the lint flagged it. Fixed to `_AppShell(location: state.uri.path, child: child)`. All future widget constructors with `child:` must put it last.
 
+**D9.11 — `flutter_floating_bottom_bar ^2.0.0` replaces manual `Stack`/`Positioned` nav layout**
+`_AppShell.build()` was refactored from `SafeArea(child: Stack([Positioned.fill(child), Positioned(nav)]))` to `BottomBar(body: SafeArea(child: child), child: Stack([MNBottomNav, Positioned(FAB)]))`. The package provides hide-on-scroll via `NotificationListener<ScrollNotification>` — no `ScrollController` wiring required. Any descendant `ListView` / `CustomScrollView` in `body` automatically drives the hide/show animation. `BottomBarThemeData(barDecoration: transparent)` ensures the package doesn't double-decorate the nav pill. `clip: Clip.none` preserves `MNBottomNav`'s drop shadow.
+
+**D9.12 — `_NavFab` center notch is the sole entry point for creating a new note**
+The old `_Fab` widget inside `NoteListScreen` (`Stack` / `Positioned(bottom:96, right:20)`) was removed. `_NavFab` — a private `StatelessWidget` in `app_router.dart` — is a 52 px amber circle with amber glow shadow, positioned with `Positioned(top: -20)` inside the `_AppShell` Stack so it protrudes 20 px above the nav pill. It calls `context.push(AppRoutes.newNote)`. Being inside `_AppShell` means it is present on all 4 shell tabs, not just Home.
+
+**D9.13 — Icon-only tabs (no text labels in nav)**
+`MNBottomNav`'s `_NavTab` was simplified: the `Row([Icon, if(isActive) Text(...)])` is replaced by `Center(child: Icon(..., size: 22))`. The active tab still shows the `primaryContainer` background pill — it just has no label. A 60 px `SizedBox` gap in the row creates the visual notch space for the protruding FAB. The `label` parameter and `AppTypography` import were removed.
+
+**D9.14 — Scroll-to-top icon uses `BottomBar.icon` builder, not `BottomBarThemeData` fields**
+`BottomBarThemeData` (v2.0.0) supports `barDecoration`, `iconDecoration`, `iconWidth`, `iconHeight` — it does NOT have `iconData` or `iconColor` fields. To customise the scroll-to-top icon, pass the `icon: BackToTopIconBuilder` function directly on `BottomBar`: `icon: (w, h) => Icon(Icons.keyboard_arrow_up_rounded, color: AppColors.accentOn, size: w * 1.4)`. The `iconDecoration` is set to amber (`AppColors.accent`) to match the nav FAB, making the scroll-to-top button visually consistent.
+
 ---
 
-## Phase 10 — Firebase Preparation Layer ⬜ Not Started
+## Phase 10 — Firebase Preparation Layer ✅ Complete
+
+### Implementation Details
+
+**D10.5 — `FirebaseNoteRepository` is a pure Dart stub with no Firebase imports**
+The class implements `INoteRepository` with every method throwing `UnimplementedError`. Crucially, it imports no Firebase packages — it is a pure Dart file. This means the class compiles and type-checks without `Firebase.initializeApp()` being called and without `google-services.json` being present. Firebase SDK imports will be added when live Firestore calls are implemented.
+
+**D10.6 — `SyncedNoteRepository` suppresses `unused_field` on `_remote`**
+`_remote` is held as a class field for the future sync phase. Since `syncEnabled` is always `false` in Phase 10, `_remote` is never called. A targeted `// ignore: unused_field` comment on the field prevents `flutter analyze` from flagging it, which would otherwise produce 1 issue. This is the canonical Dart approach for intentionally-held future-use fields.
+
+**D10.7 — `noteRepositoryProvider` body changed; no build_runner run required**
+The provider annotation (`@Riverpod(keepAlive: true)`) and return type (`INoteRepository`) are unchanged. Only the body was modified to return `SyncedNoteRepository(local: ..., remote: ...)`. No `@riverpod` annotation was added or removed, so `dart run build_runner build` does not need to be run for Phase 10.
+
+**D10.8 — `SyncStatus` audit result: all writes already correct**
+Confirmed that `Note.syncStatus` defaults to `SyncStatus.local` in the model constructor. Every note constructed in the editor uses this default or preserves the existing `syncStatus` via `copyWith`. `_noteToCompanion` in `LocalNoteRepository` writes `note.syncStatus.name` to the DB — so all notes are stored as `'local'` throughout Phase 10. No callsite changes were needed.
+
+**D10.9 — Firebase SDK added to pubspec.yaml without Gradle configuration**
+`firebase_core: ^3.6.0` and `cloud_firestore: ^5.4.4` were added to `pubspec.yaml`. The Android Gradle files (`android/build.gradle`, `android/app/build.gradle`) were NOT modified and `google-services.json` was NOT added. This is safe because: (1) the Google Services Gradle plugin is not applied, so no build failure; (2) no `Firebase.initializeApp()` is called anywhere, so no runtime crash. Full Firebase setup requires running `flutterfire configure` which generates `google-services.json`, `firebase_options.dart`, and applies the Gradle plugin — documented as a manual step before Phase 11/12.
 
 ### Pre-Decided Architecture
 
@@ -434,7 +463,46 @@ Phase 10 does not implement sign-in. The Firebase project is set up with anonymo
 
 ---
 
-## Phase 11 — Backend API Scaffolding ⬜ Not Started
+### Phase 10 Extension — Live Firebase Sync ✅ Complete
+
+**D10.10 — Anonymous auth: silent, no login UI**
+The developer uses the app personally — no user-facing auth flow is needed. `FirebaseAuthService` (singleton at `lib/services/auth/firebase_auth_service.dart`) calls `FirebaseAuth.instance.signInAnonymously()` idempotently on app start. Firebase assigns a device UID automatically. Firestore security rules scope all data to `request.auth.uid == userId`, so no other user can read or write the data even if someone inspects the Firebase project credentials.
+
+**D10.11 — Reads stay local-only; Firestore is write-only for sync**
+Firestore has no FTS5 equivalent. `FirebaseNoteRepository` read methods (`watchAll`, `watchByTag`, `watchByCategory`, `findById`, `search`) all throw `UnimplementedError`. All reads go through `LocalNoteRepository` (Drift). Firestore only receives writes during `syncNote()` / `syncAllPending()`. This means Firestore is a backup sink, not the primary data store.
+
+**D10.12 — Sync triggered on note-close and app-background, NOT on every auto-save**
+Local Drift auto-save (800 ms debounce) still fires on every keystroke as before. Firebase sync fires only when: (1) the user presses back from `NoteEditorScreen` (`_onBack()`), or (2) the app goes to background (`AppLifecycleState.paused`). This avoids hammering Firestore with a write per keystroke and keeps Firestore costs near zero.
+
+**D10.13 — Firebase init wrapped in try-catch; app boots without Firebase**
+`main.dart` wraps `Firebase.initializeApp()` + `FirebaseAuthService().signInAnonymously()` in a try-catch. If Firebase fails (e.g. stub `firebase_options.dart` still in place before `flutterfire configure` is run), a `debugPrint` is emitted and the app continues without sync. All sync operations in `SyncedNoteRepository` and `FirebaseNoteRepository` also catch errors silently.
+
+**D10.14 — `syncedNoteRepositoryProvider` typed as `SyncedNoteRepository` (not `INoteRepository`)**
+`syncNote()` and `syncAllPending()` are extra methods not in `INoteRepository`. To call them, the caller needs the concrete type. A dedicated `@Riverpod(keepAlive: true) SyncedNoteRepository syncedNoteRepository(...)` provider is added. `noteRepositoryProvider` delegates to it: `ref.watch(syncedNoteRepositoryProvider)`. Single shared instance — no duplication.
+
+**D10.15 — `_SaveBadge` extended from 2 to 4 states**
+Old states: `isDirty=true` → "Saving…" (muted dot), `isDirty=false` → "Saved" (green dot).
+New states: `isDirty=true` → "Saving…" (muted dot), `SyncStatus.local` → "Local" (grey `#9E9E9E` dot), `SyncStatus.pending` → "Syncing…" (amber `AppColors.accent` dot), `SyncStatus.synced` → "Synced" (green `AppColors.savedGreen` dot). Screen-level `_syncStatus` state variable initialized from `note.syncStatus` in `_initControllers`.
+
+**D10.16 — `_AppShell` converted to `ConsumerStatefulWidget` with `WidgetsBindingObserver`**
+`_AppShell` was `StatelessWidget` in Phase 9 (D9.8). It now needs `ref` (for `syncedNoteRepositoryProvider`) and `WidgetsBinding.instance.addObserver` (for AppLifecycle). Converted to `ConsumerStatefulWidget` + `_AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserver`. The D9.8 rule ("_AppShell is StatelessWidget") is superseded by this decision.
+
+**D10.17 — Firestore security rules deny all paths except `/users/{uid}/notes/{noteId}`**
+`firestore.rules` at project root. Deployed manually in Firebase Console. Two-rule structure: (1) allow read/write on notes subcollection when `request.auth != null && request.auth.uid == userId`; (2) deny all other paths with `allow read, write: if false`. This ensures no data leakage even if someone finds the Firebase project ID.
+
+**D10.18 — Security scan: `.gitignore` gaps patched**
+Before this session, `google-services.json` and `lib/firebase_options.dart` were not in `.gitignore`. These files contain Firebase project identifiers (API keys, app IDs) and are generated by `flutterfire configure`. Both are now gitignored alongside `session_context.md`. GitHub repo scan (179 files) confirmed clean — no credentials committed.
+
+**D10.19 — FTS5 trigger bug fixed: schema version bumped to 2 (BUG-FTS5)**
+Root cause: The original FTS5 AFTER UPDATE trigger used `UPDATE notes_fts SET title=…, content=… WHERE rowid=N` and the AFTER DELETE trigger used `DELETE FROM notes_fts WHERE rowid=N`. Both are unsupported SQL for external content FTS5 tables — SQLite requires the special `INSERT INTO fts(fts, …) VALUES('delete', …)` form. The broken UPDATE trigger caused every note UPDATE to fail and roll back, while INSERTs (first save) succeeded. Result: notes appeared on the home screen (first INSERT worked) but timestamps never updated (all subsequent UPDATEs silently failed).
+Fix: `app_database.dart` `schemaVersion` bumped to 2. `_createFtsVirtualTableAndTriggers()` rewritten with correct triggers. `onUpgrade(from < 2)` drops the broken triggers, recreates correct ones, and runs `INSERT INTO notes_fts(notes_fts) VALUES('rebuild')` to repair the FTS index.
+
+**D10.20 — `_performAutoSave` now detects silent ViewModel save failures**
+`NoteEditorViewModel.save()` catches `AppException` internally and sets `state = AsyncError` without rethrowing. As a result, `_performAutoSave`'s `catch (_)` was dead code — execution always reached `_isDirty = false`, making the badge show "Local" even on a failed save. Fix: after awaiting `save()`, `_performAutoSave` explicitly reads `ref.read(…).hasError` and returns early (keeping `_isDirty = true`) if the ViewModel is in error state. `debugPrint` added to both the ViewModel catch block and the screen's error path so failures are visible in the debug console.
+
+---
+
+## Phase 11 — Backend API Scaffolding ✅ Complete
 
 ### Pre-Decided Architecture
 
@@ -448,10 +516,33 @@ The FastAPI backend is a separate repo, not a subdirectory of the Flutter projec
 Phase 11 delivers: project structure, `main.py`, router stubs for the AI endpoints (`/api/v1/notes/{id}/tags/suggest`, `/api/v1/notes/{id}/summary`), Pydantic models, SQLAlchemy model stubs, Alembic config, and a `docker-compose.yml` for local development. No endpoint is functional until Phase 12.
 
 **D11.4 — API is stateless, JWT-authenticated**
-The API expects a JWT bearer token in the `Authorization` header. In the stub phase, auth is bypassed with a development flag. Full JWT validation is implemented when auth is enabled in post-Phase-12 work.
+The API expects a JWT bearer token in the `Authorization` header. In the stub phase, auth is bypassed with a development flag (`DEV_MODE=true` in `.env`). Full JWT validation is implemented when auth is enabled in post-Phase-12 work.
 
 **D11.5 — Flutter calls the API via a `RemoteNoteService` class**
-A `lib/services/remote/remote_note_service.dart` class handles all HTTP calls using `dio` or `http`. It is not a repository — it is a service. The `SyncedNoteRepository` (Phase 10) uses it for AI enrichment calls after sync. ViewModels never call the API directly.
+A `lib/services/remote/remote_note_service.dart` class handles all HTTP calls using `http: ^1.2.0` (stdlib-level, no extra overhead for stub-level calls). It is not a repository — it is a service. The `SyncedNoteRepository` (Phase 10) uses it for AI enrichment calls after sync. ViewModels never call the API directly.
+
+### Implementation Decisions
+
+**D11.6 — `http` package chosen over `dio`**
+`http: ^1.2.0` was chosen for Phase 11 stubs because it is the standard Dart HTTP library with minimal overhead. `dio` would add interceptors, retry logic, and other features that are unnecessary while all endpoints return 501. If Phase 12 requires auth header injection on every request or retry logic, swap to `dio` then.
+
+**D11.7 — `RemoteNoteService` is a plain Dart class, not a Riverpod provider**
+Mirrors the pattern used for `AudioRecordingService` and `SpeechToTextService` (D6.8). Lifecycle is managed by the caller. `SyncedNoteRepository` will hold a reference in Phase 12. ViewModels must never instantiate or call `RemoteNoteService` directly.
+
+**D11.8 — Default base URL is `http://10.0.2.2:8000/api/v1`**
+`10.0.2.2` is the Android emulator's special loopback address that routes to the host machine's `localhost`. This allows the emulator to call the FastAPI server running on the dev machine without any network configuration. Override via constructor param when testing on a physical device or deploying to production.
+
+**D11.9 — `RemoteServiceException` added to `AppException` sealed class**
+All HTTP errors from `RemoteNoteService` are wrapped in `RemoteServiceException(message, {cause})`. Consistent with `DatabaseException` (D2.5) and `FileStorageException` — raw `http.ClientException` and `SocketException` never propagate above the service layer.
+
+**D11.10 — Backend `core/auth.py` dev-mode bypass returns fixed UID `"dev-user-local"`**
+When `DEV_MODE=true`, `verify_token` returns the string `"dev-user-local"` without inspecting the `Authorization` header. This allows curl/Swagger testing without a real Firebase token. In production (`DEV_MODE=false`), missing or invalid tokens raise `HTTP 401`.
+
+**D11.11 — Alembic `env.py` uses async SQLAlchemy engine**
+`alembic/env.py` wraps migration execution in `asyncio.run()` to be consistent with the app's async SQLAlchemy setup. All future migrations will run via `alembic upgrade head` using the async engine. The `DATABASE_URL` is read from `core/config.py` (Settings class) — never hardcoded.
+
+**D11.12 — Backend `db/models.py` stub — no tables created in Phase 11**
+`SQLAlchemy Note` model is defined but Alembic has no migration files yet. Running `alembic upgrade head` on a clean DB will produce no table changes until Phase 12 generates the first migration via `alembic revision --autogenerate`. This is intentional — Phase 11 is scaffolding only.
 
 ---
 
@@ -539,6 +630,7 @@ Never deviate from these values. They are pixel-specified in the design system.
 | BUG-21 | GitHub issue #3: Bottom nav tabs on `TagsScreen` did nothing when tapped — `_NavTab` had no `onTap` parameter and the `GestureDetector` wrapper was missing entirely. All tab buttons were inert. Discovered after Phase 7 committed `TagsScreen` with a copy of the Phase 4 `_BottomNav` that was never wired up. | 7 | ✅ Fixed (pre-Phase-8 commit) | Added `onTap: VoidCallback` and `activeIcon: IconData` to `_NavTab`; wrapped each tab in a `GestureDetector`; wired Home → `context.go(AppRoutes.home)`, Explore → `AppRoutes.search`, Tags → no-op (already active), Settings → `AppRoutes.settings`. Added `go_router` and `app_router` imports to `tags_screen.dart`. |
 | BUG-22 | Phase 8: `_selectedCategoryName()` fallback used `const Category(id: '', name: 'root', sortOrder: 0, createdAt: null)`. But `Category.createdAt` is declared `required DateTime createdAt` (non-nullable) — passing `null` is a compile error. Caught immediately when verifying the `Category` model before `flutter analyze` would have caught it. | 8 | ✅ Fixed | Rewrote `_selectedCategoryName()` to use `.where((c) => c.id == _selectedId)` and check `.isEmpty` — no fallback `Category` object needed. |
 | BUG-23 | Phase 9: `sort_child_properties_last` lint error in `app_router.dart` ShellRoute builder. Initial call was `_AppShell(child: child, location: state.uri.path)` — Flutter lint requires `child:` to be the last named parameter. Flagged by `flutter analyze` (1 issue). | 9 | ✅ Fixed | Reordered to `_AppShell(location: state.uri.path, child: child)`. Rule applies to all widget constructors — `child:` and `children:` must always be last. |
+| BUG-24 | Post-Phase-9: `BottomBarThemeData` v2.0.0 has no `iconData` or `iconColor` fields. Initial implementation tried to use `BottomBarThemeData(iconData: ..., iconColor: ...)` to customise the scroll-to-top icon. Both fields are undefined — `flutter analyze` reported 2 errors. | 9 | ✅ Fixed | Removed `iconData`/`iconColor` from `BottomBarThemeData`. Used `icon: (w, h) => Icon(...)` builder parameter directly on `BottomBar` for icon customisation. Styled `iconDecoration` (background) via `BottomBarThemeData.iconDecoration` (which does exist). |
 
 ---
 

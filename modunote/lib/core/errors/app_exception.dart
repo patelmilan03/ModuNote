@@ -34,3 +34,8 @@ final class ValidationException extends AppException {
 final class PermissionException extends AppException {
   const PermissionException(super.message, {super.cause});
 }
+
+/// Thrown when an HTTP call to the ModuNote backend API fails.
+final class RemoteServiceException extends AppException {
+  const RemoteServiceException(super.message, {super.cause});
+}

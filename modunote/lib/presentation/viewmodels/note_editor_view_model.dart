@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../core/errors/app_exception.dart';
@@ -30,6 +31,7 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
       }
       state = AsyncData(note);
     } on AppException catch (e, st) {
+      debugPrint('NoteEditorViewModel: save failed — $e');
       state = AsyncError(e, st);
     }
   }
@@ -88,5 +90,22 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
       syncStatus: current.syncStatus,
     );
     await save(updated);
+  }
+
+  /// Pushes the note to Firestore via [SyncedNoteRepository.syncNote].
+  /// Updates ViewModel state with the new [SyncStatus] and returns it.
+  /// Called from [NoteEditorScreen._onBack] after the final local save.
+  Future<SyncStatus> syncNote(String noteId) async {
+    try {
+      final newStatus =
+          await ref.read(syncedNoteRepositoryProvider).syncNote(noteId);
+      final current = state.valueOrNull;
+      if (current != null) {
+        state = AsyncData(current.copyWith(syncStatus: newStatus));
+      }
+      return newStatus;
+    } catch (_) {
+      return SyncStatus.local;
+    }
   }
 }
