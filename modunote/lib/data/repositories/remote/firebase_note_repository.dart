@@ -42,6 +42,14 @@ class FirebaseNoteRepository implements INoteRepository {
       throw UnimplementedError('Reads stay local — use LocalNoteRepository');
 
   @override
+  Stream<List<Note>> watchByCategoryIds(List<String> categoryIds) =>
+      throw UnimplementedError('Reads stay local — use LocalNoteRepository');
+
+  @override
+  Stream<List<Note>> watchArchived() =>
+      throw UnimplementedError('Reads stay local — use LocalNoteRepository');
+
+  @override
   Future<Note?> findById(String id) =>
       throw UnimplementedError('Reads stay local — use LocalNoteRepository');
 
@@ -69,6 +77,21 @@ class FirebaseNoteRepository implements INoteRepository {
       });
     } catch (e) {
       debugPrint('FirebaseNoteRepository.archive: $e');
+    }
+  }
+
+  @override
+  Future<void> unarchive(String id) async {
+    final col = _notes;
+    if (col == null) return;
+    try {
+      await col.doc(id).update({
+        'isArchived': false,
+        'updatedAt': Timestamp.fromDate(DateTime.now()),
+        'syncStatus': 'synced',
+      });
+    } catch (e) {
+      debugPrint('FirebaseNoteRepository.unarchive: $e');
     }
   }
 

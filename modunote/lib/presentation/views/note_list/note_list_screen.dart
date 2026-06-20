@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../data/models/category.dart';
 import '../../../data/models/note.dart';
 import '../../router/app_router.dart';
+import '../../viewmodels/category_tree_view_model.dart';
 import '../../viewmodels/note_list_view_model.dart';
 import '../../viewmodels/tag_list_view_model.dart';
 import '../../widgets/mn_note_card.dart';
@@ -51,7 +53,7 @@ class NoteListScreen extends ConsumerWidget {
 // Data state
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _DataBody extends StatelessWidget {
+class _DataBody extends ConsumerWidget {
   const _DataBody({
     required this.pinned,
     required this.recent,
@@ -66,9 +68,13 @@ class _DataBody extends StatelessWidget {
       ids.map((id) => tagMap[id]).whereType<String>().toList();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (pinned.isEmpty && recent.isEmpty) {
-      return const _EmptyState();
+      final filter = ref.watch(noteFilterNotifierProvider);
+      if (filter.type == NoteFilterType.all) {
+        return const _EmptyState();
+      }
+      return const _FilteredEmptyState();
     }
 
     final children = <Widget>[
@@ -80,6 +86,8 @@ class _DataBody extends StatelessWidget {
           onTap: () => context.go(AppRoutes.search),
         ),
       ),
+      const SizedBox(height: 10),
+      const _FilterChipBar(),
     ];
 
     if (pinned.isNotEmpty) {
@@ -89,10 +97,9 @@ class _DataBody extends StatelessWidget {
         children.add(
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: MNNoteCard(
+            child: _SwipeableNoteCard(
               note: note,
               tagNames: _tagNames(note.tagIds),
-              onTap: () => context.push(AppRoutes.editNotePath(note.id)),
             ),
           ),
         );
@@ -107,10 +114,9 @@ class _DataBody extends StatelessWidget {
         children.add(
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: MNNoteCard(
+            child: _SwipeableNoteCard(
               note: note,
               tagNames: _tagNames(note.tagIds),
-              onTap: () => context.push(AppRoutes.editNotePath(note.id)),
             ),
           ),
         );
@@ -120,6 +126,407 @@ class _DataBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: 150),
       children: children,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Swipeable card with long-press actions
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SwipeableNoteCard extends ConsumerWidget {
+  const _SwipeableNoteCard({
+    required this.note,
+    required this.tagNames,
+  });
+
+  final Note note;
+  final List<String> tagNames;
+
+  void _showActionsSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _NoteActionsSheet(
+        note: note,
+        onPin: () {
+          Navigator.of(context).pop();
+          ref.read(noteListViewModelProvider.notifier).togglePin(note.id);
+        },
+        onArchive: () {
+          Navigator.of(context).pop();
+          ref.read(noteListViewModelProvider.notifier).archive(note.id);
+        },
+        onDelete: () {
+          Navigator.of(context).pop();
+          _confirmDelete(context, ref);
+        },
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, WidgetRef ref) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete note?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              ref.read(noteListViewModelProvider.notifier).delete(note.id);
+            },
+            child: Text(
+              'Delete',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Dismissible(
+      key: ValueKey(note.id),
+      // Always spring back — the Drift stream removes/updates the card.
+      confirmDismiss: (direction) async {
+        if (direction == DismissDirection.endToStart) {
+          // Swipe left → archive
+          ref.read(noteListViewModelProvider.notifier).archive(note.id);
+        } else {
+          // Swipe right → pin toggle
+          ref.read(noteListViewModelProvider.notifier).togglePin(note.id);
+        }
+        return false;
+      },
+      background: _SwipeBg(
+        alignment: Alignment.centerLeft,
+        color: AppColors.accent.withValues(alpha: 0.15),
+        icon: note.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
+        iconColor: AppColors.accent,
+      ),
+      secondaryBackground: _SwipeBg(
+        alignment: Alignment.centerRight,
+        color: (isDark
+                ? AppColors.darkRecordRed
+                : AppColors.lightRecordRed)
+            .withValues(alpha: 0.15),
+        icon: Icons.archive_outlined,
+        iconColor:
+            isDark ? AppColors.darkRecordRed : AppColors.lightRecordRed,
+      ),
+      child: MNNoteCard(
+        note: note,
+        tagNames: tagNames,
+        onTap: () => context.push(AppRoutes.editNotePath(note.id)),
+        onLongPress: () => _showActionsSheet(context, ref),
+      ),
+    );
+  }
+}
+
+// Swipe reveal background
+class _SwipeBg extends StatelessWidget {
+  const _SwipeBg({
+    required this.alignment,
+    required this.color,
+    required this.icon,
+    required this.iconColor,
+  });
+
+  final AlignmentGeometry alignment;
+  final Color color;
+  final IconData icon;
+  final Color iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      alignment: alignment,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Icon(icon, color: iconColor, size: 24),
+    );
+  }
+}
+
+// Long-press actions bottom sheet
+class _NoteActionsSheet extends StatelessWidget {
+  const _NoteActionsSheet({
+    required this.note,
+    required this.onPin,
+    required this.onArchive,
+    required this.onDelete,
+  });
+
+  final Note note;
+  final VoidCallback onPin;
+  final VoidCallback onArchive;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? AppColors.darkCard : AppColors.lightCard;
+    final outlineStrong =
+        isDark ? AppColors.darkOutlineStrong : AppColors.lightOutlineStrong;
+    final onSurface =
+        isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface;
+    final variantColor =
+        isDark ? AppColors.darkOnSurfaceVariant : AppColors.lightOnSurfaceVariant;
+    final errorColor = Theme.of(context).colorScheme.error;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: outlineStrong,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+            child: Text(
+              note.title.isEmpty ? 'Untitled' : note.title,
+              style: AppTypography.plusJakartaSans(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: onSurface,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const Divider(height: 1),
+          _ActionTile(
+            icon: note.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
+            label: note.isPinned ? 'Unpin' : 'Pin to top',
+            color: variantColor,
+            onTap: onPin,
+          ),
+          _ActionTile(
+            icon: Icons.archive_outlined,
+            label: 'Archive',
+            color: variantColor,
+            onTap: onArchive,
+          ),
+          _ActionTile(
+            icon: Icons.delete_outline,
+            label: 'Delete',
+            color: errorColor,
+            onTap: onDelete,
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, size: 22, color: color),
+            const SizedBox(width: 16),
+            Text(
+              label,
+              style: AppTypography.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filter chip bar
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _FilterChipBar extends ConsumerWidget {
+  const _FilterChipBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filter = ref.watch(noteFilterNotifierProvider);
+    final tagsAsync = ref.watch(tagListViewModelProvider);
+    final categoriesAsync = ref.watch(categoryTreeViewModelProvider);
+
+    final tags = tagsAsync.valueOrNull ?? [];
+    final categories = categoriesAsync.valueOrNull ?? <Category>[];
+
+    if (tags.isEmpty && categories.isEmpty) return const SizedBox.shrink();
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
+    final chipBg = isDark ? AppColors.darkChipBg : AppColors.lightChipBg;
+    final chipText = isDark ? AppColors.darkChipText : AppColors.lightChipText;
+    final muted =
+        isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
+
+    final isAll = filter.type == NoteFilterType.all;
+
+    return SizedBox(
+      height: 36,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        children: [
+          // "All" chip
+          _FilterChip(
+            label: 'All',
+            isSelected: isAll,
+            selectedBg: cs.primaryContainer,
+            selectedFg: cs.onPrimaryContainer,
+            defaultBg: chipBg,
+            defaultFg: chipText,
+            onTap: () =>
+                ref.read(noteFilterNotifierProvider.notifier).setAll(),
+          ),
+          if (categories.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            for (final cat in categories) ...[
+              _FilterChip(
+                label: cat.name,
+                isSelected: filter.type == NoteFilterType.category &&
+                    filter.id == cat.id,
+                selectedBg: cs.primaryContainer,
+                selectedFg: cs.onPrimaryContainer,
+                defaultBg: chipBg,
+                defaultFg: chipText,
+                prefix: Icons.folder_outlined,
+                prefixColor: muted,
+                onTap: () => ref
+                    .read(noteFilterNotifierProvider.notifier)
+                    .setCategory(cat.id, cat.name),
+              ),
+              const SizedBox(width: 6),
+            ],
+          ],
+          if (tags.isNotEmpty) ...[
+            for (final tag in tags) ...[
+              _FilterChip(
+                label: '#${tag.name}',
+                isSelected: filter.type == NoteFilterType.tag &&
+                    filter.id == tag.id,
+                selectedBg: cs.primaryContainer,
+                selectedFg: cs.onPrimaryContainer,
+                defaultBg: chipBg,
+                defaultFg: chipText,
+                onTap: () => ref
+                    .read(noteFilterNotifierProvider.notifier)
+                    .setTag(tag.id, tag.name),
+              ),
+              const SizedBox(width: 6),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.selectedBg,
+    required this.selectedFg,
+    required this.defaultBg,
+    required this.defaultFg,
+    required this.onTap,
+    this.prefix,
+    this.prefixColor,
+  });
+
+  final String label;
+  final bool isSelected;
+  final Color selectedBg;
+  final Color selectedFg;
+  final Color defaultBg;
+  final Color defaultFg;
+  final VoidCallback onTap;
+  final IconData? prefix;
+  final Color? prefixColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isSelected ? selectedBg : defaultBg;
+    final fg = isSelected ? selectedFg : defaultFg;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (prefix != null) ...[
+              Icon(prefix, size: 13, color: isSelected ? fg : prefixColor),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: AppTypography.inter(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -377,6 +784,71 @@ class _ErrorBody extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filtered empty state (filter active, zero results)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _FilteredEmptyState extends ConsumerWidget {
+  const _FilteredEmptyState();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filter = ref.watch(noteFilterNotifierProvider);
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final muted =
+        isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
+
+    final label = filter.type == NoteFilterType.category
+        ? (filter.name ?? 'this category')
+        : '#${filter.name ?? 'this tag'}';
+
+    return Column(
+      children: [
+        const _AppBarSection(),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: MNSearchField(
+            onTap: () => context.go(AppRoutes.search),
+          ),
+        ),
+        const SizedBox(height: 10),
+        const _FilterChipBar(),
+        Expanded(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.inbox_outlined, size: 56, color: muted),
+                const SizedBox(height: 16),
+                Text(
+                  'No notes in $label',
+                  style: AppTypography.plusJakartaSans(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Tap + to add a note here.',
+                  style: AppTypography.inter(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w400,
+                    color: muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

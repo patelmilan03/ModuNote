@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../router/app_router.dart';
 
-/// Settings screen — Appearance theme toggle.
+/// Settings screen — Appearance theme toggle + Archive link.
 /// The shell [_AppShell] provides the outer Scaffold and SafeArea;
 /// this screen returns body content only (no Scaffold wrapper).
 /// Spec: MODUNOTE_UI_REFERENCE.md § 3.6 | Decision: D9.5
@@ -29,7 +30,11 @@ class SettingsScreen extends ConsumerWidget {
               ref.read(themeModeNotifierProvider.notifier).setLight(),
           onSelectDark: () =>
               ref.read(themeModeNotifierProvider.notifier).setDark(),
+          onSelectSystem: () =>
+              ref.read(themeModeNotifierProvider.notifier).setSystem(),
         ),
+        const SizedBox(height: 16),
+        _ArchiveCard(isDark: isDark),
       ],
     );
   }
@@ -70,12 +75,14 @@ class _AppearanceCard extends StatelessWidget {
     required this.isDark,
     required this.onSelectLight,
     required this.onSelectDark,
+    required this.onSelectSystem,
   });
 
   final ThemeMode themeMode;
   final bool isDark;
   final VoidCallback onSelectLight;
   final VoidCallback onSelectDark;
+  final VoidCallback onSelectSystem;
 
   @override
   Widget build(BuildContext context) {
@@ -120,18 +127,27 @@ class _AppearanceCard extends StatelessWidget {
                 label: 'Light',
                 icon: Icons.light_mode_outlined,
                 isSelected: themeMode == ThemeMode.light,
-                isDarkPreview: false,
+                previewType: _PreviewType.light,
                 isDark: isDark,
                 onTap: onSelectLight,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               _ThemeTile(
                 label: 'Dark',
                 icon: Icons.dark_mode_outlined,
                 isSelected: themeMode == ThemeMode.dark,
-                isDarkPreview: true,
+                previewType: _PreviewType.dark,
                 isDark: isDark,
                 onTap: onSelectDark,
+              ),
+              const SizedBox(width: 8),
+              _ThemeTile(
+                label: 'System',
+                icon: Icons.brightness_auto_outlined,
+                isSelected: themeMode == ThemeMode.system,
+                previewType: _PreviewType.system,
+                isDark: isDark,
+                onTap: onSelectSystem,
               ),
             ],
           ),
@@ -143,12 +159,14 @@ class _AppearanceCard extends StatelessWidget {
 
 // ── Theme tile ─────────────────────────────────────────────────────────────────
 
+enum _PreviewType { light, dark, system }
+
 class _ThemeTile extends StatelessWidget {
   const _ThemeTile({
     required this.label,
     required this.icon,
     required this.isSelected,
-    required this.isDarkPreview,
+    required this.previewType,
     required this.isDark,
     required this.onTap,
   });
@@ -156,7 +174,7 @@ class _ThemeTile extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool isSelected;
-  final bool isDarkPreview;
+  final _PreviewType previewType;
   final bool isDark;
   final VoidCallback onTap;
 
@@ -172,7 +190,7 @@ class _ThemeTile extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
           decoration: BoxDecoration(
             color: isSelected ? cs.primaryContainer : surfaceContainer,
             borderRadius: BorderRadius.circular(16),
@@ -183,23 +201,23 @@ class _ThemeTile extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _MiniPreview(isDarkPreview: isDarkPreview),
-              const SizedBox(height: 12),
+              _MiniPreview(previewType: previewType),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   Icon(
                     icon,
-                    size: 16,
+                    size: 14,
                     color: isSelected
                         ? cs.onPrimaryContainer
                         : cs.onSurfaceVariant,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 4),
                   Expanded(
                     child: Text(
                       label,
                       style: AppTypography.plusJakartaSans(
-                        fontSize: 14,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: isSelected
                             ? cs.onPrimaryContainer
@@ -221,12 +239,16 @@ class _ThemeTile extends StatelessWidget {
 // ── Mini preview ───────────────────────────────────────────────────────────────
 
 class _MiniPreview extends StatelessWidget {
-  const _MiniPreview({required this.isDarkPreview});
+  const _MiniPreview({required this.previewType});
 
-  final bool isDarkPreview;
+  final _PreviewType previewType;
 
   @override
   Widget build(BuildContext context) {
+    if (previewType == _PreviewType.system) {
+      return _SystemMiniPreview();
+    }
+    final isDarkPreview = previewType == _PreviewType.dark;
     final cardBg =
         isDarkPreview ? AppColors.darkCard : AppColors.lightCard;
     final lineBg = isDarkPreview
@@ -234,7 +256,7 @@ class _MiniPreview extends StatelessWidget {
         : AppColors.lightSurfaceContainerHigh;
 
     return Container(
-      height: 56,
+      height: 52,
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(10),
@@ -243,13 +265,12 @@ class _MiniPreview extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title line + accent dot
           Row(
             children: [
               Expanded(
                 flex: 3,
                 child: Container(
-                  height: 7,
+                  height: 6,
                   decoration: BoxDecoration(
                     color: lineBg,
                     borderRadius: BorderRadius.circular(3),
@@ -258,8 +279,8 @@ class _MiniPreview extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Container(
-                width: 7,
-                height: 7,
+                width: 6,
+                height: 6,
                 decoration: const BoxDecoration(
                   color: AppColors.accent,
                   shape: BoxShape.circle,
@@ -268,7 +289,6 @@ class _MiniPreview extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 5),
-          // Body line 1
           Container(
             height: 5,
             width: double.infinity,
@@ -278,16 +298,49 @@ class _MiniPreview extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          // Body line 2 (shorter)
           Container(
             height: 5,
-            width: 60,
+            width: 40,
             decoration: BoxDecoration(
               color: lineBg.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(3),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SystemMiniPreview extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        height: 52,
+        child: Row(
+          children: [
+            Expanded(
+              child: Container(
+                color: AppColors.lightCard,
+                child: const Center(
+                  child: Icon(Icons.light_mode_outlined,
+                      size: 18, color: AppColors.lightPrimary),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Container(
+                color: AppColors.darkCard,
+                child: const Center(
+                  child: Icon(Icons.dark_mode_outlined,
+                      size: 18, color: AppColors.darkPrimary),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -308,8 +361,8 @@ class _RadioDot extends StatelessWidget {
         isDark ? AppColors.darkOutlineStrong : AppColors.lightOutlineStrong;
 
     return Container(
-      width: 18,
-      height: 18,
+      width: 16,
+      height: 16,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: isSelected ? cs.primary : Colors.transparent,
@@ -319,9 +372,71 @@ class _RadioDot extends StatelessWidget {
       ),
       child: isSelected
           ? const Center(
-              child: Icon(Icons.circle, size: 8, color: Colors.white),
+              child: Icon(Icons.circle, size: 7, color: Colors.white),
             )
           : null,
+    );
+  }
+}
+
+// ── Archive card ───────────────────────────────────────────────────────────────
+
+class _ArchiveCard extends StatelessWidget {
+  const _ArchiveCard({required this.isDark});
+
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final card = isDark ? AppColors.darkCard : AppColors.lightCard;
+    final outline = isDark ? AppColors.darkOutline : AppColors.lightOutline;
+    final onSurface =
+        isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface;
+    final muted =
+        isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
+
+    return GestureDetector(
+      onTap: () => context.push(AppRoutes.archive),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: BoxDecoration(
+          color: card,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: outline, width: 0.5),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.archive_outlined, size: 22, color: muted),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Archived Notes',
+                    style: AppTypography.plusJakartaSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'View, restore, or permanently delete archived notes.',
+                    style: AppTypography.inter(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w400,
+                      color: muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 20, color: muted),
+          ],
+        ),
+      ),
     );
   }
 }

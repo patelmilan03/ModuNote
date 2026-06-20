@@ -12,6 +12,9 @@ abstract interface class INoteRepository {
   /// Returns a stream of notes under [categoryId].
   Stream<List<Note>> watchByCategory(String categoryId);
 
+  /// Returns a stream of notes whose categoryId is in [categoryIds].
+  Stream<List<Note>> watchByCategoryIds(List<String> categoryIds);
+
   /// Returns a single note by [id], or null if not found.
   Future<Note?> findById(String id);
 
@@ -24,8 +27,14 @@ abstract interface class INoteRepository {
   /// Updates all fields of an existing note matched by [note.id].
   Future<void> update(Note note);
 
+  /// Returns a stream of archived notes ordered by updatedAt desc.
+  Stream<List<Note>> watchArchived();
+
   /// Soft-deletes by setting [isArchived] = true.
   Future<void> archive(String id);
+
+  /// Restores an archived note by setting [isArchived] = false.
+  Future<void> unarchive(String id);
 
   /// Hard-deletes. Irreversible.
   Future<void> delete(String id);

@@ -65,7 +65,10 @@ lib/
 │   │   └── synced/                    # Sync wrapper (Phase 10) — SyncedNoteRepository
 │   └── datasources/
 │       ├── local/                     # Drift DAOs + AppDatabase (Phase 2)
-│       └── file/                      # AudioFileStorage (Phase 6)
+│       └── file/                      # AudioFileStorage (Phase W — conditional export)
+│           ├── audio_file_storage.dart          # 2-line conditional export shim
+│           ├── audio_file_storage_native.dart   # dart:io implementation (native)
+│           └── audio_file_storage_web.dart      # no-op / throw stub (web)
 │
 ├── services/
 │   ├── speech/speech_to_text_service.dart   # Phase 6
@@ -154,6 +157,7 @@ All raw token values are in `lib/core/theme/app_colors.dart`.
 | `/settings` | SettingsScreen | ✅ ShellRoute tab 3 |
 | `/note/new` | NoteEditorScreen (new) | ❌ Full-screen push |
 | `/note/:id` | NoteEditorScreen (edit) | ❌ Full-screen push |
+| `/archive` | ArchivedNotesScreen | ❌ Full-screen push (from Settings) |
 
 The four shell tabs share a persistent `MNBottomNav` rendered by `_AppShell` in `app_router.dart`. Tab screens return body content only — no `Scaffold` or `SafeArea`. Note Editor routes are outside the shell and pushed via `context.push`.
 
@@ -187,6 +191,8 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ✅ Complete |
 | 10 | Firebase preparation + live sync (anon auth, Firestore writes, SyncStatus badge, AppLifecycle) | ✅ Complete |
 | 11 | Backend API scaffolding (FastAPI stubs) | ✅ Complete |
+| 11.5 | Bug fixes + UX features (swipe cards, note options, system theme, archive screen, filter bar) | ✅ Complete |
+| W | Web Portfolio Preview — Flutter Web + WASM SQLite + phone-frame landing page + Firebase Hosting | ✅ Complete |
 | 12 | AI features (auto-tagging, summarisation) | ⬜ Not started |
 
 ---
@@ -226,9 +232,19 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `lib/services/remote/remote_note_service.dart` | HTTP client for the FastAPI backend — `suggestTags()` + `summariseNote()` (both stub-level; called in Phase 12). Plain Dart class, not a Riverpod provider. Default base URL `http://10.0.2.2:8000/api/v1` (Android emulator loopback). |
 | `lib/firebase_options.dart` | STUB (gitignored). Replace by running `flutterfire configure`. |
 | `lib/data/datasources/local/converters/type_converters.dart` | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` |
-| `lib/data/repositories/remote/firebase_note_repository.dart` | Live Firestore write impl — `insert`/`update`/`archive`/`delete`/`togglePin` via Firestore set. Reads remain `UnimplementedError`. |
+| `lib/data/repositories/remote/firebase_note_repository.dart` | Live Firestore write impl — `insert`/`update`/`archive`/`unarchive`/`delete`/`togglePin` via Firestore set. Reads remain `UnimplementedError`. |
 | `lib/data/repositories/synced/synced_note_repository.dart` | Sync wrapper — all standard ops delegate to local; `syncNote(id)` + `syncAllPending()` push to Firestore |
 | `firestore.rules` | Firestore security rules (deploy manually in Firebase Console) |
+| `lib/presentation/viewmodels/note_list_view_model.dart` | `NoteFilterNotifier` (holds `NoteFilter` — all/category/tag); `NoteListViewModel` watches filter + switches repo stream |
+| `lib/presentation/viewmodels/archived_notes_view_model.dart` | `ArchivedNotesViewModel` — `watchArchived()` stream + `restore(id)` + `delete(id)` |
+| `lib/presentation/views/archive/archived_notes_screen.dart` | Archive screen — full-screen outside ShellRoute, swipe right = restore, swipe left = delete |
+| `web/index.html` | Phone-frame landing page — dark navy, CSS phone bezel, loading overlay, tech chips, GitHub link |
+| `web/flutter_bootstrap.js` | Custom Flutter bootstrap — mounts app into `#flutter-host` (phone frame div) via `hostElement` |
+| `web/drift_worker.dart` | Drift WASM web worker entry point (`WasmDatabase.workerMainForOpen()`) |
+| `web/drift_worker.js` | Compiled JS worker (from `dart compile js -O2 web/drift_worker.dart`) |
+| `web/sqlite3.wasm` | Pre-compiled SQLite WASM module (sqlite3-2.9.4, 714 KB) |
+| `firebase.json` | Firebase config — `hosting` section: `build/web`, SPA rewrite, WASM MIME, COOP/COEP headers |
+| `.firebaserc` | Firebase project alias — `default → modunote-ba654` |
 | `MODUNOTE_UI_REFERENCE.md` | Full pixel-level UI spec from Claude Design |
 | `progress.md` | Human-readable phase progress log |
 | `TESTING.md` | Manual testing checklist — 40 sections, ~175+ checks. Quick smoke test (~50 🔴 critical checks, ~20 min) + full regression (~175+ checks, ~1.5 hr). Section 40 = Firebase sync checks. |

@@ -49,8 +49,8 @@ class MNBottomNav extends StatelessWidget {
           ),
           _NavTab(
             icon: Icons.explore_outlined,
-            activeIcon: Icons.explore,
-            label: 'Explore',
+            activeIcon: Icons.search,
+            label: 'Search',
             isActive: activeIndex == 1,
             onTap: () => context.go(AppRoutes.search),
           ),

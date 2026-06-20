@@ -2,27 +2,29 @@
 
 **ModuNote** is an Android note-taking app built for a solo content creator who needs to capture ideas the moment they happen. Open the app, tap the FAB, start typing — the note saves itself. No accounts, no syncing delays, no friction.
 
-Built with Flutter using a strict **MVVM + Repository** architecture, a **Drift SQLite** local database with **FTS5 full-text search**, **Riverpod 2** state management with full code generation, and a **flutter_quill** Delta JSON rich text editor. A FastAPI backend and Firebase sync layer are planned for later phases.
+Built with Flutter using a strict **MVVM + Repository** architecture, a **Drift SQLite** local database with **FTS5 full-text search**, **Riverpod 2** state management with full code generation, a **flutter_quill** Delta JSON rich text editor, and **Firebase** for anonymous auth and Firestore sync. A FastAPI + PostgreSQL backend is scaffolded for Phase 12 AI features.
 
 This is a portfolio/resume project developed phase-by-phase with documented architectural decisions throughout.
+
+> **Live web demo →** [modunote-ba654.web.app](https://modunote-ba654.web.app) — Flutter Web build hosted on Firebase Hosting, rendered inside a Pixel 8 phone-frame mockup. See [Web Portfolio Preview](#web-portfolio-preview) below.
 
 ---
 
 ## What it does
 
-- **Capture notes instantly** — tap the amber FAB on the home screen, write a title, start typing in the rich text editor. The note auto-saves 800 ms after you stop typing. A small "Saved / Saving…" badge shows the live state.
-- **Rich text editing** — the editor supports bold, italic, underline, H1, H2, bulleted lists, numbered lists, checklists, and blockquotes via a pinned formatting toolbar. Content is stored as Quill Delta JSON so it is portable and Firebase-ready.
-- **Tags and categories** — each note can have multiple freeform tags and belong to a hierarchical category (adjacency-list tree, max depth 5). Tags are stored both in a normalised join table and as a denormalised JSON column on the note for O(1) ViewModel access.
-- **Full-text search** — a SQLite FTS5 virtual table (`notes_fts`) stays in sync with note content via three SQLite triggers (INSERT / UPDATE / BEFORE DELETE). The search screen debounces queries at 300 ms and streams results as note cards.
-- **Voice memos** — the editor toolbar has a mic button that will record AAC audio (32 kbps, mono, 16 kHz) and transcribe it using on-device speech recognition. The recording overlay UI is complete; the audio service is wired in Phase 6.
-- **Pinning and archiving** — notes can be pinned to the top of the home screen or archived.
-- **Offline-first** — the entire app works with zero network access. All data lives in a local SQLite database on the device. Firebase sync is a Phase 10 drop-in swap via the repository interface layer.
+- **Capture notes instantly** — tap the amber FAB on the home screen, write a title, start typing in the rich text editor. The note auto-saves 800 ms after you stop typing. A small "Saved / Saving…" badge shows the live save state.
+- **Rich text editing** — bold, italic, underline, H1, H2, bulleted lists, numbered lists, checklists, and blockquotes via a pinned formatting toolbar. Content is stored as Quill Delta JSON — portable and Firebase-ready.
+- **Tags and categories** — each note can carry multiple freeform tags and belong to a hierarchical category (adjacency-list tree, max depth 5). Tags are stored in a normalised join table and as a denormalised JSON column on the note for O(1) ViewModel reads. The tag picker in the editor shows all existing tags on open for one-tap selection, with prefix search as you type. A filter chip bar on the home screen filters by category or tag; selecting a parent category includes notes from all descendant categories.
+- **Full-text search** — a SQLite FTS5 virtual table (`notes_fts`) stays in sync via three SQLite triggers. The search screen debounces at 300 ms and streams results live.
+- **Voice memos** — the editor toolbar has a mic button that records AAC audio (32 kbps, mono, 16 kHz) and transcribes it using on-device speech recognition. Live amplitude waveform and transcript preview appear while recording.
+- **Swipe actions on note cards** — swipe left to archive, swipe right to toggle pin. Cards spring back after the action fires so the list updates without jarring dismissal animations. Long-press (or the ⋮ button in the editor) opens a contextual bottom sheet for pin, archive, or delete.
+- **Archive screen** — accessible from Settings; lists all archived notes with swipe-right to restore or swipe-left to permanently delete (with confirmation).
+- **Pinning** — pinned notes float to a separate "Pinned" section above the recent list; unpinning returns them to the recency order.
+- **Theme** — light, dark, and system modes with a live preview tile picker in Settings. Mode persists across restarts via SharedPreferences.
+- **Firebase sync** — anonymous sign-in on app launch (silent, no account required). Every create/update/archive/delete is queued as `SyncStatus.pending` and pushed to Firestore on note-close and on app-background events. A coloured sync badge on each card shows local / synced / pending / conflict state.
+- **Offline-first** — the entire app works with zero network access. Firebase sync is a drop-in addition via the repository interface layer, not a dependency of the core experience.
 
 ---
-
-## Screenshots
-
-> Coming once Phase 9 (final navigation shell and theming) is complete.
 
 ---
 
@@ -57,29 +59,37 @@ lib/
 │   ├── models/             # Note, Tag, Category, AudioRecord — immutable + Equatable
 │   ├── repositories/
 │   │   ├── interfaces/     # INoteRepository, ITagRepository, ICategoryRepository
-│   │   └── local/          # Drift implementations of each interface
+│   │   ├── local/          # Drift implementations
+│   │   ├── remote/         # FirebaseNoteRepository (Firestore writes)
+│   │   └── synced/         # SyncedNoteRepository — wraps local + remote
 │   └── datasources/
-│       └── local/
-│           ├── tables/     # 5 Drift table definitions
-│           ├── daos/       # 4 DAOs (notes, tags, categories, audio records)
-│           ├── converters/ # QuillDeltaConverter, DateTimeConverter, StringListConverter
-│           ├── app_database.dart       # @DriftDatabase — 5 tables, FTS5, migrations
-│           └── database_providers.dart # Riverpod providers for DB + 3 repositories
+│       ├── local/
+│       │   ├── tables/     # 5 Drift table definitions
+│       │   ├── daos/       # 4 DAOs (notes, tags, categories, audio records)
+│       │   ├── converters/ # QuillDeltaConverter, DateTimeConverter, StringListConverter
+│       │   ├── app_database.dart       # @DriftDatabase — 5 tables, FTS5, v2 migration
+│       │   └── database_providers.dart # 6 keepAlive Riverpod providers
+│       └── file/           # AudioFileStorage — create dir, generate path, delete
 │
 ├── presentation/
-│   ├── viewmodels/         # NoteListVM, NoteEditorVM, TagListVM, CategoryTreeVM, SearchVM
+│   ├── viewmodels/         # NoteListVM, NoteEditorVM, TagListVM, CategoryTreeVM,
+│   │                       # SearchVM, ArchivedNotesVM, NoteFilterNotifier
 │   ├── views/
-│   │   ├── note_list/      # NoteListScreen
-│   │   ├── note_editor/    # NoteEditorScreen
+│   │   ├── note_list/      # NoteListScreen — swipe cards, filter chip bar
+│   │   ├── note_editor/    # NoteEditorScreen — Quill, voice, ⋮ options sheet
 │   │   ├── search/         # SearchScreen
-│   │   ├── tags/           # TagsScreen (Phase 7)
-│   │   └── settings/       # SettingsScreen (Phase 9)
-│   ├── widgets/            # MNNoteCard, MNSearchField, MNEditorToolbar, MNTagRow
-│   └── router/             # GoRouter config, AppRoutes constants, ThemeModeNotifier
+│   │   ├── tags/           # TagsScreen — density bars, tag management
+│   │   ├── archive/        # ArchivedNotesScreen — restore / delete
+│   │   └── settings/       # SettingsScreen — theme tiles, archive entry
+│   ├── widgets/            # MNNoteCard, MNSearchField, MNEditorToolbar,
+│   │                       # MNTagRow, MNCategoryPickerSheet, MNBottomNav
+│   └── router/             # GoRouter ShellRoute, _AppShell, ThemeModeNotifier
 │
 └── services/
-    ├── audio/              # AudioRecordingService (Phase 6)
-    └── speech/             # SpeechToTextService (Phase 6)
+    ├── audio/              # AudioRecordingService — flutter_sound AAC wrapper
+    ├── speech/             # SpeechToTextService — on-device, Android timeout recovery
+    ├── auth/               # FirebaseAuthService — silent anonymous sign-in
+    └── remote/             # RemoteNoteService — HTTP client for FastAPI (Phase 12)
 ```
 
 ---
@@ -157,6 +167,10 @@ All 4 data-layer Riverpod providers use `keepAlive: true` so the database connec
 | Rich text editor | flutter_quill | ^10.8.5 |
 | Audio recording/playback | flutter_sound | ^9.2.13 |
 | On-device voice-to-text | speech_to_text | ^7.0.0 |
+| Firebase (auth + Firestore) | firebase_core + cloud_firestore + firebase_auth | ^3.x |
+| Floating bottom nav | flutter_floating_bottom_bar | ^2.0.0 |
+| Theme persistence | shared_preferences | ^2.3.0 |
+| Remote API client | http | ^1.2.0 |
 | Fonts | google_fonts | ^6.2.1 |
 | Model equality | equatable | ^2.0.5 |
 | UUID generation | uuid | ^4.4.0 |
@@ -209,15 +223,46 @@ A SQLite database is created automatically on first launch. The home screen will
 |---|---|---|
 | 1 | Project setup — folder structure, theme, models, router scaffold | ✅ Complete |
 | 2 | Data layer — Drift schema, DAOs, TypeConverters, local repositories | ✅ Complete |
-| 3 | State management — all 5 Riverpod ViewModels wired to repositories | ✅ Complete |
+| 3 | State management — all Riverpod ViewModels wired to repositories | ✅ Complete |
 | 4 | Note list screen — pinned/recent sections, skeleton loading, search bar, FAB | ✅ Complete |
 | 5 | Note editor — Quill editor, toolbar, tag row, recording overlay UI | ✅ Complete |
-| 6 | Voice-to-text and audio recording/playback | ⬜ Not started |
-| 7 | Tags — freeform entry, autocomplete, tag management screen | ⬜ Not started |
-| 8 | Categories — hierarchical folder tree picker | ⬜ Not started |
-| 9 | Navigation shell — GoRouter ShellRoute, persistent bottom nav, theme toggle | ⬜ Not started |
-| 10 | Firebase preparation — auth stub, Firestore repository implementation | ⬜ Not started |
-| 11 | Backend — FastAPI + PostgreSQL + SQLAlchemy async API scaffolding | ⬜ Not started |
-| 12 | AI features — auto-tagging, note summarisation | ⬜ Not started |
+| 6 | Voice-to-text + audio recording/playback — AAC, amplitude waveform, transcription | ✅ Complete |
+| 7 | Tags — freeform entry, autocomplete, tag management screen with density bars | ✅ Complete |
+| 8 | Categories — hierarchical folder tree picker with re-parent-on-delete | ✅ Complete |
+| 9 | Navigation + theming — GoRouter ShellRoute, hide-on-scroll bottom nav, theme persistence | ✅ Complete |
+| 10 | Firebase — anonymous auth, Firestore write layer, SyncStatus badge, AppLifecycle sync | ✅ Complete |
+| 11 | Backend API scaffolding — FastAPI + PostgreSQL + SQLAlchemy async, stub AI endpoints | ✅ Complete |
+| 11.5 | Bug fixes + UX — swipe actions, note options sheet, archive screen, filter chips, system theme | ✅ Complete |
+| 11.6 | Bug fixes — hierarchical category filtering, filter bar empty state, editor category sync, tag browsing | ✅ Complete |
+| 12 | AI features — auto-tagging, note summarisation via FastAPI | ⬜ Not started |
+| W | Web portfolio preview — Flutter Web + WASM SQLite, Pixel 8 phone-frame landing page, Firebase Hosting | ✅ Complete |
 
-Architectural decisions for every completed phase are documented in [`DECISIONS.md`](DECISIONS.md).
+Architectural decisions for every completed phase are documented in [`DECISIONS.md`](modunote/DECISIONS.md).
+
+---
+
+## Web portfolio preview
+
+**Live → [modunote-ba654.web.app](https://modunote-ba654.web.app)**
+
+The Flutter app runs in a browser inside a CSS Pixel 8 phone-frame landing page. Powered by Flutter Web (CanvasKit) + WASM SQLite (via a Drift web worker), hosted on Firebase Hosting with COOP/COEP headers for `SharedArrayBuffer` support.
+
+**Implementation highlights:**
+- Custom `flutter_bootstrap.js` mounts the app into `#flutter-host` inside the phone frame via `hostElement`
+- WASM SQLite runs in a dedicated web worker (`drift_worker.dart` compiled with `dart compile js -O2`)
+- `AudioFileStorage` uses conditional exports — native `dart:io` on Android, no-op stub on web
+- Audio recording gracefully disabled on web with an informational snackbar; all other features work fully
+- Real-time loading progress bar driven by `PerformanceObserver` milestones + Flutter custom events
+
+**Web feature scope:**
+
+| Feature | Web status |
+|---|---|
+| Notes CRUD | ✅ Full |
+| Rich text editor | ✅ Full |
+| Tags + categories | ✅ Full |
+| Full-text search | ✅ Full |
+| Firebase sync | ✅ Full |
+| Theme switching | ✅ Full |
+| Voice-to-text | ✅ Full (Chrome Web Speech API) |
+| Audio recording | ⚠️ Gracefully disabled (flutter_sound AAC not supported on web) |

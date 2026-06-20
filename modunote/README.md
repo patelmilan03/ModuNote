@@ -45,12 +45,15 @@ lib/
 | 4 | Note list screen | ✅ Complete |
 | 5 | Note editor screen (Quill) | ✅ Complete |
 | 6 | Voice-to-text + audio recording/playback | ✅ Complete |
-| 7 | Tags (freeform + autocomplete) | ⬜ Not started |
-| 8 | Categories (hierarchical folder tree) | ⬜ Not started |
-| 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ⬜ Not started |
-| 10 | Firebase preparation layer | ⬜ Not started |
-| 11 | Backend API scaffolding (FastAPI) | ⬜ Not started |
+| 7 | Tags (freeform + autocomplete) | ✅ Complete |
+| 8 | Categories (hierarchical folder tree) | ✅ Complete |
+| 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ✅ Complete |
+| 10 | Firebase (anon auth, Firestore sync, SyncStatus badge) | ✅ Complete |
+| 11 | Backend API scaffolding (FastAPI + PostgreSQL stubs) | ✅ Complete |
+| 11.5 | Bug fixes + UX (swipe actions, options sheet, archive screen, filter chips, system theme) | ✅ Complete |
+| 11.6 | Bug fixes — hierarchical category filtering, filter bar empty state, editor category sync, tag browsing | ✅ Complete |
 | 12 | AI features (auto-tagging, summarisation) | ⬜ Not started |
+| W | Web portfolio preview (Flutter Web + WASM SQLite + Pixel 8 phone frame + Firebase Hosting) | ✅ Complete |
 
 ## Getting Started
 
@@ -61,7 +64,9 @@ flutter analyze      # must report 0 issues
 flutter run          # Android device or emulator required
 ```
 
-First launch: empty state on Home screen. Tap the amber `+` FAB to create a note. Tap the mic icon in the editor to record voice with live transcription.
+First launch: empty state on Home screen. Tap the amber `+` FAB to create a note. Swipe note cards left to archive, right to pin. Long-press a card (or tap ⋮ in the editor) for the options sheet. Tap the mic icon in the editor to record voice with live transcription. Use the filter chip bar on the home screen to filter by category (includes all child categories) or tag.
+
+**Live web demo →** [modunote-ba654.web.app](https://modunote-ba654.web.app)
 
 ## Key Documentation
 

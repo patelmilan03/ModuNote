@@ -546,6 +546,39 @@ When `DEV_MODE=true`, `verify_token` returns the string `"dev-user-local"` witho
 
 ---
 
+## Phase W — Web Portfolio Preview ✅ Complete
+
+### Implementation Decisions
+
+**DW.1 — Platform-conditional executor via `driftDatabase()` + `DriftWebOptions`**
+`AppDatabase.createExecutor()` branches on `kIsWeb`. On web: `driftDatabase(name: 'modunote', web: DriftWebOptions(sqlite3Wasm: Uri.parse('sqlite3.wasm'), driftWorker: Uri.parse('drift_worker.js')))`. On native: `driftDatabase(name: 'modunote.db')` (unchanged). Used the `drift_flutter 0.2.7` high-level API (`DriftWebOptions` from `drift_flutter`) rather than raw `WasmDatabase.open()` from `drift/wasm.dart` — cleaner, one unified function for both platforms.
+
+**DW.2 — `AudioFileStorage` web/native split via Dart conditional export**
+`dart:io` is not available at compile time on web — not just a runtime issue. A `kIsWeb` check inside the class body would not fix the compile failure. Solution: convert `audio_file_storage.dart` to a 2-line conditional export file: `export '..._native.dart' if (dart.library.html) '..._web.dart'`. The native file contains the full original implementation; the web stub provides the same class shape but throws `FileStorageException` for path-based methods and no-ops `ensureAudioDir`/`deleteFile`. No `dart:io` import in the web stub.
+
+**DW.3 — Audio recording disabled on web (Stage 1); informational snackbar shown**
+`flutter_sound` writes AAC to native file paths — no web equivalent. `NoteEditorScreen._onMicTap()` checks `kIsWeb` as its first guard: if web, show snackbar "Audio recording is not available in the web preview." and return. `_AudioClipsRow` is hidden entirely on web via `if (!kIsWeb && _currentNote != null) _AudioClipsRow(...)`. Stage 2 web audio (WebM/Opus + IndexedDB blobs) is deferred.
+
+**DW.4 — Custom `flutter_bootstrap.js` with `hostElement` to confine Flutter to a phone frame div**
+By default Flutter web takes the full viewport. To embed it in a 390×844 phone frame div, a custom `web/flutter_bootstrap.js` is used with `{{flutter_js}}` / `{{flutter_build_config}}` template variables (Flutter replaces these during build). `initializeEngine({hostElement: document.querySelector('#flutter-host')})` confines the Flutter canvas to the specific div inside the phone frame.
+
+**DW.5 — COOP/COEP headers required for drift WASM shared memory**
+`SharedArrayBuffer` (used by drift's OPFS-shared storage backend for best performance) requires cross-origin isolation headers: `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`. These are set globally in `firebase.json` hosting headers. Without them, drift falls back to IndexedDB (still functional, just slower). Added to `firebase.json` hosting section.
+
+**DW.6 — `sqlite3.wasm` downloaded from GitHub releases, not from pub cache**
+The `sqlite3` pub package ships C source but not a pre-compiled WASM binary. The WASM file must be downloaded separately from the sqlite3.dart GitHub releases page (`sqlite3-2.9.4`). File placed at `web/sqlite3.wasm` (713 KB).
+
+**DW.7 — `web/drift_worker.dart` compiled to JS with `dart compile js -O2`**
+Drift's WASM backend requires a Dart web worker compiled to JS. Entry point: `web/drift_worker.dart` using `package:drift/wasm.dart`'s `WasmDatabase.workerMainForOpen()`. Compiled to `web/drift_worker.js` via `dart compile js -O2 -o web/drift_worker.js web/drift_worker.dart`. This file is checked into the repo (it's a build artifact but needed before `flutter build web`).
+
+**DW.8 — Phone-frame landing page: pure CSS, responsive**
+`web/index.html` replaced with a styled dark-navy landing page (background `#1C1B2E`). The phone frame is CSS-only: `.phone-bezel` with `border-radius: 50px`, dynamic island via `::before` pseudo-element, side buttons via `::after`. `#flutter-host` is `position: absolute; inset: 0` inside `.phone-screen`. Loading overlay fades on `flutter-first-frame` event. Responsive: CSS `calc()` scales the frame below 460 px viewport width. Same font families as the app (Plus Jakarta Sans + Inter).
+
+**DW.9 — Firebase Hosting SPA rewrite ensures GoRouter URL routing works**
+GoRouter uses URL-based navigation; all paths (e.g. `/search`, `/tags/`) must serve `index.html`. Firebase Hosting `firebase.json` has `"rewrites": [{"source": "**", "destination": "/index.html"}]`.
+
+---
+
 ## Phase 12 — AI Features ⬜ Not Started
 
 ### Pre-Decided Architecture

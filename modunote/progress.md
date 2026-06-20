@@ -35,7 +35,48 @@
 | 9 | Navigation + theming (GoRouter shell, M3 bottom nav) | ✅ **Complete** | See details below |
 | 10 | Firebase preparation layer | ✅ **Complete** | See details below |
 | 11 | Backend API scaffolding (FastAPI) | ✅ **Complete** | See details below |
+| 11.5 | Bug fixes + UX features (swipe cards, note options, system theme, archive screen, filter bar) | ✅ **Complete** | See details below |
+| W | Web Portfolio Preview — Flutter Web build + phone-frame landing page + Firebase Hosting deploy | ✅ **Complete** | See details below |
 | 12 | AI features | ⬜ Not started | Deferred — post full app |
+
+---
+
+## Phase W — Web Portfolio Preview ✅
+
+**Completed**: Phase W (Stage 1)
+**Deliverable**: Flutter Web build of ModuNote deployed to Firebase Hosting as a live portfolio showcase. The app renders inside a phone-frame mockup on a styled dark-navy landing page.
+
+**Live URL**: https://modunote-ba654.web.app
+
+### Files Created
+
+- `web/flutter_bootstrap.js` — Custom bootstrap that renders Flutter into `#flutter-host` (hostElement), preventing full-viewport takeover by the Flutter canvas
+- `web/drift_worker.dart` — Dart entry point for the drift WASM web worker (`WasmDatabase.workerMainForOpen()`)
+- `web/drift_worker.js` — Compiled JavaScript worker (from `dart compile js -O2`)
+- `web/sqlite3.wasm` — Pre-compiled SQLite WASM module (sqlite3-2.9.4, 714 KB, from GitHub release)
+- `lib/data/datasources/file/audio_file_storage_native.dart` — Native (dart:io) audio storage implementation (extracted from original `audio_file_storage.dart`)
+- `lib/data/datasources/file/audio_file_storage_web.dart` — Web stub for `AudioFileStorage` — all methods no-op or throw `FileStorageException`; no `dart:io` import
+
+### Files Modified
+
+- `web/index.html` — Replaced Flutter's default page with a styled phone-frame landing page: dark navy (`#1C1B2E`) background, radial glow, CSS phone bezel with dynamic island detail, `390×844` Flutter host element, header (wordmark + tagline), tech stack chips, GitHub link
+- `lib/data/datasources/file/audio_file_storage.dart` — Converted to conditional export: `export '_native.dart' if (dart.library.html) '_web.dart'`. No `dart:io` import.
+- `lib/data/datasources/local/app_database.dart` — `createExecutor()` now branches on `kIsWeb`: web path calls `driftDatabase(name: 'modunote', web: DriftWebOptions(sqlite3Wasm, driftWorker))`, native path unchanged (`driftDatabase(name: 'modunote.db')`)
+- `lib/presentation/views/note_editor/note_editor_screen.dart` — Added `kIsWeb` guard at top of `_onMicTap()` (shows snackbar and returns); gated `_AudioClipsRow` render with `!kIsWeb`
+- `test/widget_test.dart` — Replaced stale default Flutter counter test (referenced non-existent `MyApp`) with a no-op placeholder
+- `firebase.json` — Added `hosting` section: `public: build/web`, SPA rewrites, `.wasm` Content-Type header, COOP/COEP headers for cross-origin isolation (required for drift WASM shared memory)
+- `.firebaserc` — New file: maps `default` project alias to `modunote-ba654`
+
+### Key decisions
+
+- **`drift_flutter 0.2.7` provides `DriftWebOptions`** — used the high-level `driftDatabase(name:, web: DriftWebOptions(...))` API rather than raw `WasmDatabase.open()`. Cleaner and future-proof.
+- **COOP/COEP headers** — Required for `SharedArrayBuffer` which enables drift's preferred OPFS-shared storage. Without them drift falls back to IndexedDB (still works, just slower).
+- **Audio disabled on web (Stage 1)** — `flutter_sound` records AAC to native file paths; no equivalent on web. The `_onMicTap()` web path shows an informational snackbar. Audio clips row is hidden on web.
+- **Responsive phone frame** — CSS scales the phone bezel proportionally below 460 px viewport width.
+
+### Build output
+
+`flutter build web` — 0 errors, 1 harmless font warning (CupertinoIcons from a dependency). `flutter analyze` — 0 issues. 45 files deployed.
 
 ---
 
@@ -902,6 +943,64 @@ The following documentation files were created or significantly updated after Ph
 - **After Phase 9** (navigation stable): Add **unit tests** for ViewModels and repository layer (`flutter_test`). These are pure Dart, fast, and don't break on UI refactors.
 - **After Phase 12** (feature-complete): Add **integration tests** for critical flows (`integration_test` package). Add **GitHub Actions** CI to run `flutter analyze` + `flutter test` on every push.
 - The `TESTING.md` smoke test list maps directly to future integration test cases — each numbered check is a candidate `testWidgets(...)` scenario.
+
+---
+
+## Phase 11.5 — Bug Fixes + UX Features ✅
+
+**Completed**: Post-Phase 11 polish session
+**Deliverable**: 5 bug fixes + 5 UX enhancements. `flutter analyze` = 0 issues.
+
+### Bug Fixes
+
+| # | Bug | Fix |
+|---|---|---|
+| Bug 1 | Dead-code condition `!widget.noteTagIds.contains(normInput)` in `_TagInputSheet.showCreate` compared tag name string against ID list — always false | Removed the dead condition; `showCreate` now only checks `normInput.isNotEmpty && !hasExactMatch` |
+| Bug 2 | `⋮` button in `NoteEditorScreen` wired to empty no-op `onTap: () {}` | Added `_onMoreTap()` method + `_NoteOptionsSheet` bottom sheet; `_EditorAppBar` gains `onMoreTap: VoidCallback?` param; button disabled (muted colour, null onTap) until note is persisted |
+| Bug 3 | Note list screen had no pin/archive/delete actions | Added `_SwipeableNoteCard` with `Dismissible` (swipe left = archive, swipe right = pin toggle) + long-press `_NoteActionsSheet` bottom sheet |
+| Bug 4 | `LocalNoteRepository.insert/update` returned `Future<Note>` and `togglePin` returned `Future<Note?>` — mismatched `INoteRepository` interface which declares all three as `Future<void>` | Fixed return types; removed unnecessary DB re-reads from `insert`/`update`; `togglePin` reads existing then writes new pin state |
+| Bug 5 | Settings screen only had Light/Dark tiles — ThemeMode.system was unrepresented in UI | Added third "System" tile with `Icons.brightness_auto_outlined` and a split light/dark mini-preview |
+
+### UX Enhancements (S1–S5)
+
+| # | Feature | Implementation |
+|---|---|---|
+| S1 | Swipe-to-dismiss on note cards | `Dismissible` in `_SwipeableNoteCard`; `confirmDismiss` always returns `false` (springs back); Drift stream handles card removal |
+| S2 | Note options sheet from ⋮ button | `_NoteOptionsSheet` (`_OptionsRow` × 3): Pin/Unpin, Archive, Delete. Delete triggers `AlertDialog` confirm. Archive + Delete navigate back after action. |
+| S3 | System theme tile | Third tile in `_AppearanceCard` row; 3 `Expanded` tiles with reduced padding; `_ThemeTile` now takes `_PreviewType` enum instead of `bool isDarkPreview`; System preview = split left-light / right-dark card |
+| S4 | Archive screen | New `lib/presentation/views/archive/archived_notes_screen.dart`. `ArchivedNotesScreen extends ConsumerWidget`. Swipe right = restore, swipe left = delete (with confirm dialog). Access via Settings "Archived Notes" card. Route: `/archive` (outside ShellRoute). |
+| S5 | Category/tag filter chip bar on NoteListScreen | `_FilterChipBar ConsumerWidget` below search field: "All" chip + category chips + tag chips. Backed by `NoteFilterNotifier @riverpod` Notifier. `NoteListViewModel.build()` watches `noteFilterNotifierProvider` and calls `watchAll()`, `watchByCategory()`, or `watchByTag()` accordingly. |
+
+### New Files
+
+| File | Purpose |
+|---|---|
+| `lib/presentation/viewmodels/archived_notes_view_model.dart` | `ArchivedNotesViewModel @riverpod` — `build()` → `watchArchived()`, `restore(id)`, `delete(id)` |
+| `lib/presentation/views/archive/archived_notes_screen.dart` | Archive screen — full-screen, back button, dismissible cards, empty state |
+
+### Modified Files
+
+| File | Key changes |
+|---|---|
+| `lib/data/repositories/interfaces/i_note_repository.dart` | Added `watchArchived()` and `unarchive()` abstract methods |
+| `lib/data/datasources/local/daos/notes_dao.dart` | Added `watchArchived()` and `unarchiveNote()` methods |
+| `lib/data/repositories/local/local_note_repository.dart` | Fixed `insert`/`update`/`togglePin` return types; added `watchArchived()`/`unarchive()` |
+| `lib/data/repositories/remote/firebase_note_repository.dart` | Added `watchArchived()` stub + `unarchive()` Firestore call |
+| `lib/data/repositories/synced/synced_note_repository.dart` | Added `watchArchived()` and `unarchive()` delegating to `_local` |
+| `lib/presentation/viewmodels/note_list_view_model.dart` | Added `NoteFilterType` enum, `NoteFilter` class, `NoteFilterNotifier @riverpod`; `NoteListViewModel.build()` watches filter |
+| `lib/presentation/viewmodels/note_editor_view_model.dart` | Added `togglePin()`, `archive()`, `delete()` methods |
+| `lib/presentation/widgets/mn_note_card.dart` | Added optional `onLongPress: VoidCallback?` parameter |
+| `lib/presentation/views/note_list/note_list_screen.dart` | `_DataBody` → `ConsumerWidget`; added `_SwipeableNoteCard`, `_NoteActionsSheet`, `_FilterChipBar`, `_FilterChip` |
+| `lib/presentation/views/note_editor/note_editor_screen.dart` | Bug 1 dead-code removed; `_onMoreTap()`, `_showDeleteConfirm()`, `_NoteOptionsSheet`, `_OptionsRow` added; `_EditorAppBar` gains `onMoreTap`; `_CircleIconButton.onTap` made nullable |
+| `lib/presentation/views/settings/settings_screen.dart` | 3-tile `_AppearanceCard`; `_PreviewType` enum; `_SystemMiniPreview`; `_ArchiveCard` link to `/archive` |
+| `lib/presentation/router/app_router.dart` | Added `AppRoutes.archive`; added `GoRoute` for `/archive` → `ArchivedNotesScreen` |
+
+### Build Results
+
+```
+dart run build_runner build --delete-conflicting-outputs  # 99 outputs in 27s
+flutter analyze                                           # No issues found! ✅
+```
 
 ---
 

@@ -3,11 +3,73 @@
 
 ---
 
-## Status: Phase 11 ✅ Complete. Proceed with Phase 12.
+## Status: Phase 11.5 ✅ Complete. Phase W (Web Portfolio Preview) ✅ Complete.
 
-Phase 10 (Firebase preparation + live sync extension) is fully complete. **`flutter analyze` reports 0 issues.**
+Phase 11.5 (bug fixes + UX features) is fully complete. **`flutter analyze` reports 0 issues.**
+
+Phase 10 (Firebase preparation + live sync extension) is fully complete.
 
 **`flutterfire configure` has already been run** — `lib/firebase_options.dart` contains real credentials for project `modunote-ba654`. Firebase is active. Anonymous sign-in works. No manual Firebase setup required on this machine.
+
+---
+
+## Phase W — Web Portfolio Preview ✅ Complete
+
+**Live URL**: https://modunote-ba654.web.app
+
+Flutter Web build of ModuNote deployed to Firebase Hosting. The app renders inside a phone-frame mockup (390×844) on a styled dark-navy landing page, hosted at the URL above.
+
+### What was built
+
+| File | Change |
+|---|---|
+| `lib/data/datasources/local/app_database.dart` | `createExecutor()` — `kIsWeb` branch: web uses `driftDatabase(name:'modunote', web:DriftWebOptions(...))`, native unchanged |
+| `lib/data/datasources/file/audio_file_storage.dart` | Converted to 2-line conditional export — selects `_native.dart` or `_web.dart` at compile time |
+| `lib/data/datasources/file/audio_file_storage_native.dart` | New file — original implementation (dart:io, path_provider) |
+| `lib/data/datasources/file/audio_file_storage_web.dart` | New file — web stub (no dart:io; throws FileStorageException for path methods) |
+| `lib/presentation/views/note_editor/note_editor_screen.dart` | `_onMicTap` kIsWeb guard (snackbar + return); `_AudioClipsRow` hidden on web |
+| `test/widget_test.dart` | Replaced stale Flutter counter test with `void main() {}` placeholder |
+| `web/index.html` | Phone-frame landing page (dark navy, CSS phone bezel, Dynamic Island, loading overlay, tech chips, GitHub button) |
+| `web/flutter_bootstrap.js` | Custom bootstrap with `hostElement: #flutter-host` to confine Flutter to phone frame div |
+| `web/drift_worker.dart` | New — `WasmDatabase.workerMainForOpen()` entry point |
+| `web/drift_worker.js` | New — compiled JS worker (`dart compile js -O2`) |
+| `web/sqlite3.wasm` | New — 714 KB, from sqlite3-2.9.4 GitHub release |
+| `firebase.json` | Added `hosting` section: public `build/web`, SPA rewrite, WASM MIME, COOP/COEP headers |
+| `.firebaserc` | New — maps default → `modunote-ba654` |
+
+### Key constraints
+- **Android build unchanged** — all web changes are `kIsWeb`-gated or conditional exports; native path untouched.
+- **Audio disabled on web (Stage 1)** — snackbar shown; full WebM/Opus web audio is future work.
+- **COOP/COEP headers required** — for drift's SharedArrayBuffer / WASM shared memory; set globally in firebase.json.
+
+---
+
+## What Phase 11.5 delivered
+
+**Bug fixes:**
+- **Bug 1** — Removed dead-code condition `!widget.noteTagIds.contains(normInput)` from `_TagInputSheet.showCreate` (was comparing tag name against ID list — always false).
+- **Bug 2** — Wired ⋮ button in `NoteEditorScreen` to `_onMoreTap()` + `_NoteOptionsSheet` bottom sheet (Pin/Unpin, Archive, Delete). `_CircleIconButton.onTap` made nullable; button visually muted until note is persisted.
+- **Bug 3** — `NoteListScreen` note cards wrapped in `Dismissible` (swipe left = archive, swipe right = pin toggle). Long-press opens `_NoteActionsSheet` with all three actions.
+- **Bug 4** — `LocalNoteRepository.insert/update` return type fixed from `Future<Note>` to `Future<void>`; `togglePin` fixed from `Future<Note?>` to `Future<void>`.
+- **Bug 5** — Third "System" tile added to `_AppearanceCard` in `SettingsScreen`. Now 3 tiles: Light / Dark / System.
+
+**UX features (S1–S5):**
+- **S1** — Swipe-to-dismiss on NoteListScreen cards (`Dismissible`, springs back, Drift stream handles card removal).
+- **S2** — Note options sheet from ⋮ in editor (Pin/Unpin, Archive, Delete with confirm). Archive and Delete pop the editor after action.
+- **S3** — System theme tile with split light/dark mini-preview and `Icons.brightness_auto_outlined`.
+- **S4** — Archive screen (`/archive` route, outside ShellRoute). Access from Settings → "Archived Notes" card. Swipe right = restore, swipe left = delete (with confirm). Empty state.
+- **S5** — Category/tag filter chip bar below search field on NoteListScreen. `NoteFilterNotifier @riverpod` Notifier holds filter state. `NoteListViewModel.build()` watches filter and switches between `watchAll()`, `watchByCategory()`, `watchByTag()`.
+
+**Data layer additions:**
+- `INoteRepository` — `watchArchived()` + `unarchive()` added to interface.
+- All three impls (Local, Firebase, Synced) fully implement the new methods.
+- `NoteEditorViewModel` — `togglePin()`, `archive()`, `delete()` methods added.
+
+**New files:**
+- `lib/presentation/viewmodels/archived_notes_view_model.dart`
+- `lib/presentation/views/archive/archived_notes_screen.dart`
+
+**Build:** `dart run build_runner build --delete-conflicting-outputs` — 99 outputs. `flutter analyze` — 0 issues.
 
 **DB schema is version 2** — FTS5 triggers were corrected and a migration runs automatically on first app launch after updating. The FTS index is rebuilt during migration. No data loss.
 

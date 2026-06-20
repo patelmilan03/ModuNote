@@ -29,6 +29,13 @@ class SyncedNoteRepository implements INoteRepository {
   Stream<List<Note>> watchByCategory(String categoryId) =>
       _local.watchByCategory(categoryId);
 
+  @override
+  Stream<List<Note>> watchByCategoryIds(List<String> categoryIds) =>
+      _local.watchByCategoryIds(categoryIds);
+
+  @override
+  Stream<List<Note>> watchArchived() => _local.watchArchived();
+
   // ── Single-shot reads ──────────────────────────────────────────────────────
 
   @override
@@ -47,6 +54,9 @@ class SyncedNoteRepository implements INoteRepository {
 
   @override
   Future<void> archive(String id) => _local.archive(id);
+
+  @override
+  Future<void> unarchive(String id) => _local.unarchive(id);
 
   @override
   Future<void> delete(String id) => _local.delete(id);

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -270,11 +271,16 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     await ref
         .read(noteEditorViewModelProvider(noteId: widget.noteId).notifier)
         .setCategory(newCategoryId);
+    _syncCurrentNote();
   }
 
   // ─── Recording ────────────────────────────────────────────────────────────
 
   Future<void> _onMicTap() async {
+    if (kIsWeb) {
+      _showSnackBar('Audio recording is not available in the web preview.');
+      return;
+    }
     if (_quillController == null) return;
 
     // Ensure the note is persisted before attaching an audio record.
@@ -421,6 +427,79 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
+  // ─── Note options (⋮ menu) ────────────────────────────────────────────────
+
+  Future<void> _onMoreTap() async {
+    if (_currentNote == null) return;
+    final note = _currentNote!;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _NoteOptionsSheet(
+        note: note,
+        onPin: () async {
+          Navigator.of(context).pop();
+          try {
+            await ref
+                .read(noteEditorViewModelProvider(noteId: widget.noteId)
+                    .notifier)
+                .togglePin(note.id);
+            _syncCurrentNote();
+          } catch (_) {}
+        },
+        onArchive: () async {
+          Navigator.of(context).pop();
+          try {
+            await ref
+                .read(noteEditorViewModelProvider(noteId: widget.noteId)
+                    .notifier)
+                .archive(note.id);
+          } catch (_) {}
+          if (mounted) context.pop();
+        },
+        onDelete: () {
+          Navigator.of(context).pop();
+          _showDeleteConfirm();
+        },
+      ),
+    );
+  }
+
+  void _showDeleteConfirm() {
+    if (_currentNote == null) return;
+    final noteId = _currentNote!.id;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete note?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              try {
+                await ref
+                    .read(noteEditorViewModelProvider(noteId: widget.noteId)
+                        .notifier)
+                    .delete(noteId);
+              } catch (_) {}
+              if (mounted) context.pop();
+            },
+            child: Text(
+              'Delete',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ─── Navigation ───────────────────────────────────────────────────────────
 
   Future<void> _onBack() async {
@@ -507,6 +586,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
               isDark: isDark,
               titleController: _titleController,
               onBack: _onBack,
+              onMoreTap: _currentNote != null ? _onMoreTap : null,
             ),
             Expanded(
               child: QuillEditor(
@@ -522,8 +602,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                 ),
               ),
             ),
-            // Audio clips row — appears once the note has been saved.
-            if (_currentNote != null)
+            // Audio clips row — native only (audio not supported on web).
+            if (!kIsWeb && _currentNote != null)
               _AudioClipsRow(
                 noteId: _currentNote!.id,
                 audioService: _audioService,
@@ -769,6 +849,7 @@ class _EditorAppBar extends StatelessWidget {
     required this.isDark,
     required this.titleController,
     required this.onBack,
+    this.onMoreTap,
   });
 
   final bool isDirty;
@@ -776,6 +857,7 @@ class _EditorAppBar extends StatelessWidget {
   final bool isDark;
   final TextEditingController titleController;
   final VoidCallback onBack;
+  final VoidCallback? onMoreTap;
 
   @override
   Widget build(BuildContext context) {
@@ -821,8 +903,8 @@ class _EditorAppBar extends StatelessWidget {
           const SizedBox(width: 6),
           _CircleIconButton(
             icon: Icons.more_vert,
-            color: onSurface,
-            onTap: () {},
+            color: onMoreTap != null ? onSurface : onSurface.withValues(alpha: 0.35),
+            onTap: onMoreTap,
           ),
         ],
       ),
@@ -834,12 +916,12 @@ class _CircleIconButton extends StatelessWidget {
   const _CircleIconButton({
     required this.icon,
     required this.color,
-    required this.onTap,
+    this.onTap,
   });
 
   final IconData icon;
   final Color color;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1065,6 +1147,132 @@ class _WaveformBars extends StatelessWidget {
   }
 }
 
+// ─── _NoteOptionsSheet ───────────────────────────────────────────────────────
+
+/// Bottom sheet shown from the ⋮ button in [_EditorAppBar].
+/// Offers Pin/Unpin, Archive/Restore, and Delete.
+class _NoteOptionsSheet extends StatelessWidget {
+  const _NoteOptionsSheet({
+    required this.note,
+    required this.onPin,
+    required this.onArchive,
+    required this.onDelete,
+  });
+
+  final Note note;
+  final VoidCallback onPin;
+  final VoidCallback onArchive;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? AppColors.darkCard : AppColors.lightCard;
+    final outlineStrong =
+        isDark ? AppColors.darkOutlineStrong : AppColors.lightOutlineStrong;
+    final onSurface =
+        isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface;
+    final variantColor =
+        isDark ? AppColors.darkOnSurfaceVariant : AppColors.lightOnSurfaceVariant;
+    final errorColor = Theme.of(context).colorScheme.error;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Grabber
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: outlineStrong,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+            child: Text(
+              note.title.isEmpty ? 'Untitled' : note.title,
+              style: AppTypography.plusJakartaSans(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: onSurface,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const Divider(height: 1),
+          _OptionsRow(
+            icon: note.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
+            label: note.isPinned ? 'Unpin' : 'Pin to top',
+            color: variantColor,
+            onTap: onPin,
+          ),
+          _OptionsRow(
+            icon: Icons.archive_outlined,
+            label: 'Archive',
+            color: variantColor,
+            onTap: onArchive,
+          ),
+          _OptionsRow(
+            icon: Icons.delete_outline,
+            label: 'Delete note',
+            color: errorColor,
+            onTap: onDelete,
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+class _OptionsRow extends StatelessWidget {
+  const _OptionsRow({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, size: 22, color: color),
+            const SizedBox(width: 16),
+            Text(
+              label,
+              style: AppTypography.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ─── _TagInputSheet ───────────────────────────────────────────────────────────
 
 /// Bottom sheet with a live-autocomplete text field for adding a tag.
@@ -1171,9 +1379,14 @@ class _TagInputSheetState extends ConsumerState<_TagInputSheet> {
     final normInput = _ctrl.text.normalised;
     final hasExactMatch =
         _suggestions.any((t) => t.name == normInput);
-    final showCreate = normInput.isNotEmpty &&
-        !hasExactMatch &&
-        !widget.noteTagIds.contains(normInput);
+    final showCreate = normInput.isNotEmpty && !hasExactMatch;
+
+    // All existing tags not already on this note — shown when field is empty.
+    final allTags = (ref.watch(tagListViewModelProvider).valueOrNull ?? <Tag>[])
+        .where((t) => !widget.noteTagIds.contains(t.id))
+        .toList();
+    final isSearching = normInput.isNotEmpty;
+    final displayList = isSearching ? _suggestions : allTags;
 
     return Padding(
       padding:
@@ -1264,15 +1477,28 @@ class _TagInputSheetState extends ConsumerState<_TagInputSheet> {
               ),
             ),
             const SizedBox(height: 8),
-            // Suggestion list + create option
-            if (_suggestions.isNotEmpty || showCreate)
+            // Tag list (all when empty, prefix-filtered when typing) + create option
+            if (displayList.isNotEmpty || showCreate)
               ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 220),
+                constraints: const BoxConstraints(maxHeight: 260),
                 child: ListView(
                   shrinkWrap: true,
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
                   children: [
-                    for (final tag in _suggestions)
+                    if (!isSearching && displayList.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 2, 8, 6),
+                        child: Text(
+                          'All tags',
+                          style: AppTypography.inter(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: mutedColor,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ),
+                    for (final tag in displayList)
                       _SuggestionTile(
                         tag: tag,
                         chipBg: chipBg,

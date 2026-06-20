@@ -1385,7 +1385,94 @@ Section 41:  41.1, 41.2, 41.3, 41.8, 41.9, 41.11, 41.12
 
 ---
 
+## Section 42 — Phase 11.5 Bug Fixes
+
+| # | Check | Expected |
+|---|---|---|
+| 🔴 42.1 | Open an existing note. Tap the `⋮` button in the app bar. | Options sheet appears with Pin/Unpin, Archive, Delete rows. |
+| 🔴 42.2 | In the options sheet, tap "Pin to top" / "Unpin". | Sheet dismisses; note card on home screen shows/removes pin icon. |
+| 🔴 42.3 | In the options sheet, tap "Archive". | Sheet dismisses; editor closes; note disappears from home screen. |
+| 🔴 42.4 | In the options sheet, tap "Delete note". | Sheet dismisses; AlertDialog "Delete note? This cannot be undone." appears. Confirm → editor closes; note gone from home screen and archive. |
+| 🔴 42.5 | Tap "Delete note" → tap "Cancel". | Nothing changes; editor stays open. |
+| 42.6 | Open a **brand new unsaved note** (no content typed). Tap `⋮`. | Nothing happens (button visually muted — no sheet appears until note is first auto-saved). |
+| 🔴 42.7 | Add a tag with an existing name that's already on the note. Verify that the `_TagInputSheet` does NOT show a "Create #name" tile when the name exactly matches an existing tag already present in suggestions. | "Create" tile absent when exact suggestion match; sheet shows "Use existing tag" row instead. |
+
+---
+
+## Section 43 — Phase 11.5 Note List Swipe Actions (S1 / Bug 3)
+
+| # | Check | Expected |
+|---|---|---|
+| 🔴 43.1 | Swipe a note card to the **right** (slow reveal). | Amber pin icon appears on the left background. |
+| 🔴 43.2 | Complete the swipe-right gesture. | Card springs back; note pin state toggles (pin icon appears/disappears on card). |
+| 🔴 43.3 | Swipe a note card to the **left** (slow reveal). | Red archive icon appears on the right background. |
+| 🔴 43.4 | Complete the swipe-left gesture. | Card springs back; note disappears from the list (archived). |
+| 🔴 43.5 | Long-press a note card. | `_NoteActionsSheet` bottom sheet appears with note title, Pin/Unpin, Archive, Delete. |
+| 43.6 | Long-press → tap "Pin to top". | Sheet dismisses; note moves to PINNED section. |
+| 43.7 | Long-press → tap "Archive". | Sheet dismisses; note disappears. |
+| 🔴 43.8 | Long-press → tap "Delete" → confirm. | Note permanently deleted. |
+| 43.9 | Long-press → tap "Delete" → cancel. | Note still present. |
+
+---
+
+## Section 44 — Phase 11.5 System Theme (S3 / Bug 5)
+
+| # | Check | Expected |
+|---|---|---|
+| 🔴 44.1 | Go to Settings. | Three theme tiles visible: Light, Dark, System. |
+| 🔴 44.2 | "System" tile preview. | Tile preview shows split left-light / right-dark card. |
+| 🔴 44.3 | With OS in Light mode, tap "System". | App uses light theme. Radio dot filled on System tile. |
+| 🔴 44.4 | With OS in Dark mode, tap "System". | App uses dark theme. Radio dot filled on System tile. |
+| 44.5 | Kill + restart with System selected and OS in Dark. | App boots in dark theme. System tile still selected. |
+| 44.6 | Tap "Light" then kill + restart. | App boots in light theme regardless of OS theme. |
+
+---
+
+## Section 45 — Phase 11.5 Archive Screen (S4)
+
+| # | Check | Expected |
+|---|---|---|
+| 🔴 45.1 | Go to Settings → tap "Archived Notes" card. | Archive screen opens full-screen (outside nav bar). |
+| 🔴 45.2 | Archive screen with no archived notes. | Empty state: archive icon + "No archived notes" message. |
+| 🔴 45.3 | Archive a note from the home screen. Go to Settings → Archived Notes. | Note appears in archive list. |
+| 🔴 45.4 | Swipe archived note to the **right** (reveal). | Primary-coloured restore icon appears on left. |
+| 🔴 45.5 | Complete swipe-right on archived note. | Note springs back; disappears from archive list; reappears on home screen. |
+| 🔴 45.6 | Swipe archived note to the **left** (reveal). | Red delete icon appears on right. |
+| 🔴 45.7 | Complete swipe-left → confirm in dialog. | Note permanently deleted; gone from archive and home. |
+| 45.8 | Swipe-left → tap Cancel in dialog. | Note remains in archive. |
+| 45.9 | Tap back arrow on Archive screen. | Returns to Settings screen. |
+| 45.10 | Tap an archived note card. | Note Editor opens in edit mode. Edits save normally. |
+
+---
+
+## Section 46 — Phase 11.5 Filter Chip Bar (S5)
+
+| # | Check | Expected |
+|---|---|---|
+| 🔴 46.1 | Home screen with at least one tag and one category. | Horizontal chip bar appears below the search field. |
+| 46.2 | "All" chip selected by default. | "All" chip has primary-container background; notes show all non-archived notes. |
+| 🔴 46.3 | Tap a category chip. | Chip highlights; note list filters to notes in that category only. |
+| 🔴 46.4 | Tap a tag chip. | Chip highlights; note list filters to notes with that tag only. |
+| 🔴 46.5 | Tap "All" chip while a filter is active. | Filter clears; all notes shown again. |
+| 46.6 | Chip bar with no tags and no categories. | Chip bar hidden entirely (no empty bar visible). |
+| 46.7 | Filter to a category with no notes. | Empty list (no "PINNED" or "RECENT" section headers). |
+
+---
+
+## Smoke Test — Phase 11.5 additions
+
+Add these to the quick smoke pass (~5 min):
+```
+Section 42:  42.1, 42.2, 42.3, 42.4
+Section 43:  43.1, 43.3, 43.5, 43.8
+Section 44:  44.1, 44.3, 44.4
+Section 45:  45.1, 45.3, 45.5, 45.7
+Section 46:  46.1, 46.3, 46.5
+```
+
+---
+
 ## Full Regression — ~2.5 hr
 
-Run all numbered checks in all 40 sections before tagging a release or beginning a new phase.
-Pay special attention to Sections 36–38 (Phase 9 Navigation + Theming), Sections 29–32 (ADB verification), Section 40 (Phase 10 Firebase scaffold), and Section 41 (Phase 11 backend scaffold).
+Run all numbered checks in all sections before tagging a release or beginning a new phase.
+Pay special attention to Sections 36–38 (Phase 9 Navigation + Theming), Sections 29–32 (ADB verification), Section 40 (Phase 10 Firebase scaffold), Section 41 (Phase 11 backend scaffold), and Sections 42–46 (Phase 11.5 UX features).

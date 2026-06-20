@@ -57,6 +57,31 @@ class NotesDao extends DatabaseAccessor<AppDatabase> with _$NotesDaoMixin {
         .watch();
   }
 
+  /// Streams non-archived notes belonging to any of [categoryIds] (inclusive).
+  Stream<List<NoteRow>> watchByCategoryIds(List<String> categoryIds) {
+    if (categoryIds.isEmpty) return Stream.value([]);
+    return (select(notesTable)
+          ..where((t) =>
+              t.categoryId.isIn(categoryIds) & t.isArchived.equals(false))
+          ..orderBy([
+            (t) =>
+                OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
+            (t) => OrderingTerm(
+                expression: t.updatedAt, mode: OrderingMode.desc),
+          ]))
+        .watch();
+  }
+
+  /// Streams all archived notes ordered by recency.
+  Stream<List<NoteRow>> watchArchived() {
+    return (select(notesTable)
+          ..where((t) => t.isArchived.equals(true))
+          ..orderBy([
+            (t) => OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc),
+          ]))
+        .watch();
+  }
+
   // ── Single-row queries ─────────────────────────────────────────────────────
 
   /// Returns the note with the given [id], or null if not found.
@@ -119,6 +144,13 @@ class NotesDao extends DatabaseAccessor<AppDatabase> with _$NotesDaoMixin {
         isArchived: Value(true),
         isPinned: Value(false),
       ),
+    );
+  }
+
+  /// Restores the note with [id] by setting [isArchived] = false.
+  Future<void> unarchiveNote(String id) async {
+    await (update(notesTable)..where((t) => t.id.equals(id))).write(
+      const NotesTableCompanion(isArchived: Value(false)),
     );
   }
 

@@ -92,6 +92,32 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
     await save(updated);
   }
 
+  Future<void> togglePin(String noteId) async {
+    try {
+      await ref.read(noteRepositoryProvider).togglePin(noteId);
+      final updated = await ref.read(noteRepositoryProvider).findById(noteId);
+      state = AsyncData(updated);
+    } on AppException catch (e, st) {
+      state = AsyncError(e, st);
+    }
+  }
+
+  Future<void> archive(String noteId) async {
+    try {
+      await ref.read(noteRepositoryProvider).archive(noteId);
+    } on AppException catch (e, st) {
+      state = AsyncError(e, st);
+    }
+  }
+
+  Future<void> delete(String noteId) async {
+    try {
+      await ref.read(noteRepositoryProvider).delete(noteId);
+    } on AppException catch (e, st) {
+      state = AsyncError(e, st);
+    }
+  }
+
   /// Pushes the note to Firestore via [SyncedNoteRepository.syncNote].
   /// Updates ViewModel state with the new [SyncStatus] and returns it.
   /// Called from [NoteEditorScreen._onBack] after the final local save.

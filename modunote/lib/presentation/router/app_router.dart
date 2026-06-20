@@ -12,6 +12,7 @@ import '../views/note_list/note_list_screen.dart';
 import '../views/note_editor/note_editor_screen.dart';
 import '../views/search/search_screen.dart';
 import '../views/tags/tags_screen.dart';
+import '../views/archive/archived_notes_screen.dart';
 import '../views/settings/settings_screen.dart';
 import '../widgets/mn_bottom_nav.dart';
 
@@ -25,6 +26,7 @@ abstract class AppRoutes {
   static const String search = '/search';
   static const String tags = '/tags';
   static const String settings = '/settings';
+  static const String archive = '/archive';
 
   /// Builds the edit-note path for a specific [id].
   static String editNotePath(String id) => '/note/$id';
@@ -74,6 +76,10 @@ GoRouter router(Ref ref) {
           final id = state.pathParameters['id']!;
           return NoteEditorScreen(noteId: id);
         },
+      ),
+      GoRoute(
+        path: AppRoutes.archive,
+        builder: (context, state) => const ArchivedNotesScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

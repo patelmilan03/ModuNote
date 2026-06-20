@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ModuNote — Quick-capture ideation tool for content creators. Built with Flutter, Firebase, Drift SQLite, and Riverpod.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="ModuNote">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <title>ModuNote — Portfolio Preview</title>
+  <link rel="manifest" href="manifest.json">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Real progress tracking: set up PerformanceObserver before any async scripts fire -->
+  <script>
+    (function () {
+      var _pct = 0;
+      var _done = false;
+
+      // Advance progress bar — only ever moves forward, never back
+      window._setProgress = function (pct, msg) {
+        if (_done || pct <= _pct) return;
+        _pct = pct;
+        var fill = document.getElementById('progress-fill');
+        var text = document.getElementById('loading-text');
+        if (fill) fill.style.width = pct + '%';
+        if (msg && text) text.textContent = msg;
+      };
+
+      // Watch real network events: fires when each file finishes downloading
+      if (window.PerformanceObserver) {
+        try {
+          new PerformanceObserver(function (list) {
+            list.getEntries().forEach(function (e) {
+              var n = e.name;
+              if (n.includes('flutter.js'))            window._setProgress(20, 'Loading Flutter engine…');
+              else if (n.endsWith('.wasm') && !n.includes('sqlite3')) window._setProgress(50, 'Loading Dart runtime…');
+              else if (n.includes('main.dart.js'))     window._setProgress(45, 'Downloading app bundle…');
+              else if (n.includes('sqlite3.wasm'))     window._setProgress(68, 'Loading SQLite…');
+              else if (n.includes('drift_worker'))     window._setProgress(78, 'Setting up database…');
+            });
+          }).observe({ entryTypes: ['resource'], buffered: true });
+        } catch (e) {}
+      }
+
+      // Flutter bootstrap dispatches these two events (see flutter_bootstrap.js)
+      window.addEventListener('flutter-entrypoint-loaded',  function () { window._setProgress(87, 'Starting app…'); });
+      window.addEventListener('flutter-engine-initialized', function () { window._setProgress(94, 'Rendering first frame…'); });
+
+      window.addEventListener('flutter-first-frame', function () {
+        _done = true;
+        window._setProgress(100, 'Ready');
+        setTimeout(function () {
+          var ov = document.getElementById('loading-overlay');
+          if (ov) ov.classList.add('hidden');
+        }, 300);
+      });
+    })();
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #1C1B2E;
+      --primary:     #B7AFFF;
+      --accent:      #F59E0B;
+      --accent-on:   #1C1B2E;
+      --text:        #EDECF5;
+      --text-muted:  #8A8799;
+      --chip-bg:     #33324E;
+      --chip-text:   #E4E0FF;
+      /* Pixel 8 proportions */
+      --phone-w:     393px;
+      --phone-h:     851px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 52px 24px 72px;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 700px; height: 700px;
+      background: radial-gradient(ellipse at center, rgba(91,78,255,0.13) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      margin-bottom: 44px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .wordmark {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: clamp(2.2rem, 6vw, 3rem);
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.5px;
+      line-height: 1;
+    }
+
+    .tagline {
+      margin-top: 12px;
+      font-size: 0.975rem;
+      color: var(--text-muted);
+      max-width: 380px;
+      line-height: 1.55;
+    }
+
+    /* ════════════════════════════════════════
+       PHONE FRAME — realistic Pixel 8 style
+       ════════════════════════════════════════ */
+    .phone-wrap {
+      position: relative;
+      z-index: 1;
+      flex-shrink: 0;
+    }
+
+    /*
+     * Bezel: dark glass-ceramic look with subtle metallic edge highlight.
+     * Pixel 8 uses a polished aluminum frame; we approximate with inset
+     * box-shadows that mimic a chamfered edge lit from top-left.
+     */
+    .phone-bezel {
+      border-radius: 50px;
+      padding: 14px 11px;
+      position: relative;
+      /* Layered background: slight angled sheen over near-black base */
+      background:
+        linear-gradient(155deg,
+          rgba(255,255,255,0.055) 0%,
+          rgba(255,255,255,0)     18%,
+          rgba(0,0,0,0)           55%,
+          rgba(255,255,255,0.025) 100%
+        ),
+        #0d0d18;
+      box-shadow:
+        /* Chamfered top-left edge highlight */
+        inset  1px  1px 0   rgba(255,255,255,0.14),
+        /* Chamfered bottom-right shadow */
+        inset -1px -1px 0   rgba(0,0,0,0.35),
+        /* Inner bevel top */
+        inset  0    2px 0   rgba(255,255,255,0.07),
+        /* Outer rim */
+        0 0 0 1px rgba(255,255,255,0.07),
+        /* Primary drop shadow */
+        0 40px 90px rgba(0,0,0,0.9),
+        0 18px 36px rgba(0,0,0,0.6),
+        /* Ambient purple glow from the screen */
+        0  0  50px rgba(91,78,255,0.1);
+    }
+
+    /* Volume rocker — right side, tall */
+    .phone-bezel::before {
+      content: '';
+      position: absolute;
+      right: -4px; top: 108px;
+      width: 4px; height: 78px;
+      background: linear-gradient(180deg,
+        rgba(255,255,255,0.06) 0%,
+        rgba(255,255,255,0.12) 50%,
+        rgba(255,255,255,0.06) 100%
+      );
+      border-radius: 0 3px 3px 0;
+    }
+
+    /* Power button — right side, shorter, below volume */
+    .phone-bezel::after {
+      content: '';
+      position: absolute;
+      right: -4px; top: 204px;
+      width: 4px; height: 38px;
+      background: linear-gradient(180deg,
+        rgba(255,255,255,0.06) 0%,
+        rgba(255,255,255,0.12) 50%,
+        rgba(255,255,255,0.06) 100%
+      );
+      border-radius: 0 3px 3px 0;
+    }
+
+    /*
+     * Phone screen: flex column so the status bar sits above the app area.
+     * The glass-reflection overlay sits on top as an absolutely-positioned div.
+     */
+    .phone-screen {
+      width: var(--phone-w);
+      height: var(--phone-h);
+      border-radius: 38px;
+      overflow: hidden;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Glass glint: diagonal highlight mimicking tempered screen glass */
+    .phone-glass {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(
+        128deg,
+        rgba(255,255,255,0.045) 0%,
+        rgba(255,255,255,0.015) 30%,
+        transparent             58%
+      );
+      pointer-events: none;
+      z-index: 200;
+    }
+
+    /* ── Android status bar ── */
+    .android-status-bar {
+      flex-shrink: 0;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1px;
+      position: relative;
+      z-index: 6;
+    }
+
+    .status-time { min-width: 34px; }
+
+    /* Pixel 8 punch-hole camera: centred, subtle lens ring */
+    .punch-hole {
+      position: absolute;
+      left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 38% 36%, rgba(255,255,255,0.22) 0%, transparent 48%),
+        radial-gradient(circle, #020208 0%, #000 100%);
+      box-shadow:
+        0 0 0 1.5px rgba(255,255,255,0.09),
+        0 0 0 3px   rgba(0,0,0,0.5),
+        inset 0 1px 3px rgba(0,0,0,0.95);
+    }
+
+    .status-icons {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--text);
+    }
+
+    /* ── App content area (below status bar) ── */
+    .screen-body {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #flutter-host {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ── Loading overlay ── */
+    #loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: var(--bg);
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      z-index: 5;
+      transition: opacity 0.45s ease;
+      padding: 24px;
+    }
+
+    #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+    .loader-ring {
+      width: 34px; height: 34px;
+      border: 2.5px solid rgba(183,175,255,0.16);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Real progress bar — width driven by JS */
+    .loader-bar-track {
+      width: 130px; height: 3px;
+      background: rgba(183,175,255,0.1);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .loader-bar-fill {
+      height: 100%;
+      width: 5%;           /* JS sets this */
+      background: var(--primary);
+      border-radius: 3px;
+      transition: width 0.4s ease;
+    }
+
+    .loader-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+
+    .loader-elapsed { opacity: 0.55; }
+
+    /* Error state — shown after 60 s with no first frame */
+    .loader-error {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-top: 4px;
+      text-align: center;
+    }
+
+    .loader-error-msg {
+      color: #FF6369;
+      font-size: 0.78rem;
+      line-height: 1.5;
+    }
+
+    .loader-refresh-btn {
+      background: none;
+      border: 1px solid rgba(255,99,105,0.45);
+      color: #FF6369;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 6px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .loader-refresh-btn:hover { background: rgba(255,99,105,0.1); }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 44px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .footer-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .tech-chips {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .chip {
+      background: var(--chip-bg);
+      color: var(--chip-text);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 5px 13px;
+      border-radius: 999px;
+      border: 1px solid rgba(183,175,255,0.12);
+      letter-spacing: 0.25px;
+    }
+
+    .github-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent);
+      color: var(--accent-on);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 700;
+      text-decoration: none;
+      padding: 11px 24px;
+      border-radius: 14px;
+      transition: opacity 0.15s, transform 0.15s;
+      margin-top: 4px;
+    }
+
+    .github-btn:hover  { opacity: 0.88; transform: translateY(-1px); }
+    .github-btn:active { opacity: 1;    transform: translateY(0); }
+    .github-btn svg { width: 18px; height: 18px; fill: var(--accent-on); flex-shrink: 0; }
+
+    .built-by { font-size: 0.75rem; color: var(--text-muted); margin-top: 8px; }
+    .built-by span { color: var(--primary); font-weight: 600; }
+
+    /* ── Responsive: scale frame on narrow screens ── */
+    @media (max-width: 460px) {
+      :root {
+        --phone-w: calc(100vw - 48px);
+        --phone-h: calc((100vw - 48px) * 851 / 393);
+      }
+      .phone-bezel {
+        border-radius: calc(50px  * (100vw - 48px) / 393);
+        padding: calc(14px * (100vw - 48px) / 393) calc(11px * (100vw - 48px) / 393);
+      }
+      .phone-screen { border-radius: calc(38px * (100vw - 48px) / 393); }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="wordmark">ModuNote</div>
+    <p class="tagline">Quick-capture ideation tool for content creators — Rich text, voice notes, tags &amp; Firebase sync.</p>
+  </header>
+
+  <div class="phone-wrap">
+    <div class="phone-bezel">
+      <div class="phone-screen">
+
+        <!-- Android status bar -->
+        <div class="android-status-bar">
+          <span class="status-time" id="status-time">9:41</span>
+          <div class="punch-hole" aria-hidden="true"></div>
+          <div class="status-icons" aria-hidden="true">
+            <!-- Signal bars -->
+            <svg width="13" height="11" viewBox="0 0 13 11" fill="currentColor">
+              <rect x="0"  y="5" width="3" height="6"  rx="0.8" opacity="0.4"/>
+              <rect x="5"  y="3" width="3" height="8"  rx="0.8" opacity="0.7"/>
+              <rect x="10" y="0" width="3" height="11" rx="0.8"/>
+            </svg>
+            <!-- WiFi -->
+            <svg width="14" height="11" viewBox="0 0 16 13" fill="none" stroke="currentColor" stroke-linecap="round">
+              <path d="M1 4.5C4.5 1 11.5 1 15 4.5"       stroke-width="1.7" opacity="0.4"/>
+              <path d="M3.5 7.5C5.5 5.5 10.5 5.5 12.5 7.5" stroke-width="1.7" opacity="0.7"/>
+              <path d="M6.3 10.5C7.1 9.7 8.9 9.7 9.7 10.5" stroke-width="1.7"/>
+              <circle cx="8" cy="12.5" r="1.1" fill="currentColor" stroke="none"/>
+            </svg>
+            <!-- Battery -->
+            <svg width="22" height="11" viewBox="0 0 26 12">
+              <rect x="0.75" y="0.75" width="21.5" height="10.5" rx="2.5"
+                    stroke="currentColor" stroke-width="1.4" fill="none"/>
+              <rect x="22.5" y="3.5" width="3" height="5" rx="1.2" fill="currentColor" opacity="0.55"/>
+              <rect x="2.5"  y="2.5" width="15" height="7" rx="1.5" fill="currentColor"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- App area — Flutter renders here -->
+        <div class="screen-body">
+          <div id="loading-overlay">
+            <div class="loader-ring"></div>
+            <div class="loader-bar-track">
+              <div class="loader-bar-fill" id="progress-fill"></div>
+            </div>
+            <div class="loader-meta">
+              <span id="loading-text">Starting&hellip;</span>
+              <span class="loader-elapsed">(<span id="elapsed-time">0</span>s)</span>
+            </div>
+            <div class="loader-error" id="load-error">
+              <span class="loader-error-msg">
+                Taking longer than expected.<br>
+                Check your connection or open the browser console for errors.
+              </span>
+              <button class="loader-refresh-btn" onclick="location.reload()">Refresh</button>
+            </div>
+          </div>
+          <div id="flutter-host"></div>
+        </div>
+
+        <!-- Tempered-glass reflection overlay -->
+        <div class="phone-glass" aria-hidden="true"></div>
+
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p class="footer-label">Built with</p>
+    <div class="tech-chips">
+      <span class="chip">Flutter</span>
+      <span class="chip">Dart</span>
+      <span class="chip">Firebase</span>
+      <span class="chip">Drift SQLite</span>
+      <span class="chip">Riverpod</span>
+      <span class="chip">GoRouter</span>
+      <span class="chip">FastAPI</span>
+    </div>
+    <a class="github-btn" href="https://github.com/patelmilan03/ModuNote" target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+      </svg>
+      View Source on GitHub
+    </a>
+    <p class="built-by">Built by <span>Milan Patel</span></p>
+  </footer>
+
+  <script src="flutter_bootstrap.js" async></script>
+
+  <script>
+    // Live clock
+    (function () {
+      function tick() {
+        var n = new Date();
+        var el = document.getElementById('status-time');
+        if (el) el.textContent =
+          n.getHours().toString().padStart(2,'0') + ':' +
+          n.getMinutes().toString().padStart(2,'0');
+      }
+      tick();
+      setInterval(tick, 30000);
+    })();
+
+    // Elapsed-time counter + 60 s error reveal
+    (function () {
+      var start = Date.now();
+      var done  = false;
+      window.addEventListener('flutter-first-frame', function () { done = true; });
+      setInterval(function () {
+        if (done) return;
+        var s = Math.floor((Date.now() - start) / 1000);
+        var el = document.getElementById('elapsed-time');
+        if (el) el.textContent = s;
+        if (s >= 60) {
+          var err = document.getElementById('load-error');
+          if (err) err.style.display = 'flex';
+        }
+        // Advance to 5 % immediately so the bar isn't empty while flutter.js downloads
+        if (s === 1) window._setProgress(5, 'Connecting…');
+      }, 1000);
+    })();
+  </script>
+</body>
+</html>

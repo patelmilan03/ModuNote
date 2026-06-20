@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'converters/type_converters.dart';
 export 'converters/type_converters.dart';
@@ -52,10 +53,22 @@ part 'app_database.g.dart';
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
-  /// Creates the platform-appropriate [QueryExecutor] backed by SQLite via
-  /// drift_flutter.  File name: [modunote.db].
-  static QueryExecutor createExecutor() =>
-      driftDatabase(name: 'modunote.db');
+  /// Creates the platform-appropriate [QueryExecutor].
+  /// On web: uses WASM SQLite via drift_flutter's DriftWebOptions
+  ///   (requires sqlite3.wasm + drift_worker.js in the web/ folder).
+  /// On native: uses driftDatabase() with the existing modunote.db file path.
+  static QueryExecutor createExecutor() {
+    if (kIsWeb) {
+      return driftDatabase(
+        name: 'modunote',
+        web: DriftWebOptions(
+          sqlite3Wasm: Uri.parse('sqlite3.wasm'),
+          driftWorker: Uri.parse('drift_worker.js'),
+        ),
+      );
+    }
+    return driftDatabase(name: 'modunote.db');
+  }
 
   @override
   int get schemaVersion => 2;

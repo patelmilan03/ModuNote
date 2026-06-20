@@ -40,6 +40,20 @@ class LocalNoteRepository implements INoteRepository {
         .map((rows) => rows.map(_rowToNote).toList());
   }
 
+  @override
+  Stream<List<Note>> watchByCategoryIds(List<String> categoryIds) {
+    return _notesDao
+        .watchByCategoryIds(categoryIds)
+        .map((rows) => rows.map(_rowToNote).toList());
+  }
+
+  @override
+  Stream<List<Note>> watchArchived() {
+    return _notesDao
+        .watchArchived()
+        .map((rows) => rows.map(_rowToNote).toList());
+  }
+
   // ── Single-shot reads ──────────────────────────────────────────────────────
 
   @override
@@ -71,30 +85,20 @@ class LocalNoteRepository implements INoteRepository {
   // ── Mutations ──────────────────────────────────────────────────────────────
 
   @override
-  Future<Note> insert(Note note) async {
+  Future<void> insert(Note note) async {
     try {
-      final companion = _noteToCompanion(note);
-      await _notesDao.insertNote(companion);
-      return note;
+      await _notesDao.insertNote(_noteToCompanion(note));
     } on Exception catch (e) {
-      throw DatabaseException(
-        'Failed to insert note: ${note.id}',
-        cause: e,
-      );
+      throw DatabaseException('Failed to insert note: ${note.id}', cause: e);
     }
   }
 
   @override
-  Future<Note> update(Note note) async {
+  Future<void> update(Note note) async {
     try {
-      final companion = _noteToCompanion(note);
-      await _notesDao.updateNote(companion);
-      return note;
+      await _notesDao.updateNote(_noteToCompanion(note));
     } on Exception catch (e) {
-      throw DatabaseException(
-        'Failed to update note: ${note.id}',
-        cause: e,
-      );
+      throw DatabaseException('Failed to update note: ${note.id}', cause: e);
     }
   }
 
@@ -103,10 +107,16 @@ class LocalNoteRepository implements INoteRepository {
     try {
       await _notesDao.archiveNote(id);
     } on Exception catch (e) {
-      throw DatabaseException(
-        'Failed to archive note: $id',
-        cause: e,
-      );
+      throw DatabaseException('Failed to archive note: $id', cause: e);
+    }
+  }
+
+  @override
+  Future<void> unarchive(String id) async {
+    try {
+      await _notesDao.unarchiveNote(id);
+    } on Exception catch (e) {
+      throw DatabaseException('Failed to unarchive note: $id', cause: e);
     }
   }
 
@@ -115,27 +125,18 @@ class LocalNoteRepository implements INoteRepository {
     try {
       await _notesDao.deleteNote(id);
     } on Exception catch (e) {
-      throw DatabaseException(
-        'Failed to delete note: $id',
-        cause: e,
-      );
+      throw DatabaseException('Failed to delete note: $id', cause: e);
     }
   }
 
   @override
-  Future<Note?> togglePin(String id) async {
+  Future<void> togglePin(String id) async {
     try {
       final existing = await _notesDao.findById(id);
-      if (existing == null) return null;
-      final newPinned = !existing.isPinned;
-      await _notesDao.togglePin(id, pinned: newPinned);
-      final updated = await _notesDao.findById(id);
-      return updated == null ? null : _rowToNote(updated);
+      if (existing == null) return;
+      await _notesDao.togglePin(id, pinned: !existing.isPinned);
     } on Exception catch (e) {
-      throw DatabaseException(
-        'Failed to toggle pin for note: $id',
-        cause: e,
-      );
+      throw DatabaseException('Failed to toggle pin for note: $id', cause: e);
     }
   }
 

@@ -12,6 +12,7 @@ class MNNoteCard extends StatelessWidget {
     required this.note,
     required this.onTap,
     this.tagNames = const [],
+    this.onLongPress,
   });
 
   final Note note;
@@ -19,6 +20,9 @@ class MNNoteCard extends StatelessWidget {
 
   /// Resolved tag names for [note.tagIds]. Empty list shows no chip row.
   final List<String> tagNames;
+
+  /// Optional long-press callback (e.g. opens an actions sheet).
+  final VoidCallback? onLongPress;
 
   String _timestamp() {
     final now = DateTime.now();
@@ -79,6 +83,7 @@ class MNNoteCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Container(
         decoration: BoxDecoration(
           color: cardBg,
