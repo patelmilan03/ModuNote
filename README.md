@@ -8,6 +8,10 @@ This is a portfolio/resume project developed phase-by-phase with documented arch
 
 > **Live web demo →** [modunote-ba654.web.app](https://modunote-ba654.web.app) — Flutter Web build hosted on Firebase Hosting, rendered inside a Pixel 8 phone-frame mockup. See [Web Portfolio Preview](#web-portfolio-preview) below.
 
+<p align="center">
+  <img src="image_17.png" alt="ModuNote web preview" width="420" />
+</p>
+
 ---
 
 ## What it does
