@@ -292,5 +292,53 @@ Write only what is new — do not duplicate content already in the target file. 
 8. Run `flutter run` — boots to NoteListScreen with persistent floating nav; amber `+` FAB in nav center taps to open Note Editor; scrolling content hides nav and shows amber up-arrow scroll-to-top; tap mic → recording overlay; tap Tags tab → Tags screen with density bars; tap Settings tab → theme tiles.
 9. Ask the developer which phase to proceed with before writing any code.
 10. After completing a phase, run the smoke test checks in `TESTING.md` before committing.
+11. After completing a phase, run the **Security Pre-Commit Checklist** below before staging anything.
+
+---
+
+## Security Pre-Commit Checklist
+
+Run every item before staging files for commit at the end of any phase or significant change set.
+
+### S1 — Gitignored secrets present on disk (never commit these)
+- [ ] `lib/firebase_options.dart` exists locally but is NOT staged (`git ls-files lib/firebase_options.dart` returns nothing)
+- [ ] `android/app/google-services.json` exists locally but is NOT staged
+- [ ] `android/key.properties` is NOT staged (signing config)
+- [ ] `*.jks` / `*.keystore` files are NOT staged
+- [ ] No `.env` or `.env.*` files are staged
+- [ ] `session_context.md` is NOT staged
+
+### S2 — No hardcoded secrets in source files
+- [ ] Run: `git diff --staged | grep -iE "AIza|apiKey|api_key|secretKey|secret_key|private_key|password|bearer |token"` — output must be empty (false positives for field names like `apiKeyProvider` are OK; actual string literals are not)
+- [ ] Run: `git ls-files "*.dart" | xargs grep -l "AIza"` — must return no files (Firebase Web API key pattern)
+- [ ] No hardcoded base URLs pointing to production servers in committed code (use `AppConstants` or environment variables)
+
+### S3 — Firebase config files
+- [ ] `firebase.json` contains only hosting config, COOP/COEP headers, and rewrites — no API keys (App IDs like `1:xxx:android:xxx` are public identifiers, not secrets; acceptable to commit)
+- [ ] `.firebaserc` contains only project aliases — acceptable to commit
+- [ ] `.firebase/` directory is gitignored (cache/build artifacts — `git ls-files .firebase/` must return nothing after this phase's work)
+
+### S4 — Firestore security rules
+- [ ] `firestore.rules` enforces `request.auth != null && request.auth.uid == userId` for user data paths
+- [ ] `firestore.rules` has a catch-all `allow read, write: if false` at the bottom
+- [ ] Rules have been deployed (manually in Firebase Console or via `firebase deploy --only firestore:rules`)
+
+### S5 — Android signing
+- [ ] `android/key.properties` is gitignored — verify `git ls-files android/key.properties` returns nothing
+- [ ] No release keystore passwords appear in any `build.gradle` or `build.gradle.kts` file
+
+### S6 — Repository hygiene
+- [ ] `build/` directory is NOT staged (Flutter build output)
+- [ ] `**/*.g.dart` generated files are NOT staged (Riverpod/Drift code-gen)
+- [ ] No large binary files (`.apk`, `.aab`, `.ipa`) are staged
+- [ ] `web/sqlite3.wasm` being tracked is acceptable (it is a pre-compiled public binary, not a secret)
+
+### S7 — README / docs
+- [ ] No API keys, tokens, or passwords appear in any `.md` file that will be committed
+- [ ] Live URLs in READMEs (e.g. Firebase Hosting URL) are intentional and public-safe
+
+**If any S1–S7 item fails: do not commit. Fix the issue first (add to .gitignore, remove from staging, rotate the key if it was already pushed).**
+
+---
 
 SPAWN A VERIFICATION SUBAGENT AFTER THE MAIN TASK FINISHES. SCOPE IT TO ONLY THE DART SOURCE FILES (lib/**/*.dart) THAT WERE ACTUALLY EDITED IN THE CURRENT SESSION — DO NOT PASS ANY .md FILES. THE SUBAGENT MUST READ EACH SCOPED FILE FRESH AND CHECK EACH MANDATORY RULE LINE BY LINE. IT MUST PRODUCE A CHECKLIST TABLE WITH ONE ROW PER RULE, A PASS OR FAIL STATUS, AND EXACT EVIDENCE (QUOTE + LINE NUMBER) FOR EACH ITEM. BLOCK TASK COMPLETION ON ANY FAIL RESULT. RESTRICT THE SUBAGENT TO READ-ONLY TOOLS SO IT CANNOT CHANGE ANYTHING WHILE AUDITING.

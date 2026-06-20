@@ -26,6 +26,9 @@ google-services.json
 **/android/app/google-services.json
 lib/firebase_options.dart
 
+# Firebase CLI cache — build artifacts, not source
+.firebase/
+
 # Session context — temporary file, wiped at session end
 session_context.md
 
