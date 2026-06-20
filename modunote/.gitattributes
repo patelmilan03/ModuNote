@@ -1,0 +1,9 @@
+# Tell Linguist to ignore generated/web/platform folders
+build/           linguist-generated=true
+web/             linguist-vendored=true
+ios/             linguist-vendored=true
+android/         linguist-vendored=true
+linux/           linguist-vendored=true
+macos/           linguist-vendored=true
+windows/         linguist-vendored=true
+*.g.dart         linguist-generated=true
