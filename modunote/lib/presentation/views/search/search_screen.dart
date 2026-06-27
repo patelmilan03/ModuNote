@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../data/models/note.dart';
 import '../../../data/models/tag.dart';
 import '../../router/app_router.dart';
 import '../../viewmodels/search_view_model.dart';
@@ -58,11 +59,17 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           onBack: () => context.go(AppRoutes.home),
         ),
         Expanded(
-          child: _SearchBody(
-            state: searchState,
-            tagMap: tagMap,
-            onNoteTap: (id) => context.push(AppRoutes.editNotePath(id)),
-          ),
+          child: searchState.query.isEmpty
+              ? _RecentNotes(
+                  recent: ref.watch(recentNotesProvider),
+                  tagMap: tagMap,
+                  onNoteTap: (id) => context.push(AppRoutes.editNotePath(id)),
+                )
+              : _SearchBody(
+                  state: searchState,
+                  tagMap: tagMap,
+                  onNoteTap: (id) => context.push(AppRoutes.editNotePath(id)),
+                ),
         ),
       ],
     );
@@ -209,6 +216,62 @@ class _SearchBody extends StatelessWidget {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, __) => const _SearchError(),
+    );
+  }
+}
+
+/// Shown on the Explore screen when there's no query: the most recent notes.
+class _RecentNotes extends StatelessWidget {
+  const _RecentNotes({
+    required this.recent,
+    required this.tagMap,
+    required this.onNoteTap,
+  });
+
+  final AsyncValue<List<Note>> recent;
+  final Map<String, String> tagMap;
+  final void Function(String id) onNoteTap;
+
+  List<String> _tagNames(List<String> ids) =>
+      ids.map((id) => tagMap[id]).whereType<String>().toList();
+
+  @override
+  Widget build(BuildContext context) {
+    return recent.when(
+      data: (notes) {
+        if (notes.isEmpty) return const _EmptyPrompt();
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final muted = isDark
+            ? AppColors.darkOnSurfaceMuted
+            : AppColors.lightOnSurfaceMuted;
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 150),
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10, left: 2),
+              child: Text(
+                'Recent notes',
+                style: AppTypography.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: muted,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ),
+            for (int i = 0; i < notes.length; i++) ...[
+              if (i > 0) const SizedBox(height: 10),
+              MNNoteCard(
+                note: notes[i],
+                tagNames: _tagNames(notes[i].tagIds),
+                onTap: () => onNoteTap(notes[i].id),
+              ),
+            ],
+          ],
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, __) => const _EmptyPrompt(),
     );
   }
 }

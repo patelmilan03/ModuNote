@@ -11,6 +11,18 @@
             "type": "dart"
         },
         {
+            // Debug build (same signing key as "modunote" — will NOT wipe data),
+            // but points the app at the deployed backend. The API key/URL live
+            // in the gitignored modunote/dart_defines.json (not in this file).
+            "name": "modunote (deployed API)",
+            "cwd": "modunote",
+            "request": "launch",
+            "type": "dart",
+            "toolArgs": [
+                "--dart-define-from-file=dart_defines.json"
+            ]
+        },
+        {
             "name": "modunote (profile mode)",
             "cwd": "modunote",
             "request": "launch",

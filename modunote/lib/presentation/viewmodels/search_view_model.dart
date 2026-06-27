@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../core/errors/app_exception.dart';
@@ -7,6 +8,17 @@ import '../../data/datasources/local/database_providers.dart';
 import '../../data/models/note.dart';
 
 part 'search_view_model.g.dart';
+
+/// The 5 most recent notes (by `updatedAt`), shown on the Explore screen when
+/// no search query is active. Independent of the home-screen filter.
+@riverpod
+Stream<List<Note>> recentNotes(Ref ref) {
+  return ref.watch(noteRepositoryProvider).watchAll().map((notes) {
+    final sorted = [...notes]
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return sorted.take(5).toList();
+  });
+}
 
 class SearchState {
   const SearchState({

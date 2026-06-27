@@ -238,10 +238,20 @@ A SQLite database is created automatically on first launch. The home screen will
 | 11 | Backend API scaffolding — FastAPI + PostgreSQL + SQLAlchemy async, stub AI endpoints | ✅ Complete |
 | 11.5 | Bug fixes + UX — swipe actions, note options sheet, archive screen, filter chips, system theme | ✅ Complete |
 | 11.6 | Bug fixes — hierarchical category filtering, filter bar empty state, editor category sync, tag browsing | ✅ Complete |
-| 12 | AI features — auto-tagging, note summarisation via FastAPI | ⬜ Not started |
+| 12 | AI features — Groq writing assistant → RAG QnA → observability → deployment (4-stage roadmap, via FastAPI) | 🟡 In progress |
 | W | Web portfolio preview — Flutter Web + WASM SQLite, Pixel 8 phone-frame landing page, Firebase Hosting | ✅ Complete |
 
-Architectural decisions for every completed phase are documented in [`DECISIONS.md`](modunote/DECISIONS.md).
+Chronological order: 11.5 → W → 11.6 → 12 (next).
+
+### Project documentation
+
+| File | Purpose |
+|---|---|
+| [`CLAUDE.md`](modunote/CLAUDE.md) | Architecture, conventions, file map — AI-agent entry point |
+| [`STATUS.md`](modunote/STATUS.md) | Current status, phase log, and next-phase scope |
+| [`DECISIONS.md`](modunote/DECISIONS.md) | Every architectural decision with full rationale |
+| [`TESTING.md`](modunote/TESTING.md) | Manual testing checklist (smoke + full regression) |
+| [`MODUNOTE_UI_REFERENCE.md`](modunote/MODUNOTE_UI_REFERENCE.md) | Pixel-level UI specification |
 
 ---
 

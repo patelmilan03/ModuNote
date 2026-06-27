@@ -154,18 +154,18 @@ class MNNoteCard extends StatelessWidget {
             // ── Tag chips ───────────────────────────────────────────
             if (shownTags.isNotEmpty) ...[
               const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: shownTags
-                    .map(
-                      (name) => _TagChip(
-                        label: '#$name',
-                        chipBg: chipBg,
-                        chipFg: chipFg,
-                      ),
-                    )
-                    .toList(),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (int i = 0; i < shownTags.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 4),
+                    _TagChip(
+                      label: '#${shownTags[i]}',
+                      chipBg: chipBg,
+                      chipFg: chipFg,
+                    ),
+                  ],
+                ],
               ),
             ],
           ],

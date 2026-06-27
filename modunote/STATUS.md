@@ -1,6 +1,6 @@
-# ModuNote — Project Progress
+# ModuNote — Project Status & Handoff
 
-> Updated at the end of every phase. Read this before starting any new phase.
+> Single source of truth for "what's done and what's next." Merges the former `progress.md` (phase-by-phase log) and `THREAD_HANDOFF.md` (session handoff). Updated at the end of every phase. Read this before starting any new phase.
 
 > ⚠️ **Git rule**: Claude may create and edit files on the local machine freely. Claude must never run `git commit`, `git push`, `git pull`, `git reset`, or any git command that changes repository state or interacts with GitHub. All commits and pushes are handled exclusively by the developer using GitHub Desktop.
 
@@ -37,7 +37,48 @@
 | 11 | Backend API scaffolding (FastAPI) | ✅ **Complete** | See details below |
 | 11.5 | Bug fixes + UX features (swipe cards, note options, system theme, archive screen, filter bar) | ✅ **Complete** | See details below |
 | W | Web Portfolio Preview — Flutter Web build + phone-frame landing page + Firebase Hosting deploy | ✅ **Complete** | See details below |
-| 12 | AI features | ⬜ Not started | Deferred — post full app |
+| 11.6 | Bug fixes — hierarchical category filtering, filter-bar empty state, editor category sync, tag browsing in editor | ✅ **Complete** | See "Current Status" below |
+| 12 | AI features — Groq writing assistant → RAG QnA → observability → deployment (4-stage roadmap) | 🟡 **In progress** | See `DECISIONS.md` Phase 12 + `PHASE_12_PLAN.md` |
+
+> **Chronological order of recent work:** Phase 11.5 → Phase W → Phase 11.6 → (Phase 12 next). The "W" label sorts oddly in the table but was completed between 11.5 and 11.6.
+
+---
+
+## Current Status & Next Phase
+
+**Current state (as of 2026-06-22):** Feature-complete through **Phase 11.6 + Phase W**; **Phase 12 Stage 1 (AI writing assistant) complete** (Groq via FastAPI). `flutter analyze` = **0 issues**. Live web demo: **https://modunote-ba654.web.app**
+
+**Deployment (pulled forward):** to test AI on a physical device without the laptop, the API is deployed early on **Render free tier** (no credit card; cold start defeated with a keep-warm `/health` pinger) with single static `X-API-Key` auth. Code + runbook done (`modunote-api/DEPLOY.md`, `render.yaml`, `Dockerfile`); Flutter reads `API_BASE_URL`+`API_KEY` via `--dart-define`. **Pending developer step**: create the Render service from `render.yaml` + add the pinger. See `DECISIONS.md` D12.6.
+
+### Voice/VTT redesign — live build tracker (✅ ALL STEPS COMPLETE 2026-06-22)
+> Per-step status so the work can resume cleanly across token limits. Full spec is in `session_context.md` (2026-06-22 "Voice/VTT editor redesign").
+> **Foundation ✅ DONE**: `AudioRecordingService` playback engine (`seekTo`/pause/resume + player progress sub); backend `POST /api/v1/notes/transcribe` (Groq Whisper) + `RemoteNoteService.transcribe` pending in Step C.
+
+- ✅ **Step C — VTT wiring** *(DONE 2026-06-22)*: `RemoteNoteService.transcribe()` (multipart → `/notes/transcribe`); `_stopRecording` uses on-device STT, falls back to a Whisper upload when empty, stores on `AudioRecord.transcribedText`, no longer inserts into the note body; removed `_insertTranscriptAtCursor`. `flutter analyze` = 0.
+- ✅ **Step D — Voice panel widget** *(DONE 2026-06-22)*: `_VoicePanel` (play/pause + seek bar + `current:total` timers + record button + one-at-a-time carousel; expand → transcript + Paraphrase opens the AI sheet via `_AiToolsSheet.contentOverride` + Insert-into-note + red-trash delete). Replaced `_AudioClipsRow`/`_AudioClipChip`. `_RecordingOverlay` kept for live recording feedback. `flutter analyze` = 0.
+- ✅ **Step E — Editor layout** *(DONE 2026-06-22)*: tags/category row (+ suggest banner) moved to the top under the title; bottom swaps `MNEditorToolbar` (keyboard up) ↔ `_VoicePanel` (keyboard down) via `MediaQuery.viewInsets.bottom`; removed `_MicButton` from `MNTagRow`. `flutter analyze` = 0.
+- ✅ **Step F — Delete confirm + Settings** *(DONE 2026-06-22)*: `audioDeleteConfirm` SharedPreferences-backed `@riverpod` pref (default ask) in `audio_pref_view_model.dart`; red-trash delete → confirm dialog with "Don't ask again" checkbox; `_VoiceNotesCard` Settings toggle to re-enable. `flutter analyze` = 0. **Voice/VTT redesign COMPLETE.**
+
+**Firebase:** Live. `flutterfire configure` has already been run on this machine — `lib/firebase_options.dart` holds real credentials for project `modunote-ba654` (gitignored, not the placeholder stub). Anonymous sign-in + Firestore sync work. No manual Firebase setup is needed here; a fresh clone on a new machine must run `flutterfire configure` first.
+
+### Phase 11.6 — Bug fixes (most recent completed work) ✅
+- **Hierarchical category filtering** — selecting a parent category now shows notes from all descendant categories. Added `watchByCategoryIds(List<String>)` through `NotesDao` → `INoteRepository` → all three impls (Local / Firebase stub / Synced); `NoteListViewModel._collectDescendants()` resolves the subtree client-side from the category adjacency list, then calls `watchByCategoryIds`.
+- **Filter-bar empty state** — new `_FilteredEmptyState` (`ConsumerWidget`) keeps the filter chip bar visible and shows "No notes in X" when a tag/category filter returns zero notes. Previously the whole tags/categories tray vanished. `_EmptyState` is now gated on `filter.type == NoteFilterType.all`.
+- **Editor category sync** — `_onCategoryTap` now calls `_syncCurrentNote()` after `setCategory()`, so the chosen category is reflected immediately instead of only after closing and reopening the editor.
+- **Tag browsing in editor** — the `_TagInputSheet` now watches `tagListViewModelProvider` and lists all existing tags (excluding those already on the note) when the field is empty, switching to prefix-filtered results as you type. Previously it only offered to create a new tag.
+
+### Next phase — Phase 12: AI features (in planning)
+Direction locked: **full 4-stage roadmap**, first feature **via the FastAPI backend** (`modunote-api/`), provider **Groq** (switched from Gemini on 2026-06-22 — Gemini's free tier blocked testing; see `DECISIONS.md` D12.2).
+
+1. **Stage 1 — Writing assistant** ✅ *complete (2026-06-22)*: Groq-powered Improve / Humanize / Paraphrase / Format-as-script / Critique + Summarise, tag-aware. Flutter (`RemoteNoteService`) → FastAPI → Groq; never blocks save.
+   - ✅ Backend (`modunote-api/`): `services/ai_service.py` (Groq `AsyncGroq`), AI models in `models/note.py`, live `/api/v1/notes/{id}/{assist,tags/suggest,summary}`. **Developer confirmed it works** with a real `GROQ_API_KEY`.
+   - ✅ Flutter: `quill_extensions.dart` (Delta→plaintext), `RemoteNoteService.assist` + `existingTags`, `remoteNoteServiceProvider`; editor UI — `_TagSuggestBanner` (auto-suggest once when content ≥15 chars & untagged, dismissible) + `_AiToolsSheet` from the ⋮ "AI assist" (Insert / Replace / Copy; Summarise → top blockquote). `flutter analyze` = 0.
+   - ⬜ **NEXT**: Stage 2 — RAG QnA (pgvector + local `sentence-transformers` embeddings + dedicated QnA screen). First task: push plain-text of study/notes-tagged notes to the backend. See `PHASE_12_PLAN.md` Stage 2.
+2. **Stage 2 — RAG QnA**: ingest notes tagged study/notes → chunk → embed (local `sentence-transformers`, since Groq has no embeddings) → **pgvector** in the existing Postgres → retrieval-augmented answers with citations. Requires pushing plain-text note content to the backend (the one new sync design).
+3. **Stage 3 — Observability & evals**: Langfuse tracing, Sentry error monitoring, RAGAS / LLM-as-judge evals, light guardrails (start with Pydantic + basic checks).
+4. **Stage 4 — Production deployment** (scope = "deploy," not "billed SaaS"): small VM + Caddy (auto-TLS) + GitHub Actions CI/CD + monitoring.
+
+Full decisions and rationale live in **`DECISIONS.md` → Phase 12**. The detailed, step-by-step build spec for all four stages (with per-stage task checklists to tick as you go) is in **`PHASE_12_PLAN.md`** — the standing plan any new thread follows.
 
 ---
 
@@ -93,7 +134,7 @@
 - `build.yaml` — Riverpod generator + Drift codegen config
 - `.gitignore` — excludes `*.g.dart`, build/, Android local config
 - `CLAUDE.md` — AI agent context (architecture, conventions, phase status)
-- `progress.md` — this file
+- `STATUS.md` (formerly `progress.md`) — this file
 
 #### `lib/`
 - `main.dart` — `WidgetsFlutterBinding.ensureInitialized()` + `ProviderScope` + `runApp`
@@ -790,7 +831,7 @@ Expected: App boots identically to Phase 9. All note operations still go through
 **Completed**: Phase 10 Extension
 **Deliverable**: Live anonymous Firebase Authentication + Firestore sync wired through the existing seam. Notes sync to Firestore on note-close and on app-background. `_SaveBadge` extended to 4 states. `flutter analyze` = 0 issues.
 
-Key changes (full detail in `THREAD_HANDOFF.md`):
+Key changes (the former `THREAD_HANDOFF.md` detail is now merged into this file):
 - `firebase_auth: ^5.7.0` added to `pubspec.yaml` (resolved: 5.7.0)
 - `lib/services/auth/firebase_auth_service.dart` — singleton, `signInAnonymously()` (idempotent)
 - `lib/main.dart` — `Firebase.initializeApp()` + `FirebaseAuthService().signInAnonymously()` in try-catch before `runApp`

@@ -8,7 +8,7 @@
 > Every time a new decision is introduced, append it to the relevant phase section.
 >
 > **Reading order**: Read this file alongside `CLAUDE.md` (architecture overview)
-> and `progress.md` (phase-by-phase file log). All three together form complete context.
+> and `STATUS.md` (phase-by-phase log + current status + next-phase scope). All three together form complete context.
 
 ---
 
@@ -546,6 +546,36 @@ When `DEV_MODE=true`, `verify_token` returns the string `"dev-user-local"` witho
 
 ---
 
+## Phase 11.5 — Bug Fixes + UX Features ✅ Complete
+
+### Decisions Made
+
+**D11.5a — Swipe-to-dismiss on note cards springs back (no real dismissal)**
+`NoteListScreen` cards are wrapped in `Dismissible`: swipe left = archive, swipe right = toggle pin. `confirmDismiss` returns `false` so the card springs back; the underlying Drift stream removes/reorders it on the next emission. This avoids dismissal animations fighting the reactive list.
+
+**D11.5b — Note options sheet from the editor ⋮ button**
+The ⋮ button in `NoteEditorScreen` opens `_NoteOptionsSheet` (Pin/Unpin, Archive, Delete-with-confirm). `_CircleIconButton.onTap` made nullable; the button is muted until the note is first persisted. Archive and Delete pop the editor after the action.
+
+**D11.5c — Long-press on a list card opens `_NoteActionsSheet`**
+Mirrors the editor options sheet for the list screen — same three actions.
+
+**D11.5d — `INoteRepository` gains `watchArchived()` + `unarchive()`**
+Added to the interface and implemented in all three impls (Local, Firebase stub, Synced). `NoteEditorViewModel` gains `togglePin()`, `archive()`, `delete()`.
+
+**D11.5e — Archive screen at `/archive`, outside the ShellRoute**
+`ArchivedNotesScreen` + `ArchivedNotesViewModel`. Reached from Settings → "Archived Notes". Swipe right = restore, swipe left = delete-with-confirm. Own empty state. Full-screen push, not a shell tab.
+
+**D11.5f — System theme exposed as a third tile**
+`_AppearanceCard` in `SettingsScreen` now has Light / Dark / System tiles. System uses `Icons.brightness_auto_outlined` with a split light/dark mini-preview. `ThemeMode.system` was already the default (D1.5); this surfaces it.
+
+**D11.5g — Category/tag filter chip bar on the home screen**
+`NoteFilterNotifier` (`@riverpod Notifier<NoteFilter>`) holds the active filter (all / category / tag). `NoteListViewModel.build()` watches it and switches between `watchAll()`, `watchByCategory()`, and `watchByTag()`.
+
+**D11.5h — `LocalNoteRepository` write methods return `Future<void>`**
+`insert`/`update` corrected from `Future<Note>` to `Future<void>`; `togglePin` from `Future<Note?>` to `Future<void>` — matching the interface.
+
+---
+
 ## Phase W — Web Portfolio Preview ✅ Complete
 
 ### Implementation Decisions
@@ -579,30 +609,74 @@ GoRouter uses URL-based navigation; all paths (e.g. `/search`, `/tags/`) must se
 
 ---
 
-## Phase 12 — AI Features ⬜ Not Started
+## Phase 11.6 — Bug Fixes (filter + editor) ✅ Complete
 
-### Pre-Decided Architecture
+### Decisions Made
 
-**D12.1 — AI features are strictly post-full-app**
-No AI feature is built until Phases 1–11 are complete and the app is fully functional. This decision is final. Do not move AI features earlier under any circumstances.
+**D11.6a — Hierarchical category filtering via client-side descendant resolution**
+Selecting a parent category must show notes from the whole subtree. Added `NotesDao.watchByCategoryIds(List<String>)` (Drift `isIn()` filter), surfaced through `INoteRepository` and all three impls. `NoteListViewModel._collectDescendants(all, rootId)` runs an iterative BFS over the category adjacency list to collect the root + all descendant ids, then calls `watchByCategoryIds`. Descendant resolution lives in the ViewModel (not SQL) because the adjacency list is already streamed via `categoryTreeViewModelProvider`; a recursive SQL CTE adds complexity for no benefit at this scale.
 
-**D12.2 — Two AI features in scope for Phase 12**
-Priority order:
-1. **Smart auto-tagging**: After a note is saved, the API analyses the content and suggests up to 5 tags. The user sees a "Suggested tags" prompt and can accept or dismiss each one.
-2. **Note summarisation**: A "Summarise" action in the note editor's overflow menu sends the note to the API and inserts a summary blockquote at the top of the Quill document.
+**D11.6b — `_FilteredEmptyState` keeps the filter bar visible on empty results**
+Previously a filter returning zero notes fell through to `_EmptyState` (no chips), so the whole tray vanished and felt broken. Fix: `_EmptyState` is now gated on `filter.type == NoteFilterType.all`; any active filter with zero results renders `_FilteredEmptyState` (`ConsumerWidget`) — search field + `_FilterChipBar` + a centered "No notes in [name]" message.
 
-**D12.3 ⚠️ PENDING: AI provider selection**
-Two candidates under evaluation:
-- **Google Gemini API** (free tier: 15 requests/min, 1M tokens/day as of planning). Advantage: free, multimodal for future image notes.
-- **Groq API** (free tier: fast inference on Llama/Mixtral). Advantage: very fast, good for real-time suggestions.
+**D11.6c — Editor category selection syncs immediately**
+`_onCategoryTap` now calls `_syncCurrentNote()` after `setCategory()`, re-reading the ViewModel so `_currentNote.categoryId` reflects the change without closing/reopening the editor. Same `_syncCurrentNote()` pattern already used after tag add/remove (D5.7).
 
-This decision is made at the start of Phase 12 after evaluating current free-tier limits and response quality. Update this file when resolved.
+**D11.6d — Tag picker browses existing tags when the field is empty**
+`_TagInputSheet` (`ConsumerStatefulWidget`) now watches `tagListViewModelProvider` in `build()` and lists all tags not already on the note (under an "All tags" subheader) when the input is empty, switching to prefix-filtered `_suggestions` as the user types. Previously the sheet only offered to create a new tag, hiding existing ones.
 
-**D12.4 — AI calls are fire-and-forget from the UI perspective**
-The user does not wait for AI tagging. After saving a note, the AI call is made in the background. If it succeeds, suggested tags appear as a dismissible banner. If it fails (no internet, API error), it fails silently — the note is already saved correctly. Never block the save flow on AI response.
+---
 
-**D12.5 — AI features are isolated in the backend service layer**
-All AI logic lives in the FastAPI backend (`services/ai_service.py`). The Flutter app never calls an AI provider directly. This means the AI provider can be swapped at the backend without any Flutter code change.
+## Phase 12 — AI Features 🟡 In Planning
+
+> **Direction locked**: full **4-stage roadmap**, first feature **via the FastAPI backend** (`modunote-api/`), provider **Groq** (switched from Gemini on 2026-06-22 — see D12.2). Supersedes the earlier "two features, provider TBD" plan, preserved under "Superseded" below per the file's never-delete rule.
+
+### Resolved Decisions
+
+**D12.1 — AI features are strictly post-full-app** *(unchanged)*
+No AI feature is built until Phases 1–11 + W are complete and the app is fully functional. ✅ Satisfied as of Phase 11.6.
+
+**D12.2 — Provider: Groq** *(resolves PD-02; switched from Gemini 2026-06-22)*
+Chat/text generation runs on **Groq** (default model `llama-3.3-70b-versatile`) via the official `groq` Python SDK (OpenAI-compatible). Chosen because Gemini's free tier proved unusable in practice for this developer — requests failed before any real testing — whereas Groq offers a generous, fast free tier. The provider logic is isolated in `services/ai_service.py`, so this swap touched only that file + `config.py` + `requirements.txt` — no Flutter changes (the payoff of the backend-routed architecture, D12.3).
+*Embeddings (Stage 2 RAG)*: Groq has no first-party embedding model, so Stage 2 will use **local `sentence-transformers`** (e.g. `all-MiniLM-L6-v2`, 384-dim) in the FastAPI process — free, no quota, no second key. Alternatives if a hosted embedder is preferred: Mistral (`mistral-embed`) or Cohere (`embed-v3`).
+*Superseded rationale (Gemini)*: originally chosen for its free tier + first-party embeddings; dropped after the free tier blocked testing. ⚠️ Free-tier limits change — verify Groq quotas at https://console.groq.com.
+
+**D12.3 — Architecture: route AI through the FastAPI backend, not direct from Flutter** *(resolves the build-path fork)*
+The existing `modunote-api/` scaffold (FastAPI + PostgreSQL + SQLAlchemy async) is activated. Flutter's `RemoteNoteService` calls the backend; the backend calls the LLM provider (Groq). Chosen over direct-from-Flutter because Stages 2–4 (RAG, observability, deployment) all require the backend regardless — routing Stage 1 through it from the start avoids throwaway work and keeps the API key server-side. Also matches the developer's existing Python/FastAPI strength.
+
+**D12.4 — AI calls never block the save/UI flow** *(unchanged in spirit; renumbered)*
+Local Drift auto-save remains authoritative. AI calls fire asynchronously after a save completes. Failure (no internet, API error, rate limit) is silent and non-fatal — the note is already saved. All HTTP errors wrapped in `RemoteServiceException` (D11.9).
+
+**D12.5 — UX & scope resolutions (2026-06-22)**
+- **Stage 1 presentation**: *both* — auto-tag suggestions as a dismissible banner + a bottom sheet for the text-rewrite actions (Improve/Humanize/Paraphrase/Script/Critique + Summarise).
+- **Stage 2 QnA**: a *dedicated QnA screen* with its own route + nav entry (not a Search-screen mode).
+- **Backend auth/scope**: *single-user* — `DEV_MODE` bypass locally, one static API key (`X-API-Key`) once deployed. No multi-tenant accounts or per-user JWT.
+- The full step-by-step build spec for all four stages, with per-stage task checklists, lives in **`PHASE_12_PLAN.md`** — the standing plan all threads follow.
+
+**D12.6 — Deployment pulled forward; Render free tier (2026-06-22)**
+Stage 4 deployment is done right after Stage 1 (not last) so a physical device can reach the API without the laptop. Hosting: **Render free web service** — chosen over a free VM because Render needs **no credit card** (the developer will not put financial info on a portfolio project), deploys straight from the GitHub repo, and auto-redeploys on push. Render free spins down after ~15 min idle; the cold start (which previously failed a live demo) is defeated with a **keep-warm pinger** (cron-job.org / UptimeRobot hitting the unauthenticated `/health` every ~10 min) — fits within Render's 750 free instance-hours/month for one service. Auth: a single static `API_KEY` in the `X-API-Key` header when `DEV_MODE=false`; the Flutter app supplies `API_BASE_URL` + `API_KEY` via `--dart-define` so neither is committed. Config: `render.yaml` Blueprint (secrets `sync:false`). Runbook: `modunote-api/DEPLOY.md`. *(Superseded mid-session: an earlier GCP-VM + Tailscale-Funnel plan was dropped because GCP/Oracle require card verification.)*
+
+### The 4-Stage Roadmap
+
+**Stage 1 — Writing assistant** (the first feature)
+- *Backend*: `services/ai_service.py` (new) calls Groq; expose actions under the note endpoints (extend the existing `tags/suggest` + `summary` stubs, or add `/api/v1/notes/{id}/assist`). The first Alembic migration is generated here (`alembic revision --autogenerate`).
+- *Actions* — a fixed menu, each a prompt template (NOT an autonomous agent): **Improve**, **Humanize**, **Paraphrase**, **Format-as-script**, **Critique**. The note's tags are passed as context so advice adapts (e.g. `#youtube` vs `#instagram`).
+- *Flutter*: `RemoteNoteService` gets real calls (remove the 501 stubs); results shown in a suggestion/diff UI with accept-or-dismiss. The original auto-tagging (suggested-tags banner) and summarisation (blockquote insert at top of the Quill doc) fold in here as two of the actions.
+
+**Stage 2 — RAG QnA backend**
+- For notes tagged study/notes: chunk → embed (local `sentence-transformers`, e.g. `all-MiniLM-L6-v2`) → store in **pgvector** (add the extension to the existing Postgres — do NOT introduce Chroma; one database is simpler and production-credible) → top-k similarity retrieval → Groq answers **with citations**.
+- *New design dependency*: notes are currently local-first and only *written* to Firestore — the backend never sees note text. Stage 2's first task is a sync extension that pushes plain-text content of selected (study/notes-tagged) notes to the backend for indexing.
+
+**Stage 3 — Observability & evals**
+- **Langfuse** (trace every LLM call: prompt / tokens / latency / cost), **Sentry** (FastAPI error monitoring — add early, it's ~5 lines), **RAGAS / LLM-as-judge** (faithfulness + relevance scoring of RAG answers), and **light guardrails** (start with Pydantic validation + basic input/output checks before reaching for a framework like Guardrails AI / NeMo).
+
+**Stage 4 — Production deployment** (scope = "deploy," NOT "billed SaaS")
+- Small VM (Hetzner / DigitalOcean / Fly.io) + **Caddy** reverse proxy (automatic HTTPS/TLS) + Docker Compose + **GitHub Actions** CI/CD + monitoring (Langfuse + Sentry + an uptime check). Multi-tenancy and billing are explicitly out of scope unless the developer later chooses to productise — that is a separate, much larger effort.
+
+### Superseded (kept for history)
+- *Old D12.2* ("two AI features in scope: auto-tagging + summarisation") → folded into **Stage 1**; the roadmap expanded to 4 stages.
+- *Old D12.3 / PD-02* ("AI provider pending — Gemini vs Groq") → **Resolved: Groq** (Gemini tried first, then dropped — see D12.2).
+- *Old D12.5* ("all AI logic lives in the backend service layer; Flutter never calls a provider directly") → retained and reaffirmed as the new **D12.3**.
 
 ---
 
@@ -664,6 +738,10 @@ Never deviate from these values. They are pixel-specified in the design system.
 | BUG-22 | Phase 8: `_selectedCategoryName()` fallback used `const Category(id: '', name: 'root', sortOrder: 0, createdAt: null)`. But `Category.createdAt` is declared `required DateTime createdAt` (non-nullable) — passing `null` is a compile error. Caught immediately when verifying the `Category` model before `flutter analyze` would have caught it. | 8 | ✅ Fixed | Rewrote `_selectedCategoryName()` to use `.where((c) => c.id == _selectedId)` and check `.isEmpty` — no fallback `Category` object needed. |
 | BUG-23 | Phase 9: `sort_child_properties_last` lint error in `app_router.dart` ShellRoute builder. Initial call was `_AppShell(child: child, location: state.uri.path)` — Flutter lint requires `child:` to be the last named parameter. Flagged by `flutter analyze` (1 issue). | 9 | ✅ Fixed | Reordered to `_AppShell(location: state.uri.path, child: child)`. Rule applies to all widget constructors — `child:` and `children:` must always be last. |
 | BUG-24 | Post-Phase-9: `BottomBarThemeData` v2.0.0 has no `iconData` or `iconColor` fields. Initial implementation tried to use `BottomBarThemeData(iconData: ..., iconColor: ...)` to customise the scroll-to-top icon. Both fields are undefined — `flutter analyze` reported 2 errors. | 9 | ✅ Fixed | Removed `iconData`/`iconColor` from `BottomBarThemeData`. Used `icon: (w, h) => Icon(...)` builder parameter directly on `BottomBar` for icon customisation. Styled `iconDecoration` (background) via `BottomBarThemeData.iconDecoration` (which does exist). |
+| BUG-25 | Selecting a parent category on the home screen showed only notes assigned to that exact category, not its descendants — hierarchical filtering was missing. `NotesDao.watchByCategory` used `categoryId.equals(id)`. | 11.6 | ✅ Fixed | Added `watchByCategoryIds(isIn(ids))` through DAO → interface → all 3 impls; `NoteListViewModel._collectDescendants()` resolves the subtree (D11.6a). |
+| BUG-26 | Tapping a tag/category filter that matched zero notes made the entire filter chip tray disappear — the screen fell through to `_EmptyState` (no chips). | 11.6 | ✅ Fixed | Gated `_EmptyState` on `NoteFilterType.all`; added `_FilteredEmptyState` that keeps the chip bar + shows "No notes in X" (D11.6b). |
+| BUG-27 | Choosing a category in the note editor did not visibly update until the editor was closed and reopened — `_currentNote` stayed stale after `setCategory()`. | 11.6 | ✅ Fixed | Added `_syncCurrentNote()` after `setCategory()` in `_onCategoryTap` (D11.6c). |
+| BUG-28 | The editor tag picker only allowed creating new tags — existing tags were never listed, so the user couldn't reuse them. | 11.6 | ✅ Fixed | `_TagInputSheet` now watches `tagListViewModelProvider` and lists all not-yet-applied tags when the field is empty (D11.6d). |
 
 ---
 
@@ -672,7 +750,7 @@ Never deviate from these values. They are pixel-specified in the design system.
 | ID | Decision | Phase to resolve | Options |
 |---|---|---|---|
 | PD-01 | Category deletion policy when children exist | 8 ✅ Resolved | **Re-parent children to grandparent** (cascade rejected — see D8.4) |
-| PD-02 | AI provider selection | 12 | Google Gemini free tier / Groq API |
+| PD-02 | AI provider selection | 12 ✅ Resolved | **Groq** (chat) — generous/fast free tier; Gemini tried first but its free tier blocked testing. Stage 2 embeddings via local sentence-transformers. See D12.2 |
 
 ---
 

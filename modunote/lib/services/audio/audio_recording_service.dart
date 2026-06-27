@@ -34,6 +34,9 @@ class AudioRecordingService {
       await _recorder.setSubscriptionDuration(
         const Duration(milliseconds: 100),
       );
+      await _player.setSubscriptionDuration(
+        const Duration(milliseconds: 100),
+      );
       _initialized = true;
     } on Exception catch (e) {
       throw FileStorageException('Failed to open audio services', cause: e);
@@ -127,8 +130,39 @@ class AudioRecordingService {
   }
 
   bool get isPlaying => _player.isPlaying;
+  bool get isPaused => _player.isPaused;
 
-  /// Stream of playback position updates (for progress indicators).
+  /// Pauses the current playback, keeping the position.
+  Future<void> pausePlayback() async {
+    _assertInitialized();
+    try {
+      await _player.pausePlayer();
+    } on Exception catch (e) {
+      throw FileStorageException('Failed to pause playback', cause: e);
+    }
+  }
+
+  /// Resumes a paused playback.
+  Future<void> resumePlayback() async {
+    _assertInitialized();
+    try {
+      await _player.resumePlayer();
+    } on Exception catch (e) {
+      throw FileStorageException('Failed to resume playback', cause: e);
+    }
+  }
+
+  /// Seeks the current playback to [position].
+  Future<void> seekTo(Duration position) async {
+    _assertInitialized();
+    try {
+      await _player.seekToPlayer(position);
+    } on Exception catch (e) {
+      throw FileStorageException('Failed to seek playback', cause: e);
+    }
+  }
+
+  /// Stream of playback position updates (for progress indicators / seek bar).
   Stream<PlaybackDisposition>? get playbackStream => _player.onProgress;
 
   // ─── Internal ─────────────────────────────────────────────────────────────

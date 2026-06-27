@@ -16,8 +16,6 @@ class MNTagRow extends StatelessWidget {
     required this.onRemoveTag,
     required this.onAddTagTap,
     required this.onCategoryTap,
-    required this.onMicTap,
-    required this.isRecording,
     this.maxTagsReached = false,
   });
 
@@ -27,8 +25,6 @@ class MNTagRow extends StatelessWidget {
   final void Function(String tagId) onRemoveTag;
   final VoidCallback onAddTagTap;
   final VoidCallback onCategoryTap;
-  final VoidCallback onMicTap;
-  final bool isRecording;
   final bool maxTagsReached;
 
   @override
@@ -72,12 +68,6 @@ class MNTagRow extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          _MicButton(
-            isRecording: isRecording,
-            onTap: onMicTap,
-            isDark: isDark,
           ),
         ],
       ),
@@ -253,59 +243,3 @@ class _AddTagChip extends StatelessWidget {
   }
 }
 
-class _MicButton extends StatelessWidget {
-  const _MicButton({
-    required this.isRecording,
-    required this.onTap,
-    required this.isDark,
-  });
-
-  final bool isRecording;
-  final VoidCallback onTap;
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    final primaryContainer = isDark
-        ? AppColors.darkPrimaryContainer
-        : AppColors.lightPrimaryContainer;
-    final onPrimaryContainer = isDark
-        ? AppColors.darkOnPrimaryContainer
-        : AppColors.lightOnPrimaryContainer;
-    final recordRed =
-        isDark ? AppColors.darkRecordRed : AppColors.lightRecordRed;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: isRecording ? recordRed : primaryContainer,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: isRecording
-              ? [
-                  BoxShadow(
-                    color: recordRed.withValues(alpha: 0.15),
-                    blurRadius: 0,
-                    spreadRadius: 4,
-                  ),
-                ]
-              : null,
-        ),
-        child: isRecording
-            ? Center(
-                child: Container(
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              )
-            : Icon(Icons.mic, size: 20, color: onPrimaryContainer),
-      ),
-    );
-  }
-}

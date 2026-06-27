@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/extensions/quill_extensions.dart';
 import '../../../core/extensions/string_extensions.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -17,8 +19,10 @@ import '../../../data/models/audio_record.dart';
 import '../../../data/models/note.dart';
 import '../../../data/models/tag.dart';
 import '../../../services/audio/audio_recording_service.dart';
+import '../../../services/remote/remote_note_service_provider.dart';
 import '../../../services/speech/speech_to_text_service.dart';
 import '../../viewmodels/audio_editor_view_model.dart';
+import '../../viewmodels/audio_pref_view_model.dart';
 import '../../viewmodels/category_tree_view_model.dart';
 import '../../viewmodels/note_editor_view_model.dart';
 import '../../viewmodels/tag_list_view_model.dart';
@@ -72,6 +76,11 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   Timer? _recordTimer;
   bool _isRecording = false;
   int _recordSeconds = 0;
+
+  // ─── AI tag suggestions (Stage 1) ─────────────────────────────────────────
+  List<String> _tagSuggestions = const [];
+  bool _tagSuggestFetched = false;
+  bool _tagSuggestDismissed = false;
 
   @override
   void dispose() {
@@ -129,6 +138,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _contentSubscription =
         _quillController!.document.changes.listen((_) => _scheduleAutoSave());
     _titleController.addListener(_onTitleChanged);
+
+    _maybeAutoSuggestTags(note);
   }
 
   // ─── Auto-save ────────────────────────────────────────────────────────────
@@ -188,6 +199,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     }
 
     if (mounted) setState(() => _isDirty = false);
+    _maybeAutoSuggestTags(_currentNote);
   }
 
   // ─── Tag handling ─────────────────────────────────────────────────────────
@@ -242,6 +254,149 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         .read(noteEditorViewModelProvider(noteId: widget.noteId))
         .valueOrNull;
     if (vmNote != null) setState(() => _currentNote = vmNote);
+  }
+
+  // ─── AI assist (Stage 1) ──────────────────────────────────────────────────
+
+  /// Resolves human-readable tag names from tag ids via the tag list VM.
+  List<String> _resolveTagNames(List<String> tagIds) {
+    if (tagIds.isEmpty) return const [];
+    final all = ref.read(tagListViewModelProvider).valueOrNull ?? <Tag>[];
+    final byId = {for (final t in all) t.id: t.name};
+    return [for (final id in tagIds) if (byId[id] != null) byId[id]!];
+  }
+
+  /// Fetches AI tag suggestions once for a note that has enough content but no
+  /// tags yet. Cost-bounded: fires at most once per editor session, and never
+  /// after the banner is dismissed.
+  void _maybeAutoSuggestTags(Note? note) {
+    if (note == null || _tagSuggestFetched || _tagSuggestDismissed) return;
+    if (note.tagIds.isNotEmpty) return;
+    if (plainTextFromDelta(note.content).length < 15) return;
+    _tagSuggestFetched = true;
+    _fetchTagSuggestions(note);
+  }
+
+  Future<void> _fetchTagSuggestions(Note note) async {
+    try {
+      final tags = await ref.read(remoteNoteServiceProvider).suggestTags(
+            noteId: note.id,
+            title: note.title,
+            content: plainTextFromDelta(note.content),
+            existingTags: _resolveTagNames(note.tagIds),
+          );
+      if (mounted && tags.isNotEmpty) {
+        setState(() => _tagSuggestions = tags);
+      }
+    } catch (_) {
+      // Silent — tag suggestions are a non-critical enhancement.
+    }
+  }
+
+  Future<void> _acceptSuggestedTag(String name) async {
+    if (_currentNote == null) return;
+    if (_currentNote!.tagIds.length >= AppConstants.maxTagsPerNote) {
+      _showSnackBar('Maximum ${AppConstants.maxTagsPerNote} tags per note');
+      return;
+    }
+    final normalised = name.normalised;
+    if (normalised.isEmpty) return;
+    setState(() =>
+        _tagSuggestions = _tagSuggestions.where((t) => t != name).toList());
+    try {
+      final notifier = ref.read(tagListViewModelProvider.notifier);
+      final tag =
+          await notifier.findByName(normalised) ?? await notifier.insert(normalised);
+      if (_currentNote!.tagIds.contains(tag.id)) return;
+      await ref
+          .read(noteEditorViewModelProvider(noteId: widget.noteId).notifier)
+          .addTag(tag.id);
+      _syncCurrentNote();
+    } catch (_) {}
+  }
+
+  Future<void> _onAiAssist() async {
+    if (_currentNote == null || _quillController == null) return;
+    if (plainTextFromDelta(_currentNote!.content).isEmpty) {
+      _showSnackBar('Write something first');
+      return;
+    }
+    // Persist latest edits before sending content to the backend.
+    if (_isDirty) {
+      _debounce?.cancel();
+      await _performAutoSave();
+    }
+    if (!mounted || _currentNote == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AiToolsSheet(
+        note: _currentNote!,
+        tagNames: _resolveTagNames(_currentNote!.tagIds),
+        onInsert: _aiInsertAtCursor,
+        onReplace: _aiReplaceDocument,
+        onInsertSummary: _aiInsertSummaryBlockquote,
+      ),
+    );
+  }
+
+  void _aiInsertAtCursor(String text) {
+    if (_quillController == null) return;
+    final docLen = _quillController!.document.length;
+    var idx = _quillController!.selection.baseOffset;
+    if (idx < 0 || idx > docLen - 1) idx = docLen - 1;
+    final insertText = '\n${text.trim()}\n';
+    _quillController!.document.insert(idx, insertText);
+    _quillController!.updateSelection(
+      TextSelection.collapsed(offset: idx + insertText.length),
+      ChangeSource.local,
+    );
+    _scheduleAutoSave();
+  }
+
+  void _aiReplaceDocument(String text) {
+    if (_quillController == null) return;
+    final len = _quillController!.document.length;
+    final body = text.trim();
+    _quillController!.replaceText(
+      0,
+      len > 0 ? len - 1 : 0,
+      body,
+      TextSelection.collapsed(offset: body.length),
+    );
+    _scheduleAutoSave();
+  }
+
+  void _aiInsertSummaryBlockquote(String summary) {
+    if (_quillController == null) return;
+    final text = '${summary.trim()}\n';
+    _quillController!.document.insert(0, text);
+    _quillController!.formatText(0, text.length, Attribute.blockQuote);
+    _quillController!.updateSelection(
+      TextSelection.collapsed(offset: text.length),
+      ChangeSource.local,
+    );
+    _scheduleAutoSave();
+  }
+
+  /// Opens the AI assist sheet seeded with a voice [transcript] (the "Paraphrase"
+  /// action in the voice panel). Results insert/replace/copy into the note.
+  Future<void> _onParaphraseTranscript(String transcript) async {
+    if (_currentNote == null || transcript.trim().isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AiToolsSheet(
+        note: _currentNote!,
+        tagNames: _resolveTagNames(_currentNote!.tagIds),
+        contentOverride: transcript,
+        onInsert: _aiInsertAtCursor,
+        onReplace: _aiReplaceDocument,
+        onInsertSummary: _aiInsertSummaryBlockquote,
+      ),
+    );
   }
 
   // ─── Category picker ──────────────────────────────────────────────────────
@@ -373,7 +528,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     } catch (_) {}
 
     await _sttService.stopListening();
-    final finalTranscript = _sttService.accumulatedText.trim();
+    // On-device live STT result first.
+    var transcript = _sttService.accumulatedText.trim();
 
     setState(() {
       _isRecording = false;
@@ -389,6 +545,18 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         fileSize = await _audioStorage.getFileSize(recordingPath);
       } catch (_) {}
 
+      // Fallback: if on-device STT produced nothing (e.g. the recorder and the
+      // recognizer contended for the mic), upload the audio to the backend →
+      // Groq Whisper.
+      if (transcript.isEmpty && !kIsWeb) {
+        try {
+          transcript = (await ref
+                  .read(remoteNoteServiceProvider)
+                  .transcribe(filePath: recordingPath))
+              .trim();
+        } catch (_) {}
+      }
+
       try {
         await ref
             .read(
@@ -397,28 +565,15 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
               filePath: recordingPath,
               durationMs: durationMs,
               fileSizeBytes: fileSize,
-              transcript: finalTranscript.isEmpty ? null : finalTranscript,
+              transcript: transcript.isEmpty ? null : transcript,
             );
       } catch (_) {}
-
-      // Insert the transcript at the Quill cursor.
-      if (finalTranscript.isNotEmpty && _quillController != null && mounted) {
-        _insertTranscriptAtCursor(finalTranscript);
-      }
+      // The transcript stays with the audio record and is shown in the voice
+      // panel — no longer auto-inserted into the note body. Insert-into-note is
+      // a panel action (Step D).
     }
 
     if (mounted) setState(() => _liveTranscript = '');
-  }
-
-  void _insertTranscriptAtCursor(String text) {
-    final idx = _quillController!.selection.baseOffset;
-    final insertText = '\n$text\n';
-    _quillController!.document.insert(idx, insertText);
-    _quillController!.updateSelection(
-      TextSelection.collapsed(offset: idx + insertText.length),
-      ChangeSource.local,
-    );
-    _scheduleAutoSave();
   }
 
   void _showSnackBar(String message) {
@@ -437,6 +592,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => _NoteOptionsSheet(
         note: note,
+        onAiAssist: () {
+          Navigator.of(context).pop();
+          _onAiAssist();
+        },
         onPin: () async {
           Navigator.of(context).pop();
           try {
@@ -576,6 +735,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
 
   Widget _buildEditor(
       List<Tag> allTags, String? categoryName, bool isDark) {
+    final keyboardUp = MediaQuery.of(context).viewInsets.bottom > 0;
     return Stack(
       children: [
         Column(
@@ -587,6 +747,25 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
               titleController: _titleController,
               onBack: _onBack,
               onMoreTap: _currentNote != null ? _onMoreTap : null,
+            ),
+            // Tags + category at the top, directly under the title.
+            if (_tagSuggestions.isNotEmpty && !_tagSuggestDismissed)
+              _TagSuggestBanner(
+                suggestions: _tagSuggestions,
+                isDark: isDark,
+                onAccept: _acceptSuggestedTag,
+                onDismiss: () => setState(() => _tagSuggestDismissed = true),
+              ),
+            MNTagRow(
+              tagIds: _currentNote?.tagIds ?? const [],
+              allTags: allTags,
+              categoryName: categoryName,
+              onRemoveTag: _onRemoveTag,
+              onAddTagTap: _onAddTagTap,
+              onCategoryTap: _onCategoryTap,
+              maxTagsReached:
+                  (_currentNote?.tagIds.length ?? 0) >=
+                  AppConstants.maxTagsPerNote,
             ),
             Expanded(
               child: QuillEditor(
@@ -602,28 +781,21 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                 ),
               ),
             ),
-            // Audio clips row — native only (audio not supported on web).
-            if (!kIsWeb && _currentNote != null)
-              _AudioClipsRow(
+            // Bottom area swaps: the formatting toolbar while the keyboard is up
+            // (editing text), the voice panel when it is down.
+            if (keyboardUp)
+              MNEditorToolbar(controller: _quillController!)
+            else if (!kIsWeb && _currentNote != null)
+              _VoicePanel(
                 noteId: _currentNote!.id,
                 audioService: _audioService,
                 audioStorage: _audioStorage,
                 isDark: isDark,
+                isRecording: _isRecording,
+                onRecordTap: _onMicTap,
+                onParaphrase: _onParaphraseTranscript,
+                onInsertTranscript: _aiInsertAtCursor,
               ),
-            MNTagRow(
-              tagIds: _currentNote?.tagIds ?? const [],
-              allTags: allTags,
-              categoryName: categoryName,
-              onRemoveTag: _onRemoveTag,
-              onAddTagTap: _onAddTagTap,
-              onCategoryTap: _onCategoryTap,
-              onMicTap: _onMicTap,
-              isRecording: _isRecording,
-              maxTagsReached:
-                  (_currentNote?.tagIds.length ?? 0) >=
-                  AppConstants.maxTagsPerNote,
-            ),
-            MNEditorToolbar(controller: _quillController!),
           ],
         ),
         if (_isRecording)
@@ -644,69 +816,118 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   }
 }
 
-// ─── _AudioClipsRow ───────────────────────────────────────────────────────────
+// ─── _VoicePanel ──────────────────────────────────────────────────────────────
 
-/// Horizontal scrollable row of audio clip chips above the tag row.
-/// Only rendered when the note has at least one audio record.
-class _AudioClipsRow extends ConsumerStatefulWidget {
-  const _AudioClipsRow({
+/// Bottom voice panel: play/pause + seek bar + current:total timers + record
+/// button + one-at-a-time carousel over the note's recordings. Expanding shows
+/// the transcript with Paraphrase (opens the AI sheet) and Insert-into-note.
+/// Live recording feedback is still the separate [_RecordingOverlay].
+class _VoicePanel extends ConsumerStatefulWidget {
+  const _VoicePanel({
     required this.noteId,
     required this.audioService,
     required this.audioStorage,
     required this.isDark,
+    required this.isRecording,
+    required this.onRecordTap,
+    required this.onParaphrase,
+    required this.onInsertTranscript,
   });
 
   final String noteId;
   final AudioRecordingService audioService;
   final AudioFileStorage audioStorage;
   final bool isDark;
+  final bool isRecording;
+  final VoidCallback onRecordTap;
+  final void Function(String transcript) onParaphrase;
+  final void Function(String transcript) onInsertTranscript;
 
   @override
-  ConsumerState<_AudioClipsRow> createState() => _AudioClipsRowState();
+  ConsumerState<_VoicePanel> createState() => _VoicePanelState();
 }
 
-class _AudioClipsRowState extends ConsumerState<_AudioClipsRow> {
+class _VoicePanelState extends ConsumerState<_VoicePanel> {
+  int _index = 0;
   String? _playingId;
+  bool _paused = false;
+  int _posMs = 0;
+  int _durMs = 0;
+  bool _expanded = false;
+  StreamSubscription<dynamic>? _playSub;
 
   @override
   void initState() {
     super.initState();
-    // Eagerly initialise so playback works even when the user opens a note
-    // with existing clips without tapping the mic first. init() is idempotent.
     widget.audioService.init().ignore();
   }
 
   @override
   void dispose() {
-    if (_playingId != null) {
-      widget.audioService.stopPlayback();
-    }
+    _playSub?.cancel();
+    if (_playingId != null) widget.audioService.stopPlayback();
     super.dispose();
   }
 
-  Future<void> _togglePlayback(AudioRecord record) async {
-    if (_playingId == record.id) {
-      await widget.audioService.stopPlayback();
-      setState(() => _playingId = null);
+  String _fmt(int ms) {
+    final s = (ms < 0 ? 0 : ms) ~/ 1000;
+    return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+  }
+
+  void _stopAndReset() {
+    _playSub?.cancel();
+    _playSub = null;
+    if (_playingId != null) widget.audioService.stopPlayback();
+    if (mounted) {
+      setState(() {
+        _playingId = null;
+        _paused = false;
+        _posMs = 0;
+        _durMs = 0;
+      });
     } else {
-      if (_playingId != null) {
-        await widget.audioService.stopPlayback();
-      }
-      setState(() => _playingId = record.id);
-      await widget.audioService.startPlayback(
-        record.filePath,
-        onDone: () {
-          if (mounted) setState(() => _playingId = null);
-        },
-      );
+      _playingId = null;
     }
   }
 
-  Future<void> _delete(AudioRecord record) async {
+  Future<void> _togglePlay(AudioRecord record) async {
     if (_playingId == record.id) {
-      await widget.audioService.stopPlayback();
-      setState(() => _playingId = null);
+      if (_paused) {
+        await widget.audioService.resumePlayback();
+        if (mounted) setState(() => _paused = false);
+      } else {
+        await widget.audioService.pausePlayback();
+        if (mounted) setState(() => _paused = true);
+      }
+      return;
     }
+    _stopAndReset();
+    if (mounted) {
+      setState(() {
+        _playingId = record.id;
+        _paused = false;
+        _posMs = 0;
+        _durMs = record.durationMs;
+      });
+    }
+    await widget.audioService
+        .startPlayback(record.filePath, onDone: _stopAndReset);
+    _playSub = widget.audioService.playbackStream?.listen((d) {
+      if (!mounted) return;
+      setState(() {
+        _posMs = d.position.inMilliseconds;
+        if (d.duration.inMilliseconds > 0) _durMs = d.duration.inMilliseconds;
+      });
+    });
+  }
+
+  Future<void> _seek(double ms) async {
+    await widget.audioService.seekTo(Duration(milliseconds: ms.round()));
+    if (mounted) setState(() => _posMs = ms.round());
+  }
+
+  Future<void> _delete(AudioRecord record) async {
+    if (_playingId == record.id) _stopAndReset();
     await ref
         .read(audioEditorViewModelProvider(noteId: widget.noteId).notifier)
         .deleteRecord(record.id);
@@ -715,126 +936,292 @@ class _AudioClipsRowState extends ConsumerState<_AudioClipsRow> {
     } catch (_) {}
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final clipsAsync =
-        ref.watch(audioEditorViewModelProvider(noteId: widget.noteId));
-
-    return clipsAsync.when(
-      data: (clips) {
-        if (clips.isEmpty) return const SizedBox.shrink();
-        final outlineColor =
-            widget.isDark ? AppColors.darkOutline : AppColors.lightOutline;
-        final surfaceBg =
-            widget.isDark ? AppColors.darkBg : AppColors.lightBg;
-        return Container(
-          decoration: BoxDecoration(
-            color: surfaceBg,
-            border: Border(top: BorderSide(color: outlineColor, width: 0.5)),
+  Future<void> _confirmDelete(AudioRecord record) async {
+    if (!ref.read(audioDeleteConfirmProvider)) {
+      await _delete(record);
+      return;
+    }
+    var dontAsk = false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Delete voice note?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                  'This permanently removes the recording and its transcript.'),
+              const SizedBox(height: 4),
+              CheckboxListTile(
+                value: dontAsk,
+                onChanged: (v) => setLocal(() => dontAsk = v ?? false),
+                title: const Text("Don't ask again"),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+              ),
+            ],
           ),
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (int i = 0; i < clips.length; i++) ...[
-                  _AudioClipChip(
-                    record: clips[i],
-                    isPlaying: _playingId == clips[i].id,
-                    onPlayPause: () => _togglePlayback(clips[i]),
-                    onDelete: () => _delete(clips[i]),
-                    isDark: widget.isDark,
-                  ),
-                  if (i < clips.length - 1) const SizedBox(width: 6),
-                ],
-              ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
             ),
-          ),
-        );
-      },
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text('Delete',
+                  style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+            ),
+          ],
+        ),
+      ),
     );
-  }
-}
-
-class _AudioClipChip extends StatelessWidget {
-  const _AudioClipChip({
-    required this.record,
-    required this.isPlaying,
-    required this.onPlayPause,
-    required this.onDelete,
-    required this.isDark,
-  });
-
-  final AudioRecord record;
-  final bool isPlaying;
-  final VoidCallback onPlayPause;
-  final VoidCallback onDelete;
-  final bool isDark;
-
-  String _formatDuration(int ms) {
-    final s = ms ~/ 1000;
-    final m = s ~/ 60;
-    final sec = s % 60;
-    return '$m:${sec.toString().padLeft(2, '0')}';
+    if (confirmed != true) return;
+    if (dontAsk) {
+      await ref.read(audioDeleteConfirmProvider.notifier).setAsk(false);
+    }
+    await _delete(record);
   }
 
   @override
   Widget build(BuildContext context) {
-    final surfaceContainer = isDark
-        ? AppColors.darkSurfaceContainer
-        : AppColors.lightSurfaceContainer;
+    final clips =
+        ref.watch(audioEditorViewModelProvider(noteId: widget.noteId)).valueOrNull ??
+            const <AudioRecord>[];
+    if (_index >= clips.length) _index = clips.isEmpty ? 0 : clips.length - 1;
+    final current = clips.isEmpty ? null : clips[_index];
+
+    final cs = Theme.of(context).colorScheme;
+    final cardBg = widget.isDark ? AppColors.darkCard : AppColors.lightCard;
     final outlineColor =
-        isDark ? AppColors.darkOutline : AppColors.lightOutline;
-    final variantColor = isDark
+        widget.isDark ? AppColors.darkOutline : AppColors.lightOutline;
+    final onSurface =
+        widget.isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface;
+    final variantColor = widget.isDark
         ? AppColors.darkOnSurfaceVariant
         : AppColors.lightOnSurfaceVariant;
-    final mutedColor =
-        isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
+    final mutedColor = widget.isDark
+        ? AppColors.darkOnSurfaceMuted
+        : AppColors.lightOnSurfaceMuted;
 
     return Container(
-      height: 28,
-      padding: const EdgeInsets.only(left: 8, right: 6),
       decoration: BoxDecoration(
-        color: surfaceContainer,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: outlineColor, width: 0.5),
+        color: cardBg,
+        border: Border(top: BorderSide(color: outlineColor, width: 0.5)),
       ),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          GestureDetector(
-            onTap: onPlayPause,
+          _topRow(clips, current, cs, onSurface, variantColor, mutedColor),
+          if (_expanded && current != null)
+            _transcriptSection(current, cs, onSurface, variantColor, mutedColor),
+        ],
+      ),
+    );
+  }
+
+  Widget _topRow(List<AudioRecord> clips, AudioRecord? current, ColorScheme cs,
+      Color onSurface, Color variantColor, Color mutedColor) {
+    return Row(
+      children: [
+        // Record button (disabled while the recording overlay is active).
+        GestureDetector(
+          onTap: widget.isRecording ? null : widget.onRecordTap,
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: widget.isRecording
+                  ? cs.error.withValues(alpha: 0.15)
+                  : AppColors.accent,
+            ),
             child: Icon(
-              isPlaying ? Icons.pause : Icons.play_arrow,
-              size: 16,
-              color: variantColor,
+              widget.isRecording ? Icons.mic : Icons.mic_none,
+              size: 19,
+              color: widget.isRecording ? cs.error : AppColors.accentOn,
             ),
           ),
-          const SizedBox(width: 4),
-          Text(
-            _formatDuration(record.durationMs),
-            style: AppTypography.inter(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: mutedColor,
-            ),
-          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: current == null
+              ? Text(
+                  widget.isRecording ? 'Recording…' : 'Tap to record a voice note',
+                  style: AppTypography.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: mutedColor,
+                  ),
+                )
+              : _playbackControls(current, variantColor, mutedColor),
+        ),
+        if (clips.length > 1) ...[
           const SizedBox(width: 4),
           GestureDetector(
-            onTap: onDelete,
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.black.withValues(alpha: 0.08),
-              ),
-              child: Icon(Icons.close, size: 10, color: variantColor),
-            ),
+            onTap: _index > 0
+                ? () {
+                    _stopAndReset();
+                    setState(() => _index--);
+                  }
+                : null,
+            child: Icon(Icons.chevron_left,
+                size: 22, color: _index > 0 ? variantColor : mutedColor),
+          ),
+          Text('${_index + 1}/${clips.length}',
+              style: AppTypography.inter(
+                  fontSize: 11, fontWeight: FontWeight.w600, color: mutedColor)),
+          GestureDetector(
+            onTap: _index < clips.length - 1
+                ? () {
+                    _stopAndReset();
+                    setState(() => _index++);
+                  }
+                : null,
+            child: Icon(Icons.chevron_right,
+                size: 22,
+                color: _index < clips.length - 1 ? variantColor : mutedColor),
           ),
         ],
+        if (current != null)
+          GestureDetector(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 2),
+              child: Icon(_expanded ? Icons.expand_more : Icons.expand_less,
+                  size: 22, color: variantColor),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _playbackControls(
+      AudioRecord current, Color variantColor, Color mutedColor) {
+    final isThis = _playingId == current.id;
+    final durMs = isThis && _durMs > 0 ? _durMs : current.durationMs;
+    final maxD = durMs <= 0 ? 1.0 : durMs.toDouble();
+    final posMs = isThis ? _posMs.clamp(0, durMs) : 0;
+    final val = posMs.toDouble().clamp(0.0, maxD);
+    final timerStyle = AppTypography.inter(
+        fontSize: 11, fontWeight: FontWeight.w600, color: mutedColor);
+
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: () => _togglePlay(current),
+          child: Icon(
+            isThis && !_paused
+                ? Icons.pause_circle_filled
+                : Icons.play_circle_filled,
+            size: 30,
+            color: AppColors.accent,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(_fmt(posMs), style: timerStyle),
+        Expanded(
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+              activeTrackColor: AppColors.accent,
+              inactiveTrackColor: variantColor.withValues(alpha: 0.25),
+              thumbColor: AppColors.accent,
+            ),
+            child: Slider(
+              value: val,
+              max: maxD,
+              onChanged:
+                  isThis ? (v) => setState(() => _posMs = v.round()) : null,
+              onChangeEnd: isThis ? _seek : null,
+            ),
+          ),
+        ),
+        Text(_fmt(durMs), style: timerStyle),
+      ],
+    );
+  }
+
+  Widget _transcriptSection(AudioRecord current, ColorScheme cs, Color onSurface,
+      Color variantColor, Color mutedColor) {
+    final transcript = current.transcribedText?.trim() ?? '';
+    final hasTranscript = transcript.isNotEmpty;
+    final surfaceContainer = widget.isDark
+        ? AppColors.darkSurfaceContainer
+        : AppColors.lightSurfaceContainer;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(maxHeight: 160),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: surfaceContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: SingleChildScrollView(
+              child: Text(
+                hasTranscript
+                    ? transcript
+                    : 'No transcript for this recording.',
+                style: AppTypography.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  color: hasTranscript ? onSurface : mutedColor,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              if (hasTranscript) ...[
+                _chip('Paraphrase', Icons.auto_awesome, AppColors.accent,
+                    () => widget.onParaphrase(transcript)),
+                const SizedBox(width: 8),
+                _chip('Insert', Icons.south, variantColor,
+                    () => widget.onInsertTranscript(transcript)),
+              ],
+              const Spacer(),
+              GestureDetector(
+                onTap: () => _confirmDelete(current),
+                child: Icon(Icons.delete_outline, size: 22, color: cs.error),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(String label, IconData icon, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+            Text(label,
+                style: AppTypography.inter(
+                    fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+          ],
+        ),
       ),
     );
   }
@@ -1154,12 +1541,14 @@ class _WaveformBars extends StatelessWidget {
 class _NoteOptionsSheet extends StatelessWidget {
   const _NoteOptionsSheet({
     required this.note,
+    required this.onAiAssist,
     required this.onPin,
     required this.onArchive,
     required this.onDelete,
   });
 
   final Note note;
+  final VoidCallback onAiAssist;
   final VoidCallback onPin;
   final VoidCallback onArchive;
   final VoidCallback onDelete;
@@ -1210,6 +1599,12 @@ class _NoteOptionsSheet extends StatelessWidget {
             ),
           ),
           const Divider(height: 1),
+          _OptionsRow(
+            icon: Icons.auto_awesome,
+            label: 'AI assist',
+            color: AppColors.accent,
+            onTap: onAiAssist,
+          ),
           _OptionsRow(
             icon: note.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
             label: note.isPinned ? 'Unpin' : 'Pin to top',
@@ -1265,6 +1660,469 @@ class _OptionsRow extends StatelessWidget {
                 fontWeight: FontWeight.w500,
                 color: color,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── _TagSuggestBanner + _AiToolsSheet (Stage 1 AI) ──────────────────────────
+
+/// Dismissible banner of AI-suggested tags shown above the tag row.
+/// Tapping a chip adds the tag; the × dismisses the banner.
+class _TagSuggestBanner extends StatelessWidget {
+  const _TagSuggestBanner({
+    required this.suggestions,
+    required this.isDark,
+    required this.onAccept,
+    required this.onDismiss,
+  });
+
+  final List<String> suggestions;
+  final bool isDark;
+  final void Function(String name) onAccept;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final variantColor = isDark
+        ? AppColors.darkOnSurfaceVariant
+        : AppColors.lightOnSurfaceVariant;
+    final onSurface =
+        isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface;
+    final surfaceContainer = isDark
+        ? AppColors.darkSurfaceContainer
+        : AppColors.lightSurfaceContainer;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+      padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+      decoration: BoxDecoration(
+        color: surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Icons.auto_awesome, size: 16, color: AppColors.accent),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Suggested tags',
+                  style: AppTypography.inter(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: variantColor,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final name in suggestions)
+                      GestureDetector(
+                        onTap: () => onAccept(name),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: AppColors.accent.withValues(alpha: 0.40),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.add,
+                                  size: 13, color: AppColors.accent),
+                              const SizedBox(width: 3),
+                              Text(
+                                name,
+                                style: AppTypography.inter(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: onSurface,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: onDismiss,
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Icon(Icons.close, size: 16, color: variantColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiAction {
+  const _AiAction(this.id, this.label, this.icon);
+  final String id;
+  final String label;
+  final IconData icon;
+}
+
+const List<_AiAction> _kAiActions = [
+  _AiAction('improve', 'Improve', Icons.auto_fix_high),
+  _AiAction('humanize', 'Humanize', Icons.record_voice_over_outlined),
+  _AiAction('paraphrase', 'Paraphrase', Icons.short_text),
+  _AiAction('script', 'Format as script', Icons.movie_outlined),
+  _AiAction('critique', 'Critique', Icons.rate_review_outlined),
+  _AiAction('summary', 'Summarise', Icons.notes_outlined),
+];
+
+/// Bottom sheet of Groq-powered writing actions. Calls the backend and lets the
+/// user Insert / Replace / Copy the result. Spec: PHASE_12_PLAN.md Stage 1.
+class _AiToolsSheet extends ConsumerStatefulWidget {
+  const _AiToolsSheet({
+    required this.note,
+    required this.tagNames,
+    required this.onInsert,
+    required this.onReplace,
+    required this.onInsertSummary,
+    this.contentOverride,
+  });
+
+  final Note note;
+  final List<String> tagNames;
+
+  /// When set, the AI acts on this text instead of the note body (e.g. a voice
+  /// transcript being paraphrased).
+  final String? contentOverride;
+  final void Function(String text) onInsert;
+  final void Function(String text) onReplace;
+  final void Function(String summary) onInsertSummary;
+
+  @override
+  ConsumerState<_AiToolsSheet> createState() => _AiToolsSheetState();
+}
+
+class _AiToolsSheetState extends ConsumerState<_AiToolsSheet> {
+  _AiAction? _action;
+  bool _loading = false;
+  String? _result;
+  bool _failed = false;
+
+  Future<void> _run(_AiAction action) async {
+    setState(() {
+      _action = action;
+      _loading = true;
+      _result = null;
+      _failed = false;
+    });
+    final svc = ref.read(remoteNoteServiceProvider);
+    final content =
+        widget.contentOverride ?? plainTextFromDelta(widget.note.content);
+    try {
+      final out = action.id == 'summary'
+          ? await svc.summariseNote(
+              noteId: widget.note.id,
+              title: widget.note.title,
+              content: content,
+            )
+          : await svc.assist(
+              noteId: widget.note.id,
+              action: action.id,
+              title: widget.note.title,
+              content: content,
+              tags: widget.tagNames,
+            );
+      if (mounted) {
+        setState(() {
+          _result = out;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _failed = true;
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  void _reset() => setState(() {
+        _action = null;
+        _result = null;
+        _failed = false;
+      });
+
+  void _copy(String text) {
+    final messenger = ScaffoldMessenger.of(context);
+    Clipboard.setData(ClipboardData(text: text));
+    Navigator.of(context).pop();
+    messenger.showSnackBar(
+        const SnackBar(content: Text('Copied to clipboard')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? AppColors.darkCard : AppColors.lightCard;
+    final outlineStrong =
+        isDark ? AppColors.darkOutlineStrong : AppColors.lightOutlineStrong;
+    final onSurface =
+        isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface;
+    final variantColor = isDark
+        ? AppColors.darkOnSurfaceVariant
+        : AppColors.lightOnSurfaceVariant;
+
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 12),
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: outlineStrong,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.auto_awesome, size: 18, color: AppColors.accent),
+                  const SizedBox(width: 8),
+                  Text(
+                    _action == null ? 'AI assist' : _action!.label,
+                    style: AppTypography.plusJakartaSans(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                      color: onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _buildBody(isDark, onSurface, variantColor),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(bool isDark, Color onSurface, Color variantColor) {
+    if (_loading) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(strokeWidth: 2.5),
+              const SizedBox(height: 14),
+              Text(
+                'Thinking…',
+                style: AppTypography.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: variantColor),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_failed) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'AI request failed — try again.',
+              style: AppTypography.inter(
+                  fontSize: 14, fontWeight: FontWeight.w500, color: onSurface),
+            ),
+            const SizedBox(height: 12),
+            _AiSheetButton(
+              label: 'Back',
+              icon: Icons.arrow_back,
+              filled: false,
+              isDark: isDark,
+              onTap: _reset,
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_result != null) {
+      final isSummary = _action?.id == 'summary';
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 280),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: SelectableText(
+                _result!,
+                style: AppTypography.inter(
+                    fontSize: 14, fontWeight: FontWeight.w400, color: onSurface),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (isSummary)
+                  _AiSheetButton(
+                    label: 'Insert as quote',
+                    icon: Icons.format_quote,
+                    filled: true,
+                    isDark: isDark,
+                    onTap: () {
+                      widget.onInsertSummary(_result!);
+                      Navigator.of(context).pop();
+                    },
+                  )
+                else ...[
+                  _AiSheetButton(
+                    label: 'Insert',
+                    icon: Icons.south,
+                    filled: true,
+                    isDark: isDark,
+                    onTap: () {
+                      widget.onInsert(_result!);
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                  _AiSheetButton(
+                    label: 'Replace',
+                    icon: Icons.swap_horiz,
+                    filled: false,
+                    isDark: isDark,
+                    onTap: () {
+                      widget.onReplace(_result!);
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ],
+                _AiSheetButton(
+                  label: 'Copy',
+                  icon: Icons.copy_outlined,
+                  filled: false,
+                  isDark: isDark,
+                  onTap: () => _copy(_result!),
+                ),
+                _AiSheetButton(
+                  label: 'Back',
+                  icon: Icons.arrow_back,
+                  filled: false,
+                  isDark: isDark,
+                  onTap: _reset,
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Action list
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final action in _kAiActions)
+          _OptionsRow(
+            icon: action.icon,
+            label: action.label,
+            color: onSurface,
+            onTap: () => _run(action),
+          ),
+      ],
+    );
+  }
+}
+
+class _AiSheetButton extends StatelessWidget {
+  const _AiSheetButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    required this.filled,
+    required this.isDark,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool filled;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final variantColor = isDark
+        ? AppColors.darkOnSurfaceVariant
+        : AppColors.lightOnSurfaceVariant;
+    final fg = filled ? AppColors.accentOn : variantColor;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: filled ? AppColors.accent : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          border: filled
+              ? null
+              : Border.all(
+                  color: variantColor.withValues(alpha: 0.4), width: 0.5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: fg),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: AppTypography.inter(
+                  fontSize: 13, fontWeight: FontWeight.w600, color: fg),
             ),
           ],
         ),

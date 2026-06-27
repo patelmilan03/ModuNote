@@ -193,7 +193,10 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | 11 | Backend API scaffolding (FastAPI stubs) | ✅ Complete |
 | 11.5 | Bug fixes + UX features (swipe cards, note options, system theme, archive screen, filter bar) | ✅ Complete |
 | W | Web Portfolio Preview — Flutter Web + WASM SQLite + phone-frame landing page + Firebase Hosting | ✅ Complete |
-| 12 | AI features (auto-tagging, summarisation) | ⬜ Not started |
+| 11.6 | Bug fixes (hierarchical category filtering, filter-bar empty state, editor category sync, tag browsing) | ✅ Complete |
+| 12 | AI features — Groq writing assistant → RAG QnA → observability → deployment (4-stage roadmap, via FastAPI) | 🟡 In progress |
+
+> Chronological order: 11.5 → W → 11.6 → 12. See `STATUS.md` for the canonical status and next-phase scope, and `DECISIONS.md` Phase 12 for the AI roadmap.
 
 ---
 
@@ -230,7 +233,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `lib/services/speech/speech_to_text_service.dart` | speech_to_text wrapper — live dictation with Android timeout recovery |
 | `lib/services/auth/firebase_auth_service.dart` | Singleton — `signInAnonymously()` (idempotent). Called from `main.dart`. |
 | `lib/services/remote/remote_note_service.dart` | HTTP client for the FastAPI backend — `suggestTags()` + `summariseNote()` (both stub-level; called in Phase 12). Plain Dart class, not a Riverpod provider. Default base URL `http://10.0.2.2:8000/api/v1` (Android emulator loopback). |
-| `lib/firebase_options.dart` | STUB (gitignored). Replace by running `flutterfire configure`. |
+| `lib/firebase_options.dart` | Real Firebase config (gitignored) — `flutterfire configure` already run for project `modunote-ba654`. A fresh clone on a new machine must re-run `flutterfire configure`. |
 | `lib/data/datasources/local/converters/type_converters.dart` | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` |
 | `lib/data/repositories/remote/firebase_note_repository.dart` | Live Firestore write impl — `insert`/`update`/`archive`/`unarchive`/`delete`/`togglePin` via Firestore set. Reads remain `UnimplementedError`. |
 | `lib/data/repositories/synced/synced_note_repository.dart` | Sync wrapper — all standard ops delegate to local; `syncNote(id)` + `syncAllPending()` push to Firestore |
@@ -246,7 +249,8 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `firebase.json` | Firebase config — `hosting` section: `build/web`, SPA rewrite, WASM MIME, COOP/COEP headers |
 | `.firebaserc` | Firebase project alias — `default → modunote-ba654` |
 | `MODUNOTE_UI_REFERENCE.md` | Full pixel-level UI spec from Claude Design |
-| `progress.md` | Human-readable phase progress log |
+| `STATUS.md` | Project status + handoff — phase log, current state, next-phase scope (former `progress.md` + `THREAD_HANDOFF.md`, merged) |
+| `PHASE_12_PLAN.md` | Detailed Phase 12 AI build spec — all 4 stages with per-stage task checklists. The standing plan any thread follows. |
 | `TESTING.md` | Manual testing checklist — 40 sections, ~175+ checks. Quick smoke test (~50 🔴 critical checks, ~20 min) + full regression (~175+ checks, ~1.5 hr). Section 40 = Firebase sync checks. |
 
 ---
@@ -270,8 +274,8 @@ Do not wipe or truncate `session_context.md` at any point — entries accumulate
 | What was built / decided | Append to |
 |---|---|
 | New architectural decision or trade-off | `DECISIONS.md` |
-| Phase completion or feature milestone | `progress.md` |
-| Key facts the next session must know | `THREAD_HANDOFF.md` |
+| Phase completion or feature milestone | `STATUS.md` |
+| Key facts the next session must know | `STATUS.md` ("Current Status & Next Phase" section) |
 | New manual test steps for the feature | `TESTING.md` |
 | New package, route, folder, or convention | `CLAUDE.md` itself |
 
@@ -279,14 +283,34 @@ Write only what is new — do not duplicate content already in the target file. 
 
 ---
 
+## Context Window Management
+
+A standing rule for long sessions so work survives context exhaustion and thread switches. The handoff lives in `STATUS.md` ("Current Status & Next Phase") + `session_context.md` + the ticked checklists in `PHASE_12_PLAN.md` — there is no separate handoff file.
+
+- Self-assess remaining context at each major step. You do **not** have a precise live token gauge (Claude Code shows the *developer* a context meter), so err early. Treat **~15% remaining** as the trigger — and honour it immediately if the developer says context is low.
+- **When context is low (≈15% or below):**
+  1. Stop before starting any new tool call or file read.
+  2. Write the structured handoff into `STATUS.md` → "Current Status & Next Phase" and append to `session_context.md`, covering:
+     - What has been completed so far (tick the relevant `PHASE_12_PLAN.md` checklist boxes)
+     - What step is next
+     - Any open decisions or unresolved blockers
+     - Files currently in scope
+  3. Tell the developer context is low and await confirmation before continuing.
+- **On resuming (after compaction or in a new thread):**
+  1. Read the handoff first — `STATUS.md` "Current Status & Next Phase" + the latest `session_context.md` entries + the active stage's checklist in `PHASE_12_PLAN.md` — before doing anything else.
+  2. Confirm your understanding of the remaining steps with the developer before proceeding.
+  3. Do not repeat already-completed steps. The ticked checklists are authoritative.
+
+---
+
 ## On-boarding Checklist (new dev / new AI session)
 
 0. **Check for `session_context.md`** in the project root. If it exists and is non-empty, read it FIRST before any other file — it contains the verbatim log of every feature/fix request made in the current in-progress session and overrides or extends the permanent docs.
 1. Read `CLAUDE.md` (this file) — understand the architecture.
-2. Read `progress.md` — know what's been built and what's next.
-3. Read `THREAD_HANDOFF.md` — get the most recent session summary and next-phase scope.
-4. Read `DECISIONS.md` — all architectural decisions and their rationale.
-5. Read `MODUNOTE_UI_REFERENCE.md` — before touching any UI file.
+2. Read `STATUS.md` — current state, phase status, what's been built, and next-phase scope (the merged progress + handoff log).
+3. Read `DECISIONS.md` — all architectural decisions and their rationale.
+4. Read `MODUNOTE_UI_REFERENCE.md` — before touching any UI file.
+5. Read `session_context.md` if present (also flagged in step 0) — verbatim in-session request log; overrides/extends the permanent docs.
 6. Run `flutter pub get` then `dart run build_runner build --delete-conflicting-outputs`. (`shared_preferences` added in Phase 9, `flutter_floating_bottom_bar ^2.0.0` added post-Phase-9, `firebase_core` + `cloud_firestore` + `firebase_auth` added Phase 10, `http ^1.2.0` added Phase 11 — always re-run after a new package.) **Phase 10ext**: run `flutterfire configure` first if `lib/firebase_options.dart` is still the placeholder stub.
 7. Run `flutter analyze` — must report 0 issues before writing any code.
 8. Run `flutter run` — boots to NoteListScreen with persistent floating nav; amber `+` FAB in nav center taps to open Note Editor; scrolling content hides nav and shows amber up-arrow scroll-to-top; tap mic → recording overlay; tap Tags tab → Tags screen with density bars; tap Settings tab → theme tiles.
