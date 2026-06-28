@@ -652,6 +652,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
               } catch (_) {}
               // Remove from the RAG index too (fire-and-forget, non-fatal).
               unawaited(service.deindexNote(noteId: noteId).catchError((_) {}));
+              // Clean up any tags orphaned by deleting this note.
+              unawaited(ref.read(tagListViewModelProvider.notifier).pruneOrphans());
               if (mounted) context.pop();
             },
             child: Text(
@@ -682,6 +684,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     }
     // RAG index/deindex (Stage 2) — fire-and-forget, never blocks close.
     if (_currentNote != null) _scheduleRagSync(_currentNote!);
+    // Auto-clean tags no longer attached to any note (+ prune them from scope).
+    unawaited(ref.read(tagListViewModelProvider.notifier).pruneOrphans());
     if (mounted) context.pop();
   }
 
@@ -711,9 +715,17 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       } catch (_) {
         // Non-fatal — local Drift is the source of truth. Surface only INDEX
         // failures (a note the user wants in AI search); deindex/cleanup
-        // failures stay silent so closing plain notes never toasts.
+        // failures stay silent so closing plain notes never toasts. Dedupe per
+        // note (30s) so the same note never spams the toast.
         if (isIndexable) {
-          showErrorToast("Couldn't sync this note to AI search.");
+          final label = note.title.trim().isEmpty
+              ? 'this note'
+              : '"${note.title.trim()}"';
+          showErrorToast(
+            "Couldn't sync $label to AI search.",
+            dedupeKey: 'rag-sync-${note.id}',
+            cooldown: const Duration(seconds: 30),
+          );
         }
       }
     }());

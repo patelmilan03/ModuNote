@@ -126,6 +126,15 @@ class LocalTagRepository implements ITagRepository {
   }
 
   @override
+  Future<List<String>> deleteOrphanTags() async {
+    try {
+      return await _tagsDao.deleteOrphanTags();
+    } on Exception catch (e) {
+      throw DatabaseException('Failed to delete orphan tags', cause: e);
+    }
+  }
+
+  @override
   Future<void> addTagToNote(String noteId, String tagId) async {
     try {
       await _tagsDao.addTagToNote(noteId, tagId);

@@ -2,10 +2,8 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../core/extensions/quill_extensions.dart';
 import '../../data/datasources/local/database_providers.dart';
-import '../../data/models/tag.dart';
 import '../../services/remote/remote_note_service_provider.dart';
 import 'rag_settings_view_model.dart';
-import 'tag_list_view_model.dart';
 
 part 'rag_reindex_view_model.g.dart';
 
@@ -30,7 +28,9 @@ class RagReindex extends _$RagReindex {
     var fail = 0;
     try {
       final notes = await ref.read(noteRepositoryProvider).watchAll().first;
-      final allTags = ref.read(tagListViewModelProvider).valueOrNull ?? <Tag>[];
+      // One-shot read from the repo (not the auto-dispose VM) so tag resolution
+      // works regardless of which screen is currently watching the tag list.
+      final allTags = await ref.read(tagRepositoryProvider).watchAll().first;
       final nameById = {for (final t in allTags) t.id: t.name};
       final triggerTags = ref.read(ragIndexTagsProvider);
       final service = ref.read(remoteNoteServiceProvider);

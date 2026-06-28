@@ -10,15 +10,38 @@ import '../theme/app_colors.dart';
 /// global overlay above whatever screen is currently visible.
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
-void showSuccessToast(String message) =>
-    _show(message, ToastificationType.success);
+/// Throttle bookkeeping: last time a given dedupe key was shown.
+final Map<String, DateTime> _lastShown = {};
+const Duration _defaultCooldown = Duration(seconds: 3);
 
-void showErrorToast(String message) =>
-    _show(message, ToastificationType.error);
+bool _throttled(String key, Duration cooldown) {
+  final now = DateTime.now();
+  final last = _lastShown[key];
+  if (last != null && now.difference(last) < cooldown) return true;
+  _lastShown[key] = now;
+  return false;
+}
 
-void showInfoToast(String message) => _show(message, ToastificationType.info);
+/// [dedupeKey] defaults to the message; pass a stable key (e.g. a note id) to
+/// rate-limit a family of messages. Within [cooldown] of the last matching
+/// toast, the call is silently dropped.
+void showSuccessToast(String message, {String? dedupeKey, Duration? cooldown}) =>
+    _show(message, ToastificationType.success, dedupeKey, cooldown);
 
-void _show(String message, ToastificationType type) {
+void showErrorToast(String message, {String? dedupeKey, Duration? cooldown}) =>
+    _show(message, ToastificationType.error, dedupeKey, cooldown);
+
+void showInfoToast(String message, {String? dedupeKey, Duration? cooldown}) =>
+    _show(message, ToastificationType.info, dedupeKey, cooldown);
+
+void _show(
+  String message,
+  ToastificationType type,
+  String? dedupeKey,
+  Duration? cooldown,
+) {
+  if (_throttled(dedupeKey ?? message, cooldown ?? _defaultCooldown)) return;
+
   final context = rootNavigatorKey.currentContext;
   if (context == null) return; // app not mounted / backgrounded — skip silently
   final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -37,6 +60,7 @@ void _show(String message, ToastificationType type) {
     autoCloseDuration: const Duration(seconds: 3),
     borderRadius: BorderRadius.circular(16),
     showProgressBar: false,
+    dragToClose: true,
     primaryColor: primary,
     title: Text(message),
   );

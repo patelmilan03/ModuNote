@@ -70,6 +70,21 @@ class TagsDao extends DatabaseAccessor<AppDatabase> with _$TagsDaoMixin {
     return (delete(tagsTable)..where((t) => t.id.equals(id))).go();
   }
 
+  /// Deletes every tag not referenced by any note (orphans) and returns the
+  /// deleted tag names (lowercase). Used for automatic tag cleanup.
+  Future<List<String>> deleteOrphanTags() async {
+    final orphans = await customSelect(
+      'SELECT id, name FROM tags '
+      'WHERE id NOT IN (SELECT DISTINCT tag_id FROM note_tags)',
+      readsFrom: {tagsTable, noteTagsTable},
+    ).get();
+    if (orphans.isEmpty) return const [];
+    final ids = orphans.map((r) => r.read<String>('id')).toList();
+    final names = orphans.map((r) => r.read<String>('name')).toList();
+    await (delete(tagsTable)..where((t) => t.id.isIn(ids))).go();
+    return names;
+  }
+
   /// Inserts a single [noteId]–[tagId] pair into [NoteTagsTable].
   /// Uses `InsertMode.insertOrIgnore` so calling this twice is idempotent.
   Future<void> addTagToNote(String noteId, String tagId) async {

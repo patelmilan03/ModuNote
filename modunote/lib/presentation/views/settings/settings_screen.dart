@@ -67,21 +67,18 @@ class _RagTagsCard extends ConsumerWidget {
   /// free-text creation (a trigger tag matching no real tag can never index
   /// anything). Lists tags from [tagListViewModelProvider] minus those already
   /// selected.
-  Future<void> _pickExistingTag(BuildContext context, WidgetRef ref) async {
-    final allTags = ref.read(tagListViewModelProvider).valueOrNull ?? <Tag>[];
+  Future<void> _pickExistingTag(
+      BuildContext context, WidgetRef ref, List<Tag> allTags) async {
     final selected = ref.read(ragIndexTagsProvider);
     final available = allTags.where((t) => !selected.contains(t.name)).toList()
       ..sort((a, b) => a.name.compareTo(b.name));
 
     if (available.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            allTags.isEmpty
-                ? 'Create some tags on your notes first.'
-                : 'All your tags are already in the scope.',
-          ),
-        ),
+      // Rate-limited (see app_toast) so rapid taps don't stack toasts.
+      showInfoToast(
+        allTags.isEmpty
+            ? 'Create some tags on your notes first.'
+            : 'All your tags are already in the scope.',
       );
       return;
     }
@@ -116,6 +113,10 @@ class _RagTagsCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tags = ref.watch(ragIndexTagsProvider).toList()..sort();
+    // Watch (not read) so the tag list stays alive + populated on this screen;
+    // a bare read of this auto-dispose provider returns AsyncLoading (empty).
+    final allTags =
+        ref.watch(tagListViewModelProvider).valueOrNull ?? const <Tag>[];
     final isReindexing = ref.watch(ragReindexProvider);
     final cs = Theme.of(context).colorScheme;
     final card = isDark ? AppColors.darkCard : AppColors.lightCard;
@@ -173,7 +174,7 @@ class _RagTagsCard extends ConsumerWidget {
                 ),
               _AddTriggerTagChip(
                 isDark: isDark,
-                onTap: () => _pickExistingTag(context, ref),
+                onTap: () => _pickExistingTag(context, ref, allTags),
               ),
             ],
           ),

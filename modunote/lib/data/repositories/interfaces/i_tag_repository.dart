@@ -32,6 +32,10 @@ abstract interface class ITagRepository {
   /// Hard-deletes a tag and removes all its note associations.
   Future<void> delete(String id);
 
+  /// Deletes all tags not referenced by any note. Returns the deleted tag
+  /// names (lowercase). Used for automatic orphan-tag cleanup.
+  Future<List<String>> deleteOrphanTags();
+
   /// Returns a map of tagId → count of notes that use that tag.
   /// Tags with zero notes are omitted from the map.
   Future<Map<String, int>> getNoteCounts();

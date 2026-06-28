@@ -254,9 +254,11 @@ class _SwipeableNoteCard extends ConsumerWidget {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(ctx).pop();
-              ref.read(noteListViewModelProvider.notifier).delete(note.id);
+              await ref.read(noteListViewModelProvider.notifier).delete(note.id);
+              // Clean up any tags orphaned by deleting this note.
+              await ref.read(tagListViewModelProvider.notifier).pruneOrphans();
             },
             child: Text(
               'Delete',
