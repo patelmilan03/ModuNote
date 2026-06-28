@@ -73,12 +73,40 @@ Direction locked: **full 4-stage roadmap**, first feature **via the FastAPI back
 1. **Stage 1 — Writing assistant** ✅ *complete (2026-06-22)*: Groq-powered Improve / Humanize / Paraphrase / Format-as-script / Critique + Summarise, tag-aware. Flutter (`RemoteNoteService`) → FastAPI → Groq; never blocks save.
    - ✅ Backend (`modunote-api/`): `services/ai_service.py` (Groq `AsyncGroq`), AI models in `models/note.py`, live `/api/v1/notes/{id}/{assist,tags/suggest,summary}`. **Developer confirmed it works** with a real `GROQ_API_KEY`.
    - ✅ Flutter: `quill_extensions.dart` (Delta→plaintext), `RemoteNoteService.assist` + `existingTags`, `remoteNoteServiceProvider`; editor UI — `_TagSuggestBanner` (auto-suggest once when content ≥15 chars & untagged, dismissible) + `_AiToolsSheet` from the ⋮ "AI assist" (Insert / Replace / Copy; Summarise → top blockquote). `flutter analyze` = 0.
-   - ⬜ **NEXT**: Stage 2 — RAG QnA (pgvector + local `sentence-transformers` embeddings + dedicated QnA screen). First task: push plain-text of study/notes-tagged notes to the backend. See `PHASE_12_PLAN.md` Stage 2.
-2. **Stage 2 — RAG QnA**: ingest notes tagged study/notes → chunk → embed (local `sentence-transformers`, since Groq has no embeddings) → **pgvector** in the existing Postgres → retrieval-augmented answers with citations. Requires pushing plain-text note content to the backend (the one new sync design).
+   - 🟡 **IN PROGRESS**: Stage 2 — RAG QnA. Decisions locked 2026-06-27 (D12.7). See the live build tracker below + `PHASE_12_PLAN.md` Stage 2.
+2. **Stage 2 — RAG QnA**: ingest notes tagged study/notes/research → chunk → embed (**hosted Jina `jina-embeddings-v2-base-en`, 768-dim** — D12.7, since Groq has no embeddings and the Render free dyno can't fit local PyTorch) → **pgvector on Supabase** → retrieval-augmented answers with citations. Requires pushing plain-text note content to the backend (the one new sync design).
 3. **Stage 3 — Observability & evals**: Langfuse tracing, Sentry error monitoring, RAGAS / LLM-as-judge evals, light guardrails (start with Pydantic + basic checks).
 4. **Stage 4 — Production deployment** (scope = "deploy," not "billed SaaS"): small VM + Caddy (auto-TLS) + GitHub Actions CI/CD + monitoring.
 
 Full decisions and rationale live in **`DECISIONS.md` → Phase 12**. The detailed, step-by-step build spec for all four stages (with per-stage task checklists to tick as you go) is in **`PHASE_12_PLAN.md`** — the standing plan any new thread follows.
+
+### Phase 12 Stage 2 — RAG QnA — live build tracker (🟡 IN PROGRESS, started 2026-06-27)
+> Per-step begun/done status so work resumes cleanly across token limits. Decisions: D12.7 (Jina 768-dim hosted embeddings, Supabase pgvector, `study/notes/research` sync tags, Home-card → `/qna`). Backend lives in the separate gitignored repo `../modunote-api`. ⬜ = not started, 🔨 = in progress, ✅ = done.
+>
+> **Status: STAGE 2 VERIFIED END-TO-END (local). `flutter analyze` = 0; backend RAG pipeline confirmed working against live Supabase + Jina + Groq.** On 2026-06-27 the developer created a Supabase project; `alembic upgrade head` created the `vector` extension + `documents`/`chunks` tables + HNSW cosine index; a programmatic smoke test indexed a note (Jina embedding → pgvector) and answered a question (cosine top-k → Groq) with a correct citation, then deindexed. SSL fix required (see below). **Only remaining: set `DATABASE_URL` + `JINA_API_KEY` in the Render dashboard for the deployed/prod path.** Routes: `POST /api/v1/index/notes`, `DELETE /api/v1/index/notes/{note_id}`, `POST /api/v1/qna`.
+>
+> **SSL note:** Supabase's TLS cert chain trips default verification ("self-signed certificate in certificate chain"). `db/session.py` + `alembic/env.py` `_connect_args()` use an encrypted-but-**unverified** SSL context (`check_hostname=False`, `CERT_NONE`) for any non-local host. Traffic stays encrypted; acceptable for this single-user app.
+
+Backend (`modunote-api/`):
+- ✅ **S2-B1 — Deps + config** *(2026-06-27)*: `asyncpg==0.30.0` + `pgvector==0.3.6` + `tiktoken==0.8.0` in `requirements.txt`; `config.py` + `.env.example` + `render.yaml` add `jina_api_key`, `jina_model=jina-embeddings-v2-base-en`, `embed_dim=768`, `rag_top_k=5`, `rag_index_tags=[study,notes,research]`; `DATABASE_URL` → Supabase (direct conn note added).
+- ✅ **S2-B2 — Runtime DB session** *(2026-06-27)*: `db/session.py` (async engine + `async_sessionmaker` + `get_session` dep; auto-SSL for non-local hosts). First DB-connected code in the backend.
+- ✅ **S2-B3 — Models** *(2026-06-27)*: `db/models.py` `Document` + `Chunk` (`embedding Vector(768)`, FK cascade); pydantic schemas in `models/rag.py` (`IndexNoteRequest/Response`, `QnaRequest`, `Citation`, `QnaResponse`).
+- ✅ **S2-B4 — Alembic migration** *(2026-06-27)*: `alembic/versions/0001_rag_tables.py` — `CREATE EXTENSION IF NOT EXISTS vector`, `documents` + `chunks` tables, **HNSW cosine** index (`vector_cosine_ops`) on `embedding`. Hand-written (no live DB needed to generate).
+- ✅ **S2-B5 — Embedding service** *(2026-06-27)*: `services/embedding_service.py` — Jina API via `httpx` (`embed_documents` / `embed_query`).
+- ✅ **S2-B6 — RAG service** *(2026-06-27)*: `services/rag_service.py` — chunk (`tiktoken` cl100k, ~600 tok / 100 overlap) → embed → upsert; `deindex_note`; cosine top-k retrieval; context block + citations; empty-retrieval guard. RAG prompt added to `ai_service.rag_answer` (all Groq prompts in one file).
+- ✅ **S2-B7 — Endpoints** *(2026-06-27)*: `routers/rag.py` — `POST /index/notes` (empty content → deindex), `DELETE /index/notes/{note_id}` (204), `POST /qna`; included in `main.py`. Errors → 502 (provider/embedding/DB), no stack leaks.
+- ✅ **S2-B8 — Backend smoke (local)** *(2026-06-27)*: Supabase `DATABASE_URL` + `JINA_API_KEY` set in `.env`; `alembic upgrade head` created extension + tables + HNSW index; programmatic end-to-end test passed (index → grounded answer + citation → deindex). Required an SSL fix: `_connect_args()` in `db/session.py` + `alembic/env.py` now use an unverified TLS context (Supabase cert chain fails default verification). **Still TODO (developer):** paste `DATABASE_URL` + `JINA_API_KEY` into the Render dashboard for prod.
+
+Flutter (`modunote/`):
+- ✅ **S2-F1 — Constant** *(2026-06-27)*: `AppConstants.ragIndexTags = {study, notes, research}`.
+- ✅ **S2-F2 — Service** *(2026-06-27)*: `RemoteNoteService.indexNote` / `deindexNote` / `ask`; typed `QnaAnswer` + `Citation` model (`lib/data/models/qna_answer.dart`); `RemoteServiceException` on failure.
+- ✅ **S2-F3 — Sync wiring** *(2026-06-27)*: `_scheduleRagSync(Note)` in `note_editor_screen.dart` — on close (`_onBack`) indexes if any trigger tag else deindexes; delete path also deindexes. Fire-and-forget (never blocks save — D12.4).
+- ✅ **S2-F4 — ViewModel** *(2026-06-27)*: `QnaViewModel` (`@riverpod`, auto-dispose) holds `List<QnaTurn>` (question + `AsyncValue<QnaAnswer>`); `ask`/`clear`. `build_runner` run.
+- ✅ **S2-F5 — Route + entry** *(2026-06-27)*: `AppRoutes.qna = '/qna'` GoRoute (outside shell); `_AskNotesCard` on Home (below search field) → `context.push('/qna')`.
+- ✅ **S2-F6 — Screen** *(2026-06-27)*: `QnaScreen` (`ConsumerStatefulWidget`) — chat bubbles, thinking row, citation chips → `context.push(editNotePath)`, empty state, input bar.
+- ✅ **S2-F7 — Quality** *(2026-06-27)*: `flutter analyze` = **0 issues**.
+
+**Remaining for full Stage 2 (developer):** S2-B8 — create Supabase project, set `DATABASE_URL` (direct conn) + `JINA_API_KEY` in `modunote-api/.env`, `alembic upgrade head`, Swagger smoke test; then set the same two secrets in the Render dashboard (already wired in `render.yaml`). After that, Stage 2 is end-to-end.
 
 ---
 

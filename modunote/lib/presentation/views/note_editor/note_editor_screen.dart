@@ -640,12 +640,15 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           TextButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
+              final service = ref.read(remoteNoteServiceProvider);
               try {
                 await ref
                     .read(noteEditorViewModelProvider(noteId: widget.noteId)
                         .notifier)
                     .delete(noteId);
               } catch (_) {}
+              // Remove from the RAG index too (fire-and-forget, non-fatal).
+              unawaited(service.deindexNote(noteId: noteId).catchError((_) {}));
               if (mounted) context.pop();
             },
             child: Text(
@@ -674,7 +677,37 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           .syncNote(_currentNote!.id);
       if (mounted) setState(() => _syncStatus = newStatus);
     }
+    // RAG index/deindex (Stage 2) — fire-and-forget, never blocks close.
+    if (_currentNote != null) _scheduleRagSync(_currentNote!);
     if (mounted) context.pop();
+  }
+
+  /// Indexes or deindexes the note for RAG QnA on close (Stage 2). A note
+  /// carrying any RAG trigger tag is indexed; otherwise it is deindexed (covers
+  /// tag removal and notes that were never indexable — the backend DELETE is
+  /// idempotent). Fire-and-forget: RAG must never block or delay save/close
+  /// (D12.4); on any failure local Drift remains authoritative.
+  void _scheduleRagSync(Note note) {
+    final tagNames = _resolveTagNames(note.tagIds);
+    final isIndexable = tagNames.any(AppConstants.ragIndexTags.contains);
+    final service = ref.read(remoteNoteServiceProvider);
+    final content = plainTextFromDelta(note.content);
+    unawaited(() async {
+      try {
+        if (isIndexable) {
+          await service.indexNote(
+            noteId: note.id,
+            title: note.title,
+            content: content,
+            tags: tagNames,
+          );
+        } else {
+          await service.deindexNote(noteId: note.id);
+        }
+      } catch (_) {
+        // Non-fatal — local Drift is the source of truth.
+      }
+    }());
   }
 
   // ─── Build ────────────────────────────────────────────────────────────────

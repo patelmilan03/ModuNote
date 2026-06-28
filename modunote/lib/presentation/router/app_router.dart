@@ -10,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/datasources/local/database_providers.dart';
 import '../views/note_list/note_list_screen.dart';
 import '../views/note_editor/note_editor_screen.dart';
+import '../views/qna/qna_screen.dart';
 import '../views/search/search_screen.dart';
 import '../views/tags/tags_screen.dart';
 import '../views/archive/archived_notes_screen.dart';
@@ -27,6 +28,7 @@ abstract class AppRoutes {
   static const String tags = '/tags';
   static const String settings = '/settings';
   static const String archive = '/archive';
+  static const String qna = '/qna';
 
   /// Builds the edit-note path for a specific [id].
   static String editNotePath(String id) => '/note/$id';
@@ -80,6 +82,10 @@ GoRouter router(Ref ref) {
       GoRoute(
         path: AppRoutes.archive,
         builder: (context, state) => const ArchivedNotesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.qna,
+        builder: (context, state) => const QnaScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

@@ -31,4 +31,10 @@ abstract class AppConstants {
 
   // ─── Shared Preferences keys (Phase 9) ───────────────────────
   static const String prefThemeMode = 'theme_mode';
+
+  // ─── RAG / AI (Phase 12 Stage 2) ──────────────────────────────
+  /// A note carrying any of these tags (lowercase) is indexed on the backend
+  /// for RAG QnA. Losing all of them (or deletion) deindexes it. Mirrors the
+  /// backend `rag_index_tags` config (see DECISIONS.md D12.7).
+  static const Set<String> ragIndexTags = {'study', 'notes', 'research'};
 }

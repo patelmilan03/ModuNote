@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../core/errors/app_exception.dart';
+import '../../data/models/qna_answer.dart';
 
 /// HTTP client for the ModuNote FastAPI backend.
 ///
@@ -122,6 +123,78 @@ class RemoteNoteService {
       rethrow;
     } catch (e) {
       throw RemoteServiceException('assist network error', cause: e);
+    }
+  }
+
+  /// Indexes a note's plain text into the backend vector store (RAG, Stage 2).
+  /// Called when an indexable note (tagged study/notes/research) is saved/closed.
+  /// Returns the number of chunks stored. Empty content deindexes server-side.
+  Future<int> indexNote({
+    required String noteId,
+    required String title,
+    required String content,
+    List<String> tags = const [],
+  }) async {
+    final uri = Uri.parse('$_baseUrl/index/notes');
+    try {
+      final response = await http.post(
+        uri,
+        headers: _headers,
+        body: jsonEncode({
+          'note_id': noteId,
+          'title': title,
+          'content': content,
+          'tags': tags,
+        }),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data['chunks_indexed'] as int? ?? 0;
+      }
+      throw RemoteServiceException('indexNote failed: ${response.statusCode}');
+    } on RemoteServiceException {
+      rethrow;
+    } catch (e) {
+      throw RemoteServiceException('indexNote network error', cause: e);
+    }
+  }
+
+  /// Removes a note's chunks from the backend vector store (RAG, Stage 2).
+  /// Called when a note loses all trigger tags or is deleted.
+  Future<void> deindexNote({required String noteId}) async {
+    final uri = Uri.parse('$_baseUrl/index/notes/$noteId');
+    try {
+      final response = await http.delete(uri, headers: _headers);
+      // 204 = removed; 404 = nothing indexed (already gone) — both are fine.
+      if (response.statusCode == 204 || response.statusCode == 404) return;
+      throw RemoteServiceException('deindexNote failed: ${response.statusCode}');
+    } on RemoteServiceException {
+      rethrow;
+    } catch (e) {
+      throw RemoteServiceException('deindexNote network error', cause: e);
+    }
+  }
+
+  /// Asks a natural-language question grounded in the indexed notes (RAG QnA).
+  /// Returns the answer plus the source notes it cited.
+  Future<QnaAnswer> ask({required String question}) async {
+    final uri = Uri.parse('$_baseUrl/qna');
+    try {
+      final response = await http.post(
+        uri,
+        headers: _headers,
+        body: jsonEncode({'question': question}),
+      );
+      if (response.statusCode == 200) {
+        return QnaAnswer.fromJson(
+          jsonDecode(response.body) as Map<String, dynamic>,
+        );
+      }
+      throw RemoteServiceException('ask failed: ${response.statusCode}');
+    } on RemoteServiceException {
+      rethrow;
+    } catch (e) {
+      throw RemoteServiceException('ask network error', cause: e);
     }
   }
 

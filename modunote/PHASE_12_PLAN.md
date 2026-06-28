@@ -14,7 +14,7 @@
 
 | Decision | Value |
 |---|---|
-| Provider | **Groq** (chat — `llama-3.3-70b-versatile`). Stage 2 embeddings via local `sentence-transformers` (Groq has none). Switched from Gemini 2026-06-22. |
+| Provider | **Groq** (chat — `llama-3.3-70b-versatile`). Stage 2 embeddings via **hosted Jina `jina-embeddings-v2-base-en`, 768-dim** (Groq has none; switched from the earlier local `sentence-transformers` plan on 2026-06-27 — Render free 512 MB RAM can't fit PyTorch, see `DECISIONS.md` D12.7). Switched chat provider from Gemini 2026-06-22. |
 | Architecture | **Flutter → FastAPI (`modunote-api/`) → Groq.** Flutter never calls the LLM directly. API key stays server-side. |
 | Auth/scope | **Single-user.** Local dev: `DEV_MODE=true` bypass. Deployed (Stage 4): one static API key in a request header. No multi-tenant/JWT-per-user. |
 | Stage 1 UI | **Both** — auto-tag suggestions as a dismissible banner + a bottom sheet for the text-rewrite actions. |
@@ -35,7 +35,7 @@
 | Stage | Flutter (`pubspec.yaml`) | Backend (`requirements.txt`) | Env vars (backend `.env`) |
 |---|---|---|---|
 | 1 | none (uses `http`) | `groq` | `GROQ_API_KEY`, `GROQ_MODEL=llama-3.3-70b-versatile` |
-| 2 | none | `pgvector`, `sentence-transformers`, `tiktoken` (chunk sizing) | `EMBED_MODEL=all-MiniLM-L6-v2`, `RAG_TOP_K=5` |
+| 2 | none | `asyncpg` (uncomment), `pgvector`, `tiktoken` (chunk sizing) — *not* `sentence-transformers` (D12.7) | `DATABASE_URL`=Supabase, `JINA_API_KEY`, `JINA_MODEL=jina-embeddings-v2-base-en`, `EMBED_DIM=768`, `RAG_TOP_K=5` |
 | 3 | `sentry_flutter` (optional, app-side) | `langfuse`, `sentry-sdk[fastapi]`, `ragas`, `datasets` | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`, `SENTRY_DSN` |
 | 4 | none (build-time `--dart-define=API_BASE_URL=…`) | none new | `API_KEY` (static, single-user), `ALLOWED_ORIGINS` |
 
@@ -136,22 +136,25 @@ Open a note → run "Humanize" → see rewritten text in the sheet → Insert wo
   - DELETE `/index/notes/{note_id}` — remove all chunks for that note.
 
 ### 2B. Backend RAG pipeline
+> **Deviation (2026-06-27, D12.7):** embeddings are **hosted Jina `jina-embeddings-v2-base-en` (768-dim)** over `httpx`, not local `sentence-transformers`; the vector store is **Supabase Postgres + pgvector** (set `DATABASE_URL` to the Supabase connection string), not the Render/local Postgres. The vector column is therefore `vector(768)`. Backend was stateless until now — Stage 2 also adds the runtime DB session (`db/session.py`) and re-enables `asyncpg`.
 - Enable **pgvector**: `CREATE EXTENSION IF NOT EXISTS vector;` Add via the first Alembic migration.
 - Tables (Alembic `revision --autogenerate` after defining models in `db/models.py`):
   - `documents` (note_id PK, title, tags, updated_at)
-  - `chunks` (id PK, note_id FK, chunk_index, text, embedding `vector(384)` — match `all-MiniLM-L6-v2` dims; verify dim) + an ivfflat/hnsw index on `embedding`.
-- Ingestion: chunk plain text (~500–800 tokens, ~100 overlap; use `tiktoken` for sizing) → embed each chunk via local `sentence-transformers` (`all-MiniLM-L6-v2`) → upsert into `chunks`.
+  - `chunks` (id PK, note_id FK, chunk_index, text, embedding `vector(768)` — match `jina-embeddings-v2-base-en` dims) + an ivfflat/hnsw cosine index on `embedding`.
+- Ingestion: chunk plain text (~500–800 tokens, ~100 overlap; use `tiktoken` for sizing) → embed each chunk via the **Jina embeddings API** (`services/embedding_service.py`) → upsert into `chunks`.
 - Retrieval (`/qna`, body `{ "question": str }` → `{ "answer": str, "citations": [{note_id, title, snippet}] }`):
   - embed the question → pgvector cosine top-k (`RAG_TOP_K`, default 5) → build a context block with source labels → Groq chat prompt: "Answer the question using ONLY the provided notes. Cite the note titles you used. If the notes don't contain the answer, say so." → return answer + the citation list (the retrieved chunks' note_id/title/snippet).
 - Guard: if no chunks indexed or retrieval empty, return a friendly "No indexed notes to answer from yet."
 
 **Stage 2 backend checklist**
-- [ ] `pgvector` dependency + `CREATE EXTENSION vector` in first Alembic migration
-- [ ] `db/models.py` `documents` + `chunks` (vector column + ANN index); `alembic upgrade head` runs clean
-- [ ] `services/rag_service.py`: chunk → embed → upsert; deindex; retrieve top-k
-- [ ] `/index/notes` (upsert), `DELETE /index/notes/{id}`, `/qna` endpoints
-- [ ] Embedding dim verified against `all-MiniLM-L6-v2` (384); cosine distance op class on the index
-- [ ] Swagger test: index 2–3 notes, ask a question, get a grounded answer + citations
+- [x] `pgvector` dependency + `CREATE EXTENSION vector` in first Alembic migration (2026-06-27 — `alembic/versions/0001_rag_tables.py`; also `asyncpg`, `tiktoken`)
+- [x] `db/models.py` `documents` + `chunks` (vector column + HNSW ANN index); `db/session.py` runtime async session added (2026-06-27). *(`alembic upgrade head` is the developer step S2-B8 — needs a live Supabase DB.)*
+- [x] `services/rag_service.py`: chunk (tiktoken) → embed (Jina) → upsert; deindex; retrieve top-k (2026-06-27)
+- [x] `/index/notes` (upsert), `DELETE /index/notes/{id}`, `/qna` endpoints — `routers/rag.py`, wired into `main.py` (2026-06-27)
+- [x] Embedding dim = 768 (`jina-embeddings-v2-base-en`); cosine op class (`vector_cosine_ops`) on the HNSW index (2026-06-27)
+- [ ] Swagger test: index 2–3 notes, ask a question, get a grounded answer + citations *(developer step S2-B8 — needs Supabase `DATABASE_URL` + `JINA_API_KEY`)*
+
+> Validated by an import/wiring smoke test (`venv` python): all modules import, the pgvector cosine query compiles, the chunker works, routes registered. `flutter analyze` = 0.
 
 ### 2C. Flutter — dedicated QnA screen
 - New route (e.g. `/qna`) and a nav entry (add a destination, or a prominent card/icon — keep the 4-tab shell or add a 5th destination; document the choice in DECISIONS when built).
@@ -161,11 +164,11 @@ Open a note → run "Humanize" → see rewritten text in the sheet → Insert wo
 - Wire indexing into the note save/close path for trigger-tagged notes (and deindex on tag removal/delete).
 
 **Stage 2 Flutter checklist**
-- [ ] `RAG_INDEX_TAGS` constant; index/deindex wired into note save-close + delete
-- [ ] `RemoteNoteService.indexNote/deindexNote/ask`
-- [ ] `/qna` route + nav entry; `QnaScreen` (chat UI + citation chips → note deep-link)
-- [ ] `QnaViewModel` (`@riverpod`); `build_runner` run
-- [ ] `flutter analyze` = 0 issues
+- [x] `AppConstants.ragIndexTags`; index/deindex wired into note save-close (`_scheduleRagSync` in `_onBack`) + delete (2026-06-27)
+- [x] `RemoteNoteService.indexNote/deindexNote/ask` (+ `QnaAnswer`/`Citation` model) (2026-06-27)
+- [x] `/qna` route + Home "Ask your notes" card (`_AskNotesCard`); `QnaScreen` (chat UI + citation chips → `editNotePath`) (2026-06-27)
+- [x] `QnaViewModel` (`@riverpod`, auto-dispose); `build_runner` run (2026-06-27)
+- [x] `flutter analyze` = 0 issues (2026-06-27)
 
 ### Stage 2 acceptance
 Tag 2–3 notes `#study`, close them (they index) → open QnA screen → ask a question answerable from those notes → get a grounded answer + tappable citations that open the right note. Ask something unrelated → model says it can't answer from the notes.
@@ -222,9 +225,10 @@ Push to main → Action builds and deploys → the live HTTPS API answers a QnA 
 ---
 
 ## Open items deferred by design (decide at the relevant stage, then record in DECISIONS)
-- **QnA nav placement**: 5th nav destination vs card entry vs replacing a tab — decide at Stage 2C.
+- ✅ **QnA nav placement** *(resolved 2026-06-27, D12.7)*: **Home-screen card** ("Ask your notes") → `/qna`. Not a 5th tab (the 4-tab pill + center FAB is full).
+- ✅ **Embeddings + vector host** *(resolved 2026-06-27, D12.7)*: hosted Jina (768-dim) + Supabase pgvector.
 - **RAG trigger tags**: default `{study, notes, research}`; make user-configurable later if wanted.
-- **Deployment host**: Hetzner/DO VM vs Fly.io — decide at Stage 4 start.
+- **Deployment host**: Render (web service) chosen at Stage 4 (D12.6); Supabase for the DB (D12.7).
 - **Chunk size / top_k**: start 500–800 tokens / k=5; tune using Stage 3 eval scores.
 
 ## Things that must NOT happen (anti-drift guardrails)

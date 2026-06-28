@@ -158,6 +158,7 @@ All raw token values are in `lib/core/theme/app_colors.dart`.
 | `/note/new` | NoteEditorScreen (new) | ❌ Full-screen push |
 | `/note/:id` | NoteEditorScreen (edit) | ❌ Full-screen push |
 | `/archive` | ArchivedNotesScreen | ❌ Full-screen push (from Settings) |
+| `/qna` | QnaScreen (RAG QnA — Phase 12 Stage 2) | ❌ Full-screen push (from Home "Ask your notes" card) |
 
 The four shell tabs share a persistent `MNBottomNav` rendered by `_AppShell` in `app_router.dart`. Tab screens return body content only — no `Scaffold` or `SafeArea`. Note Editor routes are outside the shell and pushed via `context.push`.
 
@@ -232,7 +233,10 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `lib/services/audio/audio_recording_service.dart` | flutter_sound wrapper — record AAC, stream amplitude, playback |
 | `lib/services/speech/speech_to_text_service.dart` | speech_to_text wrapper — live dictation with Android timeout recovery |
 | `lib/services/auth/firebase_auth_service.dart` | Singleton — `signInAnonymously()` (idempotent). Called from `main.dart`. |
-| `lib/services/remote/remote_note_service.dart` | HTTP client for the FastAPI backend — `suggestTags()` + `summariseNote()` (both stub-level; called in Phase 12). Plain Dart class, not a Riverpod provider. Default base URL `http://10.0.2.2:8000/api/v1` (Android emulator loopback). |
+| `lib/services/remote/remote_note_service.dart` | HTTP client for the FastAPI backend — Stage 1: `suggestTags()` / `summariseNote()` / `assist()` / `transcribe()`; Stage 2 RAG: `indexNote()` / `deindexNote()` / `ask()` (returns `QnaAnswer`). Plain Dart class, not a Riverpod provider. Default base URL `http://10.0.2.2:8000/api/v1`; overridden in prod via `--dart-define API_BASE_URL`. |
+| `lib/data/models/qna_answer.dart` | `QnaAnswer` + `Citation` immutable models (Equatable) for RAG QnA responses (Phase 12 Stage 2). |
+| `lib/presentation/viewmodels/qna_view_model.dart` | `QnaViewModel` (`@riverpod`, auto-dispose) — holds `List<QnaTurn>` (question + `AsyncValue<QnaAnswer>`); `ask()` / `clear()`. |
+| `lib/presentation/views/qna/qna_screen.dart` | `QnaScreen` (`ConsumerStatefulWidget`) — chat-style RAG QnA: question/answer bubbles, "Searching your notes…" loading, citation chips deep-linking to `/note/:id`, empty state, input bar. Pushed from the Home "Ask your notes" card. |
 | `lib/firebase_options.dart` | Real Firebase config (gitignored) — `flutterfire configure` already run for project `modunote-ba654`. A fresh clone on a new machine must re-run `flutterfire configure`. |
 | `lib/data/datasources/local/converters/type_converters.dart` | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` |
 | `lib/data/repositories/remote/firebase_note_repository.dart` | Live Firestore write impl — `insert`/`update`/`archive`/`unarchive`/`delete`/`togglePin` via Firestore set. Reads remain `UnimplementedError`. |
