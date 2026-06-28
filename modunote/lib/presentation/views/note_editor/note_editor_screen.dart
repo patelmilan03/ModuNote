@@ -25,6 +25,7 @@ import '../../viewmodels/audio_editor_view_model.dart';
 import '../../viewmodels/audio_pref_view_model.dart';
 import '../../viewmodels/category_tree_view_model.dart';
 import '../../viewmodels/note_editor_view_model.dart';
+import '../../viewmodels/rag_settings_view_model.dart';
 import '../../viewmodels/tag_list_view_model.dart';
 import '../../widgets/mn_editor_toolbar.dart';
 import '../../widgets/mn_category_picker_sheet.dart';
@@ -689,7 +690,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   /// (D12.4); on any failure local Drift remains authoritative.
   void _scheduleRagSync(Note note) {
     final tagNames = _resolveTagNames(note.tagIds);
-    final isIndexable = tagNames.any(AppConstants.ragIndexTags.contains);
+    final triggerTags = ref.read(ragIndexTagsProvider);
+    final isIndexable = tagNames.any(triggerTags.contains);
     final service = ref.read(remoteNoteServiceProvider);
     final content = plainTextFromDelta(note.content);
     unawaited(() async {

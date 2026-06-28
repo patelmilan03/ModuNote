@@ -227,7 +227,7 @@ Push to main → Action builds and deploys → the live HTTPS API answers a QnA 
 ## Open items deferred by design (decide at the relevant stage, then record in DECISIONS)
 - ✅ **QnA nav placement** *(resolved 2026-06-27, D12.7)*: **Home-screen card** ("Ask your notes") → `/qna`. Not a 5th tab (the 4-tab pill + center FAB is full).
 - ✅ **Embeddings + vector host** *(resolved 2026-06-27, D12.7)*: hosted Jina (768-dim) + Supabase pgvector.
-- **RAG trigger tags**: default `{study, notes, research}`; make user-configurable later if wanted.
+- ✅ **RAG trigger tags** *(user-configurable, done 2026-06-27)*: default `{study, notes, research}`, now editable from Settings + persisted (`RagIndexTags` notifier, key `rag_index_tags`); `_scheduleRagSync` reads the live set. See D12.7. ✅ **Refinement (S2-F9, done 2026-06-27):** the Settings scope picker offers ONLY existing tags (bottom-sheet picker over `tagListViewModelProvider`); no free-text creation.
 - **Deployment host**: Render (web service) chosen at Stage 4 (D12.6); Supabase for the DB (D12.7).
 - **Chunk size / top_k**: start 500–800 tokens / k=5; tune using Stage 3 eval scores.
 

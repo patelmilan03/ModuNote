@@ -236,6 +236,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `lib/services/remote/remote_note_service.dart` | HTTP client for the FastAPI backend — Stage 1: `suggestTags()` / `summariseNote()` / `assist()` / `transcribe()`; Stage 2 RAG: `indexNote()` / `deindexNote()` / `ask()` (returns `QnaAnswer`). Plain Dart class, not a Riverpod provider. Default base URL `http://10.0.2.2:8000/api/v1`; overridden in prod via `--dart-define API_BASE_URL`. |
 | `lib/data/models/qna_answer.dart` | `QnaAnswer` + `Citation` immutable models (Equatable) for RAG QnA responses (Phase 12 Stage 2). |
 | `lib/presentation/viewmodels/qna_view_model.dart` | `QnaViewModel` (`@riverpod`, auto-dispose) — holds `List<QnaTurn>` (question + `AsyncValue<QnaAnswer>`); `ask()` / `clear()`. |
+| `lib/presentation/viewmodels/rag_settings_view_model.dart` | `RagIndexTags` (`@riverpod`, keepAlive) — user-editable, SharedPreferences-persisted set of RAG trigger tags (key `rag_index_tags`), default `AppConstants.ragIndexTags`. Read by the editor's `_scheduleRagSync`; edited in Settings ("Ask your notes — scope" card). |
 | `lib/presentation/views/qna/qna_screen.dart` | `QnaScreen` (`ConsumerStatefulWidget`) — chat-style RAG QnA: question/answer bubbles, "Searching your notes…" loading, citation chips deep-linking to `/note/:id`, empty state, input bar. Pushed from the Home "Ask your notes" card. |
 | `lib/firebase_options.dart` | Real Firebase config (gitignored) — `flutterfire configure` already run for project `modunote-ba654`. A fresh clone on a new machine must re-run `flutterfire configure`. |
 | `lib/data/datasources/local/converters/type_converters.dart` | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` |
@@ -256,6 +257,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `STATUS.md` | Project status + handoff — phase log, current state, next-phase scope (former `progress.md` + `THREAD_HANDOFF.md`, merged) |
 | `PHASE_12_PLAN.md` | Detailed Phase 12 AI build spec — all 4 stages with per-stage task checklists. The standing plan any thread follows. |
 | `TESTING.md` | Manual testing checklist — 40 sections, ~175+ checks. Quick smoke test (~50 🔴 critical checks, ~20 min) + full regression (~175+ checks, ~1.5 hr). Section 40 = Firebase sync checks. |
+| `TECH_STACK.md` | Portfolio/interview reference — every implemented technology with how-we-used-it, why-over-alternatives, and likely interview Q&A. Implemented tech only (no roadmap items). |
 
 ---
 

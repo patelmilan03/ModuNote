@@ -33,8 +33,18 @@ class MNNoteCard extends StatelessWidget {
     if (diff.inDays == 1) return 'Yesterday';
     if (diff.inDays < 7) return '${diff.inDays}d ago';
     const mo = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final d = note.updatedAt;
     if (d.year == now.year) return '${mo[d.month - 1]} ${d.day}';
@@ -67,16 +77,12 @@ class MNNoteCard extends StatelessWidget {
         : (isDark ? AppColors.darkCard : AppColors.lightCard);
 
     // rgba(245,158,11,0.35) ≈ 0x59
-    final borderColor = note.isPinned
-        ? const Color(0x59F59E0B)
-        : cs.outline;
+    final borderColor = note.isPinned ? const Color(0x59F59E0B) : cs.outline;
 
     final muted =
         isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
-    final chipBg =
-        isDark ? AppColors.darkChipBg : AppColors.lightChipBg;
-    final chipFg =
-        isDark ? AppColors.darkChipText : AppColors.lightChipText;
+    final chipBg = isDark ? AppColors.darkChipBg : AppColors.lightChipBg;
+    final chipFg = isDark ? AppColors.darkChipText : AppColors.lightChipText;
 
     final preview = _preview();
     final shownTags = tagNames.take(3).toList();
@@ -154,11 +160,11 @@ class MNNoteCard extends StatelessWidget {
             // ── Tag chips ───────────────────────────────────────────
             if (shownTags.isNotEmpty) ...[
               const SizedBox(height: 10),
-              Column(
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (int i = 0; i < shownTags.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 4),
+                    if (i > 0) const SizedBox(width: 4),
                     _TagChip(
                       label: '#${shownTags[i]}',
                       chipBg: chipBg,

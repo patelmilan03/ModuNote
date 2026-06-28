@@ -32,9 +32,13 @@ abstract class AppConstants {
   // ─── Shared Preferences keys (Phase 9) ───────────────────────
   static const String prefThemeMode = 'theme_mode';
 
+  /// Persisted set of RAG trigger tags (editable in Settings, Phase 12 Stage 2).
+  static const String prefRagIndexTags = 'rag_index_tags';
+
   // ─── RAG / AI (Phase 12 Stage 2) ──────────────────────────────
-  /// A note carrying any of these tags (lowercase) is indexed on the backend
-  /// for RAG QnA. Losing all of them (or deletion) deindexes it. Mirrors the
-  /// backend `rag_index_tags` config (see DECISIONS.md D12.7).
+  /// DEFAULT set of trigger tags (lowercase). A note carrying any of these is
+  /// indexed on the backend for RAG QnA; losing all of them (or deletion)
+  /// deindexes it. This is only the default — the live set is user-editable and
+  /// persisted via `RagIndexTags` (rag_settings_view_model.dart). See D12.7.
   static const Set<String> ragIndexTags = {'study', 'notes', 'research'};
 }

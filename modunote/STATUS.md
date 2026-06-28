@@ -105,6 +105,12 @@ Flutter (`modunote/`):
 - ✅ **S2-F5 — Route + entry** *(2026-06-27)*: `AppRoutes.qna = '/qna'` GoRoute (outside shell); `_AskNotesCard` on Home (below search field) → `context.push('/qna')`.
 - ✅ **S2-F6 — Screen** *(2026-06-27)*: `QnaScreen` (`ConsumerStatefulWidget`) — chat bubbles, thinking row, citation chips → `context.push(editNotePath)`, empty state, input bar.
 - ✅ **S2-F7 — Quality** *(2026-06-27)*: `flutter analyze` = **0 issues**.
+- ✅ **S2-F8 — User-editable trigger tags** *(2026-06-27, post-build request)*: `RagIndexTags` (`@riverpod` keepAlive, SharedPreferences key `rag_index_tags`, defaults to `AppConstants.ragIndexTags`) in `rag_settings_view_model.dart`; `_scheduleRagSync` reads it; Settings "Ask your notes — scope" card (`_RagTagsCard`) adds/removes trigger tags. `flutter analyze` = 0. Caveat: applies on next open+close per note (no bulk re-index yet).
+- ✅ **S2-F9 — Restrict scope picker to EXISTING tags** *(2026-06-27)*: `_RagTagsCard` "add tag" now opens `_TagPickerSheet` listing the user's existing tags (`tagListViewModelProvider`, minus already-selected) — no free-text/new-tag creation. Tap an existing tag → `addTag(tag.name)`. Empty cases show a SnackBar ("Create some tags…" / "All your tags are already in the scope"). `settings_screen.dart` only; `flutter analyze` = 0.
+
+> **Backend note (2026-06-27):** `modunote-api/services/embedding_service.py` now forces IPv4 on the Jina call via `httpx.AsyncHTTPTransport(local_address="0.0.0.0")` — fixes Render free-tier `[Errno 101] Network is unreachable` (no IPv6 egress). Keep this when deploying.
+>
+> **Device connectivity (open developer step):** physical-device "AI unavailable" is because the app falls back to `10.0.2.2` (emulator-only) with no `--dart-define`. Fix = rebuild once with `--dart-define=API_BASE_URL=<reachable>/api/v1` (+ `API_KEY` for Render, `DEV_MODE=false`); set Supabase `DATABASE_URL` + `JINA_API_KEY` in the Render dashboard first. `--dart-define` does NOT wipe Drift data on a same-build-mode rebuild.
 
 **Remaining for full Stage 2 (developer):** S2-B8 — create Supabase project, set `DATABASE_URL` (direct conn) + `JINA_API_KEY` in `modunote-api/.env`, `alembic upgrade head`, Swagger smoke test; then set the same two secrets in the Render dashboard (already wired in `render.yaml`). After that, Stage 2 is end-to-end.
 
