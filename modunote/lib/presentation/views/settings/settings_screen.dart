@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/app_toast.dart';
 import '../../../data/models/tag.dart';
 import '../../router/app_router.dart';
 import '../../viewmodels/audio_pref_view_model.dart';
+import '../../viewmodels/rag_reindex_view_model.dart';
 import '../../viewmodels/rag_settings_view_model.dart';
 import '../../viewmodels/tag_list_view_model.dart';
 
@@ -94,9 +96,28 @@ class _RagTagsCard extends ConsumerWidget {
     }
   }
 
+  /// Re-indexes every existing note that carries a scope tag, then reports the
+  /// outcome via an app-wide toast.
+  Future<void> _reindexAll(WidgetRef ref) async {
+    final result = await ref.read(ragReindexProvider.notifier).reindexAll();
+    if (result.ok == 0 && result.fail == 0) {
+      showInfoToast('No notes match your scope tags yet.');
+    } else if (result.fail == 0) {
+      showSuccessToast(
+        'Indexed ${result.ok} note${result.ok == 1 ? '' : 's'} for AI search.',
+      );
+    } else {
+      showErrorToast(
+        '${result.ok} indexed, ${result.fail} failed — check connection.',
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tags = ref.watch(ragIndexTagsProvider).toList()..sort();
+    final isReindexing = ref.watch(ragReindexProvider);
+    final cs = Theme.of(context).colorScheme;
     final card = isDark ? AppColors.darkCard : AppColors.lightCard;
     final outline = isDark ? AppColors.darkOutline : AppColors.lightOutline;
     final onSurface =
@@ -167,6 +188,44 @@ class _RagTagsCard extends ConsumerWidget {
               ),
             ),
           ],
+          const SizedBox(height: 14),
+          GestureDetector(
+            onTap: isReindexing ? null : () => _reindexAll(ref),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: cs.primaryContainer,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isReindexing)
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: cs.onPrimaryContainer,
+                      ),
+                    )
+                  else
+                    Icon(Icons.sync, size: 18, color: cs.onPrimaryContainer),
+                  const SizedBox(width: 8),
+                  Text(
+                    isReindexing
+                        ? 'Re-indexing…'
+                        : 'Re-index all notes now',
+                    style: AppTypography.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onPrimaryContainer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

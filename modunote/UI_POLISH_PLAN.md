@@ -1,0 +1,53 @@
+# ModuNote — UI Polish Plan
+
+> Standing plan for the post-Stage-2 **UI polish queue** (developer-requested, 2026-06-27). Companion to `STATUS.md` (live status), `DECISIONS.md` (rationale), and `PHASE_12_PLAN.md` (AI stages). **Rule: do one item at a time; scope it — and show a mockup for visual items — before writing code.**
+
+## Process rules (every item)
+- One item at a time, in queue order. Get approval on scope before coding.
+- For visual items, present mockup variant(s) and let the developer pick before building.
+- `flutter analyze` = 0 after each change; run the read-only Dart verification subagent.
+- No git ops (developer commits via GitHub Desktop); append each request verbatim to `session_context.md`; update `STATUS.md`/`CLAUDE.md`/`DECISIONS.md` as items land.
+
+## Build queue (order updated 2026-06-27)
+1. ✅ **Skeleton loaders** — DONE. `skeletonizer` + `presentation/widgets/mn_skeletons.dart`; Tags / Search / Archive / Note editor loading states. (STATUS S2-F11.)
+2. ✅ **Voice panel redesign** — DONE (2026-06-27). **Variant A** — pill→card grow via `AnimatedContainer`+`AnimatedSize` in `_VoicePanel.build()`; behavior preserved. B kept as a documented 1-prompt fallback (below). (STATUS S2-F12.)
+3. 🟡 **Test suite** — NEXT. ViewModel/model unit tests (+ optional backend pytest). Done *before* de-bloat as a refactor safety net.
+4. ⬜ **Efficiency / de-bloat pass** — reduce app size/bloat: trim unused code/deps/assets, refactor hot spots, shrink the large `note_editor_screen.dart`, audit build size.
+5. ⬜ **Startup UX** — splash screen + first-run onboarding slides.
+
+> **After this queue:** Stage 3 — monitoring / observability + evals (Langfuse, Sentry, RAGAS) per `PHASE_12_PLAN.md`.
+
+---
+
+## Item 2 — Voice panel redesign (current focus)
+
+**Goal:** modernise the voice recording + seek UI so it echoes the floating navbar pill, with an **animated expansion**: collapsed state = a rounded **pill**; on tap it **animates growing bigger** into the full panel; collapsing animates back down to the pill. ("We can improve on the original design after.")
+
+**Current widget:** `_VoicePanel` in `lib/presentation/views/note_editor/note_editor_screen.dart` — play/pause, drag-to-seek bar, `current:total` timers, record/mic button, one-at-a-time recording carousel (prev/next); expanding reveals transcript + Paraphrase (opens the Stage-1 AI sheet) + Insert-into-note + red-trash delete. It's bottom-anchored and **swaps with `MNEditorToolbar`** based on keyboard visibility (`MediaQuery.viewInsets.bottom`).
+
+**Animation approach (implementation, once a variant is chosen):**
+- Morph pill → panel with `AnimatedContainer`/`AnimatedSize` (or an `AnimationController` + `SizeTransition`/`AlignTransition`) animating height, width, and corner radius; cross-fade the expanded content in.
+- Keep it bottom-anchored; preserve the keyboard-up (toolbar) ↔ keyboard-down (voice panel) swap.
+- Preserve ALL existing functions: play/pause, drag-seek, timers, record, carousel, transcript, Paraphrase, Insert, delete-with-confirm.
+- Use `AppColors`/`AppTypography`; pill styling consistent with `MNBottomNav`.
+
+**Chosen direction (2026-06-27): Variant A — anchored card that grows from the pill.** Collapsed = a full-width rounded pill flush to the bottom (play · seek · `current:total` · mic); tapping animates it growing straight up into a rounded card (all corners rounded) revealing the waveform, transcript, and Paraphrase / Insert / delete actions. Animate height + corner-radius (`AnimatedContainer`/`AnimatedSize`) with expanded content cross-fading in.
+
+### Variant B (documented fallback — switch is a single prompt)
+If A is disliked, "switch to Variant B" regenerates it cleanly against the then-current code (no commented-out/dead code kept, per the de-bloat goal). **B spec:** identical collapsed pill + expanded content as A, but the panel is a **floating pill with side margins and a soft drop shadow** (mirrors `MNBottomNav`) that inflates *in place* while staying floating — rather than A's edge-to-edge anchored card. (Variant C, considered but not chosen: morphs into a bottom sheet with a grab handle, top-rounded corners.) The interactive mockup of all three lives in the 2026-06-27 chat (`voice_panel_grow_from_pill_variants`).
+
+---
+
+## Item 3 — Startup UX (after voice panel)
+- **Splash screen:** native (`flutter_native_splash`, shown while engine loads) and/or an animated in-app splash. *Decisions needed:* logo asset (wordmark vs image), static / animated / both.
+- **First-run onboarding:** a `PageView` carousel of feature slides, shown once on first launch, gated by a SharedPreferences "seen" flag. *Decisions needed:* slide content + count, custom vs `introduction_screen` package.
+
+## Item 4 — Test suite (last)
+- Today only `test/widget_test.dart` (placeholder). *Scope TBD:* ViewModel unit tests (Riverpod provider overrides + fake repositories), model `copyWith`/equality, DI/provider sanity; optional backend `pytest` (rag_service chunking, ai_service tag parsing, FastAPI endpoint tests via TestClient).
+
+---
+
+## Context snapshot (so this plan stands alone)
+- Phase 12 Stage 2 (RAG QnA) code complete; **Render backend verified working 2026-06-27** (live `/qna` + `/index` return 200 after switching Render's `DATABASE_URL` to the Supabase session pooler).
+- Debugging: `.vscode/launch.json` has "ModuNote (Render API)" (full debug + Inspector + AI via `--dart-define-from-file=dart_defines.json`) and "ModuNote (local / no backend)".
+- Remaining AI roadmap (separate from this UI queue): Stage 3 observability/evals, Stage 4 deployment hardening — see `PHASE_12_PLAN.md`.

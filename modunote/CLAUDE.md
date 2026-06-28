@@ -30,6 +30,8 @@
 | Fonts | Google Fonts | Plus Jakarta Sans (headings) + Inter (body) |
 | UUID | v4 | `uuid` v4 |
 | Remote API client | HTTP wrapper | `http` ^1.2.0 — `RemoteNoteService` |
+| Toasts | App-wide overlay | `toastification` ^3.2.0 — global `rootNavigatorKey` + `core/utils/app_toast.dart` |
+| Skeleton loaders | Shimmer placeholders | `skeletonizer` — `presentation/widgets/mn_skeletons.dart` (Tags/Search/Archive/editor loading states) |
 
 **Rule**: ViewModels (`AsyncNotifier` / `Notifier`) depend on repository **interfaces** only — never on Drift DAOs directly. Views (`ConsumerWidget`) depend on ViewModels only.
 
@@ -237,6 +239,8 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `lib/data/models/qna_answer.dart` | `QnaAnswer` + `Citation` immutable models (Equatable) for RAG QnA responses (Phase 12 Stage 2). |
 | `lib/presentation/viewmodels/qna_view_model.dart` | `QnaViewModel` (`@riverpod`, auto-dispose) — holds `List<QnaTurn>` (question + `AsyncValue<QnaAnswer>`); `ask()` / `clear()`. |
 | `lib/presentation/viewmodels/rag_settings_view_model.dart` | `RagIndexTags` (`@riverpod`, keepAlive) — user-editable, SharedPreferences-persisted set of RAG trigger tags (key `rag_index_tags`), default `AppConstants.ragIndexTags`. Read by the editor's `_scheduleRagSync`; edited in Settings ("Ask your notes — scope" card). |
+| `lib/presentation/viewmodels/rag_reindex_view_model.dart` | `RagReindex` (`@riverpod`) — bulk re-indexer; `reindexAll()` pushes every active note whose tags ∈ scope to the backend, returns `(ok, fail)`. State = isRunning (Settings button spinner). |
+| `lib/core/utils/app_toast.dart` | Global toast helper — `rootNavigatorKey` (passed to GoRouter; app wrapped in `ToastificationWrapper` in `app.dart`) + `showSuccessToast`/`showErrorToast`/`showInfoToast` (via `toastification`). Lets background ops (RAG sync, re-index) toast app-wide with no screen `BuildContext`. core→ imports flutter+toastification+core/theme only. |
 | `lib/presentation/views/qna/qna_screen.dart` | `QnaScreen` (`ConsumerStatefulWidget`) — chat-style RAG QnA: question/answer bubbles, "Searching your notes…" loading, citation chips deep-linking to `/note/:id`, empty state, input bar. Pushed from the Home "Ask your notes" card. |
 | `lib/firebase_options.dart` | Real Firebase config (gitignored) — `flutterfire configure` already run for project `modunote-ba654`. A fresh clone on a new machine must re-run `flutterfire configure`. |
 | `lib/data/datasources/local/converters/type_converters.dart` | `QuillDeltaConverter`, `DateTimeConverter`, `StringListConverter` |
@@ -258,6 +262,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `PHASE_12_PLAN.md` | Detailed Phase 12 AI build spec — all 4 stages with per-stage task checklists. The standing plan any thread follows. |
 | `TESTING.md` | Manual testing checklist — 40 sections, ~175+ checks. Quick smoke test (~50 🔴 critical checks, ~20 min) + full regression (~175+ checks, ~1.5 hr). Section 40 = Firebase sync checks. |
 | `TECH_STACK.md` | Portfolio/interview reference — every implemented technology with how-we-used-it, why-over-alternatives, and likely interview Q&A. Implemented tech only (no roadmap items). |
+| `UI_POLISH_PLAN.md` | Standing plan for the post-Stage-2 UI polish queue: skeleton loaders (done) → voice panel redesign → splash + onboarding → test suite. One item at a time, mockup before coding. |
 
 ---
 

@@ -9,6 +9,7 @@ import '../../router/app_router.dart';
 import '../../viewmodels/archived_notes_view_model.dart';
 import '../../viewmodels/tag_list_view_model.dart';
 import '../../widgets/mn_note_card.dart';
+import '../../widgets/mn_skeletons.dart';
 
 /// Archived notes screen — full-screen, outside the ShellRoute.
 /// Swipe right to restore, swipe left to delete permanently.
@@ -43,8 +44,9 @@ class ArchivedNotesScreen extends ConsumerWidget {
                         tagMap: tagMap,
                         isDark: isDark,
                       ),
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
+                loading: () => const MNSkeletonNoteList(
+                  padding: EdgeInsets.fromLTRB(20, 4, 20, 40),
+                ),
                 error: (_, __) => Center(
                   child: TextButton(
                     onPressed: () =>

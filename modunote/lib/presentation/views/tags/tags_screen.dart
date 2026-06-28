@@ -2,11 +2,13 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/models/tag.dart';
 import '../../viewmodels/tag_list_view_model.dart';
+import '../../widgets/mn_skeletons.dart';
 
 /// Tags management screen.
 /// Shows all tags with note-count density bars.
@@ -37,8 +39,16 @@ class TagsScreen extends ConsumerWidget {
               countsAsync.valueOrNull ?? {},
               isDark,
             ),
-            loading: () =>
-                const Center(child: CircularProgressIndicator()),
+            loading: () => Skeletonizer(
+              enabled: true,
+              child: _buildTagList(
+                context,
+                ref,
+                skeletonTags(),
+                const {},
+                isDark,
+              ),
+            ),
             error: (e, _) => Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

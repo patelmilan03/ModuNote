@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:toastification/toastification.dart';
 
 import 'core/theme/app_theme.dart';
 import 'presentation/router/app_router.dart';
@@ -15,13 +16,15 @@ class ModuNoteApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeNotifierProvider);
 
-    return MaterialApp.router(
-      title: 'ModuNote',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: themeMode,
-      routerConfig: router,
+    return ToastificationWrapper(
+      child: MaterialApp.router(
+        title: 'ModuNote',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: themeMode,
+        routerConfig: router,
+      ),
     );
   }
 }

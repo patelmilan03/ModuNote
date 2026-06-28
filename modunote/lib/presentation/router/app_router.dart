@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/app_toast.dart';
 import '../../data/datasources/local/database_providers.dart';
 import '../views/note_list/note_list_screen.dart';
 import '../views/note_editor/note_editor_screen.dart';
@@ -41,6 +42,7 @@ abstract class AppRoutes {
 @riverpod
 GoRouter router(Ref ref) {
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: AppRoutes.home,
     debugLogDiagnostics: true,
     routes: [

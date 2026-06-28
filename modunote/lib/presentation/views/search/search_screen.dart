@@ -10,6 +10,7 @@ import '../../router/app_router.dart';
 import '../../viewmodels/search_view_model.dart';
 import '../../viewmodels/tag_list_view_model.dart';
 import '../../widgets/mn_note_card.dart';
+import '../../widgets/mn_skeletons.dart';
 
 /// Explore / Search screen — live full-text search against the note repository.
 class SearchScreen extends ConsumerStatefulWidget {
@@ -214,7 +215,7 @@ class _SearchBody extends StatelessWidget {
           ),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const MNSkeletonNoteList(),
       error: (_, __) => const _SearchError(),
     );
   }
@@ -270,7 +271,7 @@ class _RecentNotes extends StatelessWidget {
           ],
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const MNSkeletonNoteList(),
       error: (_, __) => const _EmptyPrompt(),
     );
   }

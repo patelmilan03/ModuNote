@@ -6,11 +6,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/extensions/quill_extensions.dart';
 import '../../../core/extensions/string_extensions.dart';
+import '../../../core/utils/app_toast.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/uuid_generator.dart';
@@ -707,7 +709,12 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           await service.deindexNote(noteId: note.id);
         }
       } catch (_) {
-        // Non-fatal — local Drift is the source of truth.
+        // Non-fatal — local Drift is the source of truth. Surface only INDEX
+        // failures (a note the user wants in AI search); deindex/cleanup
+        // failures stay silent so closing plain notes never toasts.
+        if (isIndexable) {
+          showErrorToast("Couldn't sync this note to AI search.");
+        }
       }
     }());
   }
@@ -765,7 +772,61 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         ),
       );
     }
-    return const Center(child: CircularProgressIndicator());
+    return _buildSkeletonEditor(isDark);
+  }
+
+  /// Shimmering placeholder shown while an existing note loads.
+  Widget _buildSkeletonEditor(bool isDark) {
+    final onSurface =
+        isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface;
+    final chipBg = isDark ? AppColors.darkChipBg : AppColors.lightChipBg;
+    return Skeletonizer(
+      enabled: true,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Placeholder note title here',
+              style: AppTypography.plusJakartaSans(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: onSurface,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                for (var i = 0; i < 3; i++) ...[
+                  Container(
+                    width: 64,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: chipBg,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ],
+            ),
+            const SizedBox(height: 24),
+            for (var i = 0; i < 9; i++) ...[
+              Text(
+                'Placeholder body line of the note content for the skeleton.',
+                style: AppTypography.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                  color: onSurface,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildEditor(
@@ -1041,19 +1102,36 @@ class _VoicePanelState extends ConsumerState<_VoicePanel> {
         ? AppColors.darkOnSurfaceMuted
         : AppColors.lightOnSurfaceMuted;
 
-    return Container(
+    // Variant A — the panel reads as a rounded pill when collapsed and animates
+    // growing into a rounded card when expanded (height via AnimatedSize, corner
+    // radius + padding via AnimatedContainer). Bottom-anchored, grows upward.
+    final expanded = _expanded && current != null;
+    const motion = Duration(milliseconds: 340);
+    const curve = Curves.easeInOutCubic;
+
+    return AnimatedContainer(
+      duration: motion,
+      curve: curve,
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+      padding: EdgeInsets.fromLTRB(12, expanded ? 10 : 6, 12, expanded ? 12 : 6),
       decoration: BoxDecoration(
         color: cardBg,
-        border: Border(top: BorderSide(color: outlineColor, width: 0.5)),
+        borderRadius: BorderRadius.circular(expanded ? 22 : 28),
+        border: Border.all(color: outlineColor, width: 0.5),
       ),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _topRow(clips, current, cs, onSurface, variantColor, mutedColor),
-          if (_expanded && current != null)
-            _transcriptSection(current, cs, onSurface, variantColor, mutedColor),
-        ],
+      child: AnimatedSize(
+        duration: motion,
+        curve: curve,
+        alignment: Alignment.bottomCenter,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _topRow(clips, current, cs, onSurface, variantColor, mutedColor),
+            if (expanded)
+              _transcriptSection(
+                  current, cs, onSurface, variantColor, mutedColor),
+          ],
+        ),
       ),
     );
   }
