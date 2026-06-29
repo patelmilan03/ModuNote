@@ -5,12 +5,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "modunote",
-            "cwd": "modunote",
-            "request": "launch",
-            "type": "dart"
-        },
-        {
             // Debug build (same signing key as "modunote" — will NOT wipe data),
             // but points the app at the deployed backend. The API key/URL live
             // in the gitignored modunote/dart_defines.json (not in this file).

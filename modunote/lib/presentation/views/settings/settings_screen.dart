@@ -69,28 +69,26 @@ class _RagTagsCard extends ConsumerWidget {
   /// selected.
   Future<void> _pickExistingTag(
       BuildContext context, WidgetRef ref, List<Tag> allTags) async {
-    final selected = ref.read(ragIndexTagsProvider);
-    final available = allTags.where((t) => !selected.contains(t.name)).toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
-
-    if (available.isEmpty) {
+    if (allTags.isEmpty) {
       // Rate-limited (see app_toast) so rapid taps don't stack toasts.
-      showInfoToast(
-        allTags.isEmpty
-            ? 'Create some tags on your notes first.'
-            : 'All your tags are already in the scope.',
-      );
+      showInfoToast('Create some tags on your notes first.');
+      return;
+    }
+    final scope = ref.read(ragIndexTagsProvider);
+    if (allTags.every((t) => scope.contains(t.name))) {
+      showInfoToast('All your tags are already in the scope.');
       return;
     }
 
-    final picked = await showModalBottomSheet<String>(
+    // useRootNavigator so the sheet renders ABOVE the floating bottom bar.
+    // The sheet is self-contained (multi-add): tapping a tag adds it to the
+    // scope and the remaining tags reflow, so no return value is needed.
+    await showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _TagPickerSheet(tags: available, isDark: isDark),
+      builder: (_) => _TagPickerSheet(allTags: allTags, isDark: isDark),
     );
-    if (picked != null) {
-      await ref.read(ragIndexTagsProvider.notifier).addTag(picked);
-    }
   }
 
   /// Re-indexes every existing note that carries a scope tag, then reports the
@@ -316,24 +314,30 @@ class _AddTriggerTagChip extends StatelessWidget {
 }
 
 /// Bottom sheet listing the user's existing tags to add to the RAG scope.
-/// Pops with the chosen tag name (or null if dismissed).
-class _TagPickerSheet extends StatelessWidget {
-  const _TagPickerSheet({required this.tags, required this.isDark});
+/// Self-contained multi-add: tapping a tag adds it to the scope immediately,
+/// the tag disappears from the list, and the remaining tags reflow. Dismiss by
+/// swiping down or tapping the backdrop.
+class _TagPickerSheet extends ConsumerWidget {
+  const _TagPickerSheet({required this.allTags, required this.isDark});
 
-  final List<Tag> tags;
+  final List<Tag> allTags;
   final bool isDark;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scope = ref.watch(ragIndexTagsProvider);
+    final available = allTags.where((t) => !scope.contains(t.name)).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
     final cardBg = isDark ? AppColors.darkCard : AppColors.lightCard;
     final outlineStrong =
         isDark ? AppColors.darkOutlineStrong : AppColors.lightOutlineStrong;
     final onSurface =
         isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface;
-    final chipBg =
-        isDark ? AppColors.darkChipBg : AppColors.lightChipBg;
-    final chipText =
-        isDark ? AppColors.darkChipText : AppColors.lightChipText;
+    final muted =
+        isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
+    final chipBg = isDark ? AppColors.darkChipBg : AppColors.lightChipBg;
+    final chipText = isDark ? AppColors.darkChipText : AppColors.lightChipText;
 
     return Container(
       decoration: BoxDecoration(
@@ -359,7 +363,7 @@ class _TagPickerSheet extends StatelessWidget {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Add a tag to the scope',
+                  'Add tags to the scope',
                   style: AppTypography.plusJakartaSans(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -371,32 +375,54 @@ class _TagPickerSheet extends StatelessWidget {
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final tag in tags)
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).pop(tag.name),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: chipBg,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            '#${tag.name}',
-                            style: AppTypography.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: chipText,
-                            ),
+                child: available.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          'All your tags are in the scope.',
+                          style: AppTypography.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            color: muted,
                           ),
                         ),
+                      )
+                    : Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final tag in available)
+                            GestureDetector(
+                              onTap: () => ref
+                                  .read(ragIndexTagsProvider.notifier)
+                                  .addTag(tag.name),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: chipBg,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.add,
+                                        size: 14, color: chipText),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '#${tag.name}',
+                                      style: AppTypography.inter(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: chipText,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                  ],
-                ),
               ),
             ),
           ],
