@@ -11,8 +11,8 @@
 ## Build queue (order updated 2026-06-27)
 1. ✅ **Skeleton loaders** — DONE. `skeletonizer` + `presentation/widgets/mn_skeletons.dart`; Tags / Search / Archive / Note editor loading states. (STATUS S2-F11.)
 2. ✅ **Voice panel redesign** — DONE (2026-06-27). **Variant A** — pill→card grow via `AnimatedContainer`+`AnimatedSize` in `_VoicePanel.build()`; behavior preserved. B kept as a documented 1-prompt fallback (below). (STATUS S2-F12.)
-3. 🟡 **Test suite** — NEXT. ViewModel/model unit tests (+ optional backend pytest). Done *before* de-bloat as a refactor safety net.
-4. ⬜ **Efficiency / de-bloat pass** — reduce app size/bloat: trim unused code/deps/assets, refactor hot spots, shrink the large `note_editor_screen.dart`, audit build size.
+3. ✅ **Test suite** — DONE (2026-06-29). Focused-starter suite: Flutter models + view-models (mocktail) + local repos (in-memory Drift) + RemoteNoteService (http MockClient) = **73 tests**, `flutter analyze` = 0; backend pytest (`modunote-api/`) = **18 tests** (rag_service `_chunk_text` + answer_question short-circuit, ai_service `_parse_tags`, FastAPI endpoints via TestClient with the service layer mocked). Done *before* de-bloat as a refactor safety net. See the "Test suite" section in `STATUS.md`.
+4. ⬜ **Efficiency / de-bloat pass** — NEXT. Reduce app size/bloat: trim unused code/deps/assets, refactor hot spots, shrink the large `note_editor_screen.dart`, audit build size.
 5. ⬜ **Startup UX** — splash screen + first-run onboarding slides.
 
 > **After this queue:** Stage 3 — monitoring / observability + evals (Langfuse, Sentry, RAGAS) per `PHASE_12_PLAN.md`.
@@ -42,8 +42,18 @@ If A is disliked, "switch to Variant B" regenerates it cleanly against the then-
 - **Splash screen:** native (`flutter_native_splash`, shown while engine loads) and/or an animated in-app splash. *Decisions needed:* logo asset (wordmark vs image), static / animated / both.
 - **First-run onboarding:** a `PageView` carousel of feature slides, shown once on first launch, gated by a SharedPreferences "seen" flag. *Decisions needed:* slide content + count, custom vs `introduction_screen` package.
 
-## Item 4 — Test suite (last)
-- Today only `test/widget_test.dart` (placeholder). *Scope TBD:* ViewModel unit tests (Riverpod provider overrides + fake repositories), model `copyWith`/equality, DI/provider sanity; optional backend `pytest` (rag_service chunking, ai_service tag parsing, FastAPI endpoint tests via TestClient).
+## Item 3 — Test suite (DONE 2026-06-29)
+**Flutter** (`modunote/test/`, mirrors `lib/`):
+- Models — `copyWith`/equality for Note/Tag/Category/AudioRecord; `fromJson` for QnaAnswer/Citation. Core extensions — `StringExtensions`, `plainTextFromDelta`.
+- ViewModels — RagIndexTags (SharedPreferences), QnaViewModel, NoteListViewModel, RagReindex — via `ProviderContainer` + `overrideWithValue` of repo/service providers backed by mocktail mocks (`test/util/mocks.dart`).
+- Local repos — LocalNoteRepository + LocalTagRepository against `AppDatabase(NativeDatabase.memory())`.
+- RemoteNoteService — `http` `runWithClient` + `MockClient` (no class refactor): assist/ask/indexNote/deindexNote happy + error paths.
+- **sqlite3-on-Windows wrinkle solved** in `test/util/sqlite3_test_setup.dart`: `ensureSqlite3()` probes for a host lib, else downloads the official `sqlite3.dll` once into the gitignored `test/.cache/`; repo tests skip gracefully if it can't be obtained. Dev-deps added: `sqlite3`, `archive`.
+- Kept the pre-existing `test/presentation/views/settings_scope_picker_test.dart`; removed the no-op `test/widget_test.dart`.
+
+**Backend** (`modunote-api/`, separate repo): `requirements-dev.txt` (pytest + pytest-asyncio), `pytest.ini` (asyncio auto), `tests/` — `_chunk_text` + `answer_question` empty-retrieval short-circuit (embedding/session mocked), `_parse_tags`, and endpoints (`/health`, `/assist`, `/qna`, `/index/notes`) via `TestClient` with auth + DB-session dependencies overridden and the service layer monkeypatched. No live Groq/Jina/DB.
+
+Run: `flutter test` (modunote) · `python -m pytest` (modunote-api, deps from `requirements-dev.txt`).
 
 ---
 
