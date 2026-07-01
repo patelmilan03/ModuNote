@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../../core/errors/app_exception.dart';
@@ -14,22 +15,31 @@ import '../../data/models/qna_answer.dart';
 /// address for the host machine. Override [baseUrl] when testing on a physical
 /// device or in production.
 class RemoteNoteService {
-  RemoteNoteService({String? baseUrl, String? apiKey})
+  RemoteNoteService({String? baseUrl})
       : _baseUrl = baseUrl ??
             const String.fromEnvironment(
               'API_BASE_URL',
               defaultValue: 'http://10.0.2.2:8000/api/v1',
-            ),
-        _apiKey = apiKey ?? const String.fromEnvironment('API_KEY');
+            );
 
   final String _baseUrl;
-  final String _apiKey;
 
-  /// Request headers. Includes the single-user `X-API-Key` when configured
-  /// (required by the deployed backend; empty/omitted for local DEV_MODE).
-  Map<String, String> get _headers => {
+  /// The current user's Firebase ID token, or null if signed out / Firebase
+  /// isn't ready (e.g. in unit tests). Never throws.
+  Future<String?> _idToken() async {
+    try {
+      return await FirebaseAuth.instance.currentUser?.getIdToken();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// JSON request headers. Sends the Firebase ID token as `Authorization:
+  /// Bearer` — the backend verifies it and scopes every RAG call to that user
+  /// (per-tenant isolation).
+  Map<String, String> _jsonHeaders(String? token) => {
         'Content-Type': 'application/json',
-        if (_apiKey.isNotEmpty) 'X-API-Key': _apiKey,
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
       };
 
   /// Suggests up to 5 lowercase tags for a note based on its title and content.
@@ -44,7 +54,7 @@ class RemoteNoteService {
     try {
       final response = await http.post(
         uri,
-        headers: _headers,
+        headers: _jsonHeaders(await _idToken()),
         body: jsonEncode({
           'title': title,
           'content': content,
@@ -75,7 +85,7 @@ class RemoteNoteService {
     try {
       final response = await http.post(
         uri,
-        headers: _headers,
+        headers: _jsonHeaders(await _idToken()),
         body: jsonEncode({'title': title, 'content': content}),
       );
       if (response.statusCode == 200) {
@@ -106,7 +116,7 @@ class RemoteNoteService {
     try {
       final response = await http.post(
         uri,
-        headers: _headers,
+        headers: _jsonHeaders(await _idToken()),
         body: jsonEncode({
           'action': action,
           'title': title,
@@ -139,7 +149,7 @@ class RemoteNoteService {
     try {
       final response = await http.post(
         uri,
-        headers: _headers,
+        headers: _jsonHeaders(await _idToken()),
         body: jsonEncode({
           'note_id': noteId,
           'title': title,
@@ -164,7 +174,8 @@ class RemoteNoteService {
   Future<void> deindexNote({required String noteId}) async {
     final uri = Uri.parse('$_baseUrl/index/notes/$noteId');
     try {
-      final response = await http.delete(uri, headers: _headers);
+      final response =
+          await http.delete(uri, headers: _jsonHeaders(await _idToken()));
       // 204 = removed; 404 = nothing indexed (already gone) — both are fine.
       if (response.statusCode == 204 || response.statusCode == 404) return;
       throw RemoteServiceException('deindexNote failed: ${response.statusCode}');
@@ -182,7 +193,7 @@ class RemoteNoteService {
     try {
       final response = await http.post(
         uri,
-        headers: _headers,
+        headers: _jsonHeaders(await _idToken()),
         body: jsonEncode({'question': question}),
       );
       if (response.statusCode == 200) {
@@ -204,7 +215,10 @@ class RemoteNoteService {
     final uri = Uri.parse('$_baseUrl/notes/transcribe');
     try {
       final request = http.MultipartRequest('POST', uri);
-      if (_apiKey.isNotEmpty) request.headers['X-API-Key'] = _apiKey;
+      final token = await _idToken();
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
       request.files.add(await http.MultipartFile.fromPath('file', filePath));
       final response = await http.Response.fromStream(await request.send());
       if (response.statusCode == 200) {

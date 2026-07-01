@@ -38,6 +38,7 @@ dependencies:
   firebase_core: ^3.6.0
   cloud_firestore: ^5.4.4
   firebase_auth: ^5.0.0
+  google_sign_in: 6.2.1
 
   # Remote API
   http: ^1.2.0
@@ -65,6 +66,11 @@ dev_dependencies:
   custom_lint: ^0.7.6
   riverpod_lint: ^2.4.0
   mocktail: ^1.0.5
+
+  # Testing — in-memory Drift needs a host sqlite3 lib (no system one on
+  # Windows); the test bootstrap downloads the official sqlite3.dll once.
+  sqlite3: ^2.4.0
+  archive: ^3.6.1
 
 dependency_overrides:
   intl: '>=0.19.0 <0.21.0'

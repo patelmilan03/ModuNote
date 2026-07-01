@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_floating_bottom_bar/flutter_floating_bottom_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +12,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/app_toast.dart';
-import '../../data/datasources/local/database_providers.dart';
+import '../../services/sync/cloud_sync_service.dart';
+import '../views/auth/login_screen.dart';
 import '../views/note_list/note_list_screen.dart';
 import '../views/note_editor/note_editor_screen.dart';
 import '../views/qna/qna_screen.dart';
@@ -30,6 +35,7 @@ abstract class AppRoutes {
   static const String settings = '/settings';
   static const String archive = '/archive';
   static const String qna = '/qna';
+  static const String login = '/login';
 
   /// Builds the edit-note path for a specific [id].
   static String editNotePath(String id) => '/note/$id';
@@ -41,11 +47,43 @@ abstract class AppRoutes {
 /// Note Editor routes are outside the shell (full-screen pushes).
 @riverpod
 GoRouter router(Ref ref) {
+  // Rebuild routing decisions whenever auth state flips (sign-in / sign-out).
+  Listenable refresh;
+  try {
+    final stream = GoRouterRefreshStream(FirebaseAuth.instance.authStateChanges());
+    ref.onDispose(stream.dispose);
+    refresh = stream;
+  } catch (_) {
+    refresh = ValueNotifier<int>(0); // Firebase unavailable — no auth changes.
+  }
+
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: AppRoutes.home,
     debugLogDiagnostics: true,
+    refreshListenable: refresh,
+    redirect: (context, state) {
+      // If Firebase never initialised (bad/missing config), do NOT gate — run
+      // local-only so the user can still reach their on-device notes instead of
+      // being trapped on a login screen that can't work.
+      if (Firebase.apps.isEmpty) return null;
+
+      bool signedIn;
+      try {
+        signedIn = FirebaseAuth.instance.currentUser != null;
+      } catch (_) {
+        signedIn = false; // Firebase not ready → treat as logged out.
+      }
+      final loggingIn = state.matchedLocation == AppRoutes.login;
+      if (!signedIn) return loggingIn ? null : AppRoutes.login;
+      if (loggingIn) return AppRoutes.home;
+      return null;
+    },
     routes: [
+      GoRoute(
+        path: AppRoutes.login,
+        builder: (context, state) => const LoginScreen(),
+      ),
       ShellRoute(
         builder: (context, state, child) => _AppShell(
           location: state.uri.path,
@@ -98,6 +136,23 @@ GoRouter router(Ref ref) {
   );
 }
 
+/// Bridges a [Stream] (Firebase auth state) to a [Listenable] so GoRouter can
+/// re-run its [GoRouter.redirect] whenever the user signs in or out.
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    _subscription =
+        stream.asBroadcastStream().listen((_) => notifyListeners());
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
+
 /// Shell scaffold shared by the 4 tab routes.
 /// Provides the outer [Scaffold], [SafeArea], and persistent [MNBottomNav].
 /// Listens to [AppLifecycleState.paused] to trigger best-effort Firebase sync.
@@ -129,7 +184,8 @@ class _AppShellState extends ConsumerState<_AppShell>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      ref.read(syncedNoteRepositoryProvider).syncAllPending().ignore();
+      // Full best-effort cloud backup (notes + tags + categories) on background.
+      ref.read(cloudSyncServiceProvider).backupToCloud().ignore();
     }
   }
 

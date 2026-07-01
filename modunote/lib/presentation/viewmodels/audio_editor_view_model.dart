@@ -45,6 +45,17 @@ class AudioEditorViewModel extends _$AudioEditorViewModel {
     }
   }
 
+  /// Updates the transcript of an already-saved record. Used when transcription
+  /// is produced asynchronously after the clip is saved (e.g. the Whisper
+  /// fallback), so saving the clip never waits on the network.
+  Future<void> updateTranscription(String id, String text) async {
+    try {
+      await ref.read(audioRecordRepositoryProvider).updateTranscription(id, text);
+    } catch (e, st) {
+      state = AsyncError(e, st);
+    }
+  }
+
   /// Deletes the DB row for [id].
   /// The caller must delete the audio file from disk via [AudioFileStorage].
   Future<void> deleteRecord(String id) async {

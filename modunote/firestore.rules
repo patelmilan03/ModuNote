@@ -2,13 +2,21 @@ rules_version = '2';
 
 // ModuNote Firestore Security Rules
 // Deploy in Firebase Console → Firestore Database → Rules tab.
-// Data is scoped to the anonymous UID — no other user can read or write it.
+// Data is scoped to the signed-in user's UID — no other user can read or write it.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Each user's notes are private to their anonymous UID.
+    // Each user's notes, tags, and categories are private to their UID.
     match /users/{userId}/notes/{noteId} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+    }
+    match /users/{userId}/tags/{tagId} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+    }
+    match /users/{userId}/categories/{categoryId} {
       allow read, write: if request.auth != null
                          && request.auth.uid == userId;
     }

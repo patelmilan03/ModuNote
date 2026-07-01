@@ -166,6 +166,18 @@ The four shell tabs share a persistent `MNBottomNav` rendered by `_AppShell` in 
 
 ---
 
+## Testing
+
+Automated tests live in `test/` (mirrors `lib/`) and `../modunote-api/tests/`. Run `flutter test` (Flutter) and `python -m pytest` (backend, deps from `requirements-dev.txt`). See `UI_POLISH_PLAN.md` item 3 / `STATUS.md` "Test suite" for the full inventory.
+
+- **Mocking**: `mocktail` (dev-dep). Shared repo/service doubles in `test/util/mocks.dart`. View-models are tested via `ProviderContainer` + `overrideWithValue` of the repo/service providers; auto-dispose providers are kept alive with a `container.listen(...)` whose subscription is closed in `addTearDown`.
+- **Local repos**: tested against in-memory Drift — `AppDatabase(NativeDatabase.memory())`.
+- **sqlite3 on Windows**: `flutter test` needs a host sqlite3 lib (none preinstalled on Windows). `test/util/sqlite3_test_setup.dart` `ensureSqlite3()` probes for one, else downloads the official `sqlite3.dll` once into the **gitignored** `test/.cache/`; repo tests `markTestSkipped` if it can't be obtained (other layers still run). Test-only dev-deps: `sqlite3`, `archive`.
+- **RemoteNoteService**: tested with `http`'s `runWithClient` + `MockClient` — no production-class refactor.
+- **Backend**: the service layer (Groq/Jina/Postgres) is always mocked/monkeypatched — no live network or DB. Endpoints use FastAPI `TestClient` with `verify_token` + `get_session` dependency-overridden (`tests/conftest.py`).
+
+---
+
 ## Code Generation
 
 Any time you add or modify a `@riverpod` annotated function or a Drift table, run:
@@ -263,6 +275,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `TESTING.md` | Manual testing checklist — 40 sections, ~175+ checks. Quick smoke test (~50 🔴 critical checks, ~20 min) + full regression (~175+ checks, ~1.5 hr). Section 40 = Firebase sync checks. |
 | `TECH_STACK.md` | Portfolio/interview reference — every implemented technology with how-we-used-it, why-over-alternatives, and likely interview Q&A. Implemented tech only (no roadmap items). |
 | `UI_POLISH_PLAN.md` | Standing plan for the post-Stage-2 UI polish queue: skeleton loaders (done) → voice panel redesign → splash + onboarding → test suite. One item at a time, mockup before coding. |
+| `SUPABASE_MIGRATION_PLAN.md` | **PROPOSED (awaiting approval)** — consolidate Firebase (Auth+Firestore) → Supabase (Auth + Postgres + RLS) so per-user isolation is DB-enforced (RLS) instead of manual `WHERE user_id`. Phased S1–S4; not started. |
 
 ---
 

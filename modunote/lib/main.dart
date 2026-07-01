@@ -4,20 +4,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
 import 'firebase_options.dart';
-import 'services/auth/firebase_auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase init + anonymous auth — best-effort. If this fails (e.g., before
-  // flutterfire configure is run), the app boots normally with sync disabled.
+  // Firebase init — best-effort. Sign-in is now interactive (Google) and gated
+  // by the router's login screen, so we no longer sign in silently here. If
+  // init fails the app still boots; the login screen surfaces sign-in errors.
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    await FirebaseAuthService().signInAnonymously();
   } catch (e) {
-    debugPrint('main: Firebase unavailable — sync disabled. $e');
+    debugPrint('main: Firebase init failed. $e');
   }
 
   runApp(

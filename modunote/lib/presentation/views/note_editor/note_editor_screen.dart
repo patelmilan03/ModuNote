@@ -543,34 +543,48 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _currentRecordingPath = null;
 
     if (recordingPath != null && _currentNote != null) {
+      final noteId = _currentNote!.id;
       int fileSize = 0;
       try {
         fileSize = await _audioStorage.getFileSize(recordingPath);
       } catch (_) {}
 
-      // Fallback: if on-device STT produced nothing (e.g. the recorder and the
-      // recognizer contended for the mic), upload the audio to the backend →
-      // Groq Whisper.
-      if (transcript.isEmpty && !kIsWeb) {
-        try {
-          transcript = (await ref
-                  .read(remoteNoteServiceProvider)
-                  .transcribe(filePath: recordingPath))
-              .trim();
-        } catch (_) {}
+      // Save the clip IMMEDIATELY with whatever on-device STT produced, so it
+      // always appears in the voice panel. Transcription must never block (or
+      // lose) the recording — the Whisper fallback runs afterwards with a
+      // timeout and patches the transcript in.
+      final vm =
+          ref.read(audioEditorViewModelProvider(noteId: noteId).notifier);
+      AudioRecord? saved;
+      try {
+        saved = await vm.saveRecording(
+          filePath: recordingPath,
+          durationMs: durationMs,
+          fileSizeBytes: fileSize,
+          transcript: transcript.isEmpty ? null : transcript,
+        );
+      } catch (e) {
+        if (mounted) _showSnackBar('Could not save the recording: $e');
       }
 
-      try {
-        await ref
-            .read(
-                audioEditorViewModelProvider(noteId: _currentNote!.id).notifier)
-            .saveRecording(
-              filePath: recordingPath,
-              durationMs: durationMs,
-              fileSizeBytes: fileSize,
-              transcript: transcript.isEmpty ? null : transcript,
-            );
-      } catch (_) {}
+      // Fallback: if on-device STT produced nothing (e.g. the recorder and the
+      // recognizer contended for the mic), upload the audio to the backend →
+      // Groq Whisper. Bounded by a timeout so an unreachable backend can't hang
+      // the editor; the clip is already saved either way.
+      if (saved != null && transcript.isEmpty && !kIsWeb) {
+        try {
+          final whisper = (await ref
+                  .read(remoteNoteServiceProvider)
+                  .transcribe(filePath: recordingPath)
+                  .timeout(const Duration(seconds: 20)))
+              .trim();
+          if (whisper.isNotEmpty) {
+            await vm.updateTranscription(saved.id, whisper);
+          }
+        } catch (_) {
+          // Transcription is best-effort enrichment; the clip is kept anyway.
+        }
+      }
       // The transcript stays with the audio record and is shown in the voice
       // panel — no longer auto-inserted into the note body. Insert-into-note is
       // a panel action (Step D).

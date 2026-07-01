@@ -112,7 +112,19 @@ Flutter (`modunote/`):
 
 - ✅ **S2-F12 — Voice panel redesign (Variant A)** *(2026-06-27)*: `_VoicePanel.build()` restyled into a rounded **pill that animates growing into a card** — `AnimatedContainer` (border-radius + padding) wrapping `AnimatedSize` (height, bottom-aligned grow), floating with margins instead of the flush top-border card. All behavior preserved (play/seek/timers, record→red, carousel, transcript, Paraphrase/Insert, delete-confirm, chevron toggle). Logic untouched — build wrapper only. `flutter analyze` = 0; verification ALL PASS. **Variant B kept as a documented 1-prompt fallback** (mockup + `UI_POLISH_PLAN.md` spec; no dead code).
 
-> **Build queue (order updated 2026-06-27, one at a time):** ✅ skeleton loaders → ✅ voice panel (Variant A) → ⬜ **test suite (next — safety net before refactor)** → ⬜ efficiency / de-bloat pass → ⬜ startup UX (splash + onboarding) → then Stage 3 monitoring. See `UI_POLISH_PLAN.md`.
+> **Build queue (order updated 2026-06-29, one at a time):** ✅ skeleton loaders → ✅ voice panel (Variant A) → ✅ **test suite** → ⬜ **efficiency / de-bloat pass (next)** → ⬜ startup UX (splash + onboarding) → then Stage 3 monitoring. See `UI_POLISH_PLAN.md`.
+
+### Test suite — DONE 2026-06-29 (UI-polish queue item 3)
+Focused-starter automated tests, built as a safety net **before** the de-bloat pass. No `lib/` source changed — tests only (+ test-only dev-deps).
+
+**Flutter** (`modunote/test/`, mirrors `lib/`) — **73 tests, `flutter analyze` = 0, `flutter test` green**:
+- **Models** — `copyWith`/equality for Note/Tag/Category/AudioRecord; `fromJson` (incl. null-key fallbacks) for QnaAnswer/Citation. Plus core: `StringExtensions`, `plainTextFromDelta`.
+- **ViewModels** — RagIndexTags (SharedPreferences persistence/normalisation), QnaViewModel (loading→data/error, blank-guard, clear), NoteListViewModel (all/tag filter switch + mutation→AsyncError), RagReindex (scope filtering + (ok,fail) counts). `ProviderContainer` + `overrideWithValue` of repo/service providers backed by **mocktail** mocks (`test/util/mocks.dart`).
+- **Local repos** — LocalNoteRepository (insert/find/update/togglePin/archive-unarchive/delete/FTS search) + LocalTagRepository (normalise/blank-ValidationException/UNIQUE-DatabaseException/findByName/orphan cleanup) against `AppDatabase(NativeDatabase.memory())`.
+- **RemoteNoteService** — `http` `runWithClient` + `MockClient` (no class refactor): assist/ask/indexNote/deindexNote happy + error (RemoteServiceException) paths; auth-header behaviour.
+- **sqlite3-on-Windows wrinkle handled** — `test/util/sqlite3_test_setup.dart` `ensureSqlite3()` probes for a host sqlite3, else downloads the official `sqlite3.dll` once into the gitignored `test/.cache/`; repo tests skip gracefully if unavailable (other layers unaffected). New dev-deps: `sqlite3`, `archive`. Kept `settings_scope_picker_test.dart`; removed the no-op `widget_test.dart`.
+
+**Backend** (`modunote-api/`, separate repo) — **18 pytest tests**, service layer fully mocked (no live Groq/Jina/DB): `requirements-dev.txt` (pytest + pytest-asyncio), `pytest.ini` (asyncio auto, function loop scope), `tests/` covering `rag_service._chunk_text` + `answer_question` empty-retrieval short-circuit, `ai_service._parse_tags`, and endpoints (`/health`, `/assist`+invalid-action, `/qna`+blank-guard, `/index/notes` empty→deindex + failure→502) via FastAPI `TestClient` with auth + `get_session` dependency overrides and monkeypatched services. Install dev-deps then `python -m pytest`.
 
 > **Backend note (2026-06-27):** `modunote-api/services/embedding_service.py` now forces IPv4 on the Jina call via `httpx.AsyncHTTPTransport(local_address="0.0.0.0")` — fixes Render free-tier `[Errno 101] Network is unreachable` (no IPv6 egress). Keep this when deploying.
 >
