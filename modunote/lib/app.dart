@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:toastification/toastification.dart';
 
+import 'core/demo/demo_seeder.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/router/app_router.dart';
 
@@ -15,6 +16,8 @@ class ModuNoteApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeNotifierProvider);
+    // Seeds the read-only demo dataset on the web build (no-op on native).
+    ref.watch(demoSeedProvider);
 
     return ToastificationWrapper(
       child: MaterialApp.router(

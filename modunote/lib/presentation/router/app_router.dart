@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_floating_bottom_bar/flutter_floating_bottom_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -63,6 +64,10 @@ GoRouter router(Ref ref) {
     debugLogDiagnostics: true,
     refreshListenable: refresh,
     redirect: (context, state) {
+      // Web portfolio demo: never gate — visitors go straight to the app with
+      // no login wall (the web build is a public showcase; sync stays off and
+      // AI runs against the read-only demo dataset).
+      if (kIsWeb) return null;
       // If Firebase never initialised (bad/missing config), do NOT gate — run
       // local-only so the user can still reach their on-device notes instead of
       // being trapped on a login screen that can't work.

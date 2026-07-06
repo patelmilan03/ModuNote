@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
 import '../../core/errors/app_exception.dart';
@@ -189,11 +190,16 @@ class RemoteNoteService {
   /// Asks a natural-language question grounded in the indexed notes (RAG QnA).
   /// Returns the answer plus the source notes it cited.
   Future<QnaAnswer> ask({required String question}) async {
-    final uri = Uri.parse('$_baseUrl/qna');
+    // The web portfolio build (no login) asks the public, read-only demo
+    // dataset; native asks the signed-in user's own notes (token-scoped).
+    final uri = Uri.parse('$_baseUrl${kIsWeb ? '/qna/demo' : '/qna'}');
     try {
+      final headers = kIsWeb
+          ? const {'Content-Type': 'application/json'}
+          : _jsonHeaders(await _idToken());
       final response = await http.post(
         uri,
-        headers: _jsonHeaders(await _idToken()),
+        headers: headers,
         body: jsonEncode({'question': question}),
       );
       if (response.statusCode == 200) {
