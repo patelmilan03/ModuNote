@@ -36,6 +36,19 @@ final class PermissionException extends AppException {
 }
 
 /// Thrown when an HTTP call to the ModuNote backend API fails.
+///
+/// [statusCode] is the HTTP status of the failed response, or null when the
+/// request never got a response (network / CORS / server unreachable).
+/// [detail] is the backend's error description (FastAPI `detail` field) when
+/// one was returned — it usually names the failing provider (Groq/Jina/DB).
 final class RemoteServiceException extends AppException {
-  const RemoteServiceException(super.message, {super.cause});
+  const RemoteServiceException(
+    super.message, {
+    super.cause,
+    this.statusCode,
+    this.detail,
+  });
+
+  final int? statusCode;
+  final String? detail;
 }

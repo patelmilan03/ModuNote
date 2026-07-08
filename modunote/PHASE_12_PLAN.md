@@ -7,6 +7,7 @@
 > - Each stage has a **Task checklist** with `[ ]` items. Tick them (`[x]`) as you complete them and note the date. This is the progress anchor — a fresh agent reads the checklist to know exactly where to resume.
 > - When a stage completes: tick its checklist, update `STATUS.md` "Current Status & Next Phase", append a `DECISIONS.md` entry for any non-obvious choice, and update `session_context.md`.
 > - If reality forces a deviation from this plan, **update this file first** (with a one-line reason), then proceed. Never silently diverge.
+> - **Priority of the remaining stages vs. other work streams is tracked canonically in the root `README.md` → "Roadmap"** (2026-07-08: Stage 3 is P1, Stage-4 leftovers P4). This file remains the *how* for the stages.
 
 ---
 

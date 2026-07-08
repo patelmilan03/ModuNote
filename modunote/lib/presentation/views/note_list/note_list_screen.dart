@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -693,6 +694,11 @@ class _ProfileAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Firebase may be uninitialised (e.g. the web portfolio build has no web
+    // config). Touching FirebaseAuth.instance then throws and crashes the whole
+    // home screen — so render a static, non-interactive avatar instead.
+    if (Firebase.apps.isEmpty) return _buildAvatar(context, null);
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       initialData: FirebaseAuth.instance.currentUser,

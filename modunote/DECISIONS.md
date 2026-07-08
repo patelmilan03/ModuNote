@@ -627,7 +627,7 @@ Previously a filter returning zero notes fell through to `_EmptyState` (no chips
 
 ---
 
-## Phase 12 — AI Features 🟡 In Planning
+## Phase 12 — AI Features 🟢 Stages 1–2 Complete (Stages 3–4 planned)
 
 > **Direction locked**: full **4-stage roadmap**, first feature **via the FastAPI backend** (`modunote-api/`), provider **Groq** (switched from Gemini on 2026-06-22 — see D12.2). Supersedes the earlier "two features, provider TBD" plan, preserved under "Superseded" below per the file's never-delete rule.
 
@@ -688,6 +688,28 @@ Four Stage 2 open items (flagged in `PHASE_12_PLAN.md`) resolved with the develo
 - *Old D12.2* ("two AI features in scope: auto-tagging + summarisation") → folded into **Stage 1**; the roadmap expanded to 4 stages.
 - *Old D12.3 / PD-02* ("AI provider pending — Gemini vs Groq") → **Resolved: Groq** (Gemini tried first, then dropped — see D12.2).
 - *Old D12.5* ("all AI logic lives in the backend service layer; Flutter never calls a provider directly") → retained and reaffirmed as the new **D12.3**.
+
+---
+
+## Phase 13 — Accounts, Security & Web Demo ✅ Complete (2026-06-29 → 07-02)
+
+> Context honesty: ModuNote is a real, in-use app *and* a portfolio project. These decisions were made while it was live, including one where a bug was caught and fixed in production — kept in the record on purpose.
+
+**D13.1 — Google Sign-In + auth-gated router (replaces silent anonymous).** `main.dart` no longer signs in silently; the GoRouter redirects to a login screen until signed in (`GoRouterRefreshStream` over `authStateChanges`). *Guards against lock-out:* a "Continue without an account" anonymous escape hatch, a local-only fallback when Firebase is uninitialised (`Firebase.apps.isEmpty`), and a full bypass on web (`kIsWeb`). Rationale: a stable Google uid (survives reinstalls) is the prerequisite for durable sync and per-user data isolation, which anonymous uids (regenerated on every reinstall) can't provide.
+
+**D13.2 — Durable cloud backup/restore; Drift stays local-first.** New `CloudSyncService` backs up notes/tags/categories to Firestore on app-background and restores them on sign-in — Drift remains the source of truth (offline-first preserved). Restore is a single atomic Drift transaction, de-dupes tags **by name** (with cloud→local id remap for join rows to respect the `UNIQUE(name)` constraint), prunes/rebuilds join rows, nulls orphan category refs, and only overwrites a note when the cloud copy is newer (missing/invalid `updatedAt` → epoch, so it can never clobber a newer local edit). Backup commits in ≤450-op chunks (Firestore's 500 batch cap). Hardened after a read-only audit flagged a lock-out BLOCKER and restore data-loss HIGHs.
+
+**D13.3 — Per-user RAG isolation via Firebase ID-token verification (fixes a cross-user leak).** The original single-user backend returned one constant uid for everyone and never filtered retrieval — so QnA could surface *any* user's notes. Fix: the backend verifies the caller's Firebase ID token (RS256 JWT vs Google's JWKS — audience/issuer/expiry/kid, fail-closed 401) to get the real uid, and scopes every index / retrieval / delete by it (`Document.user_id == uid`). The Flutter client sends `Authorization: Bearer <idToken>`. Chosen over the "trust a client-supplied uid" shortcut (spoofable) and over a full Supabase-RLS migration (deferred — D13.8). The vestigial static `API_KEY` / `X-API-Key` was removed (the token is the only auth). No new backend dependency (reused `python-jose`), no service-account secret.
+
+**D13.4 — Login-free web demo with a public, read-only RAG endpoint.** The web build is Firebase-free by design (no web config in `firebase_options.dart`), so the auth gate is bypassed and Firebase-touching code is guarded. A web-only seeder loads a fixed set of demo notes into local Drift; the same notes are pre-indexed server-side under a fixed `demo_user_id`, and `ask()` hits a dedicated **public, read-only** `POST /api/v1/qna/demo` (scoped to that id, with **no** public index/delete path). This lets a reviewer try RAG without an account, and — verified by audit — it can never read or mutate a real user's data.
+
+**D13.5 — Voice: save the clip first, transcribe with a timeout.** `_stopRecording` persists the recording immediately, then runs the Whisper fallback bounded by a 20 s timeout and patches the transcript in afterward — so an unreachable backend can never hang the editor or lose a recording (the previous bug).
+
+**D13.6 — Reverted the experimental liquid-glass nav.** Tried `liquid_glass_renderer` for the bottom bar (Impeller-only, web-guarded); reverted to the solid `MNBottomNav` on the developer's call ("didn't look good"). Widget + dependency deleted to avoid dead code.
+
+**D13.7 — Focused-starter automated test suites (Flutter + backend).** Added before the planned de-bloat pass as a refactor safety net: Flutter (models, view-models via mocktail, local repos via in-memory Drift, `RemoteNoteService` via `MockClient`) and backend pytest (chunking, tag parsing, token verification, per-user scoping, endpoints with the service layer mocked). No live LLM/DB/network in tests.
+
+**D13.8 — Supabase consolidation APPROVED (not started).** Decided to eventually replace Firebase (Auth + Firestore) with Supabase (Auth + Postgres + **RLS**) so per-user isolation is DB-enforced rather than relying on a hand-written `WHERE user_id` (the exact class of bug behind D13.3), consolidating on the Supabase Postgres already used for vectors. Locked defaults: keep Drift local-first; RAG retrieval via FastAPI + verified Supabase JWT first (a Supabase RPC under the user JWT as a follow-up); clean-slate data; keep the anonymous guest option. Phased S1–S4 in `SUPABASE_MIGRATION_PLAN.md`; `supabase/schema.sql` (tables + RLS) drafted. Blocked on developer Supabase console setup.
 
 ---
 

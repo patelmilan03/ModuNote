@@ -15,7 +15,7 @@
 4. ⬜ **Efficiency / de-bloat pass** — NEXT. Reduce app size/bloat: trim unused code/deps/assets, refactor hot spots, shrink the large `note_editor_screen.dart`, audit build size.
 5. ⬜ **Startup UX** — splash screen + first-run onboarding slides.
 
-> **After this queue:** Stage 3 — monitoring / observability + evals (Langfuse, Sentry, RAGAS) per `PHASE_12_PLAN.md`.
+> **Priority across ALL work streams is tracked canonically in the root `README.md` → "Roadmap"** (this file only specs the UI queue items). Per that roadmap, Stage 3 (Sentry/Langfuse/RAGAS, `PHASE_12_PLAN.md`) now comes BEFORE the remaining queue items here.
 
 ---
 

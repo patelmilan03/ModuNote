@@ -1318,6 +1318,20 @@ curl -X POST http://localhost:8000/api/v1/notes/test-id/tags/suggest \
 | 41.14 | Swagger shows correct request body schema: `title` (str) + `content` (str) | Pydantic models reflected in docs |
 | 41.15 | Swagger shows correct response schema: `suggested_tags` (list) / `summary` (str) | Response models reflected in docs |
 
+---
+
+## Section 42 — QnA Error-Source Display (2026-07-08)
+
+> The QnA answer bubble surfaces the *source* of a failure instead of a generic "AI is unavailable". `RemoteServiceException` carries the HTTP status + the backend's `detail` message; `_ErrorContent` maps them to a headline + a dimmer detail line.
+
+| # | Check | Expected |
+|---|---|---|
+| 42.1 🔴 | Ask a question with the backend unreachable (airplane mode, or `API_BASE_URL` pointing at a dead host) | Error bubble: "Couldn't reach the AI server — it may be waking up…" with the network cause below |
+| 42.2 | Ask with an invalid/expired provider key on the backend (returns 502) | Headline "An AI provider behind the server failed:" + the backend `detail` text (names Groq/Jina/DB) below |
+| 42.3 | Ask while signed out with `DEV_MODE=false` on native (backend returns 401) | Headline says sign-in was rejected, suggests sign out/in |
+| 42.4 | Happy path unchanged | Successful answers render exactly as before (text + citation chips) |
+| 42.5 | Error text uses theme tokens | Error icon in `colorScheme.error`; detail line in `onSurfaceVariant`; correct in light + dark |
+
 ### 41D — Auth Bypass (DEV_MODE)
 
 | # | Check | Expected |

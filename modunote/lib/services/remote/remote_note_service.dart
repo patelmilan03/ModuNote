@@ -43,6 +43,26 @@ class RemoteNoteService {
         if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
       };
 
+  /// Builds the exception for a non-200 response, carrying the status code and
+  /// the backend's `detail` message (which names the failing provider) so the
+  /// UI can say WHAT broke instead of a generic "unavailable".
+  RemoteServiceException _httpFailure(String operation, http.Response response) {
+    String? detail;
+    try {
+      final data = jsonDecode(response.body);
+      if (data is Map<String, dynamic> && data['detail'] is String) {
+        detail = data['detail'] as String;
+      }
+    } catch (_) {
+      // Non-JSON error body (proxy/HTML error page) — no detail to surface.
+    }
+    return RemoteServiceException(
+      '$operation failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      detail: detail,
+    );
+  }
+
   /// Suggests up to 5 lowercase tags for a note based on its title and content.
   /// [existingTags] (tag names already on the note) are excluded server-side.
   Future<List<String>> suggestTags({
@@ -66,9 +86,7 @@ class RemoteNoteService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return List<String>.from(data['suggested_tags'] as List);
       }
-      throw RemoteServiceException(
-        'suggestTags failed: ${response.statusCode}',
-      );
+      throw _httpFailure('suggestTags', response);
     } on RemoteServiceException {
       rethrow;
     } catch (e) {
@@ -93,9 +111,7 @@ class RemoteNoteService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return data['summary'] as String;
       }
-      throw RemoteServiceException(
-        'summariseNote failed: ${response.statusCode}',
-      );
+      throw _httpFailure('summariseNote', response);
     } on RemoteServiceException {
       rethrow;
     } catch (e) {
@@ -129,7 +145,7 @@ class RemoteNoteService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return data['result'] as String;
       }
-      throw RemoteServiceException('assist failed: ${response.statusCode}');
+      throw _httpFailure('assist', response);
     } on RemoteServiceException {
       rethrow;
     } catch (e) {
@@ -162,7 +178,7 @@ class RemoteNoteService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return data['chunks_indexed'] as int? ?? 0;
       }
-      throw RemoteServiceException('indexNote failed: ${response.statusCode}');
+      throw _httpFailure('indexNote', response);
     } on RemoteServiceException {
       rethrow;
     } catch (e) {
@@ -179,7 +195,7 @@ class RemoteNoteService {
           await http.delete(uri, headers: _jsonHeaders(await _idToken()));
       // 204 = removed; 404 = nothing indexed (already gone) — both are fine.
       if (response.statusCode == 204 || response.statusCode == 404) return;
-      throw RemoteServiceException('deindexNote failed: ${response.statusCode}');
+      throw _httpFailure('deindexNote', response);
     } on RemoteServiceException {
       rethrow;
     } catch (e) {
@@ -207,7 +223,7 @@ class RemoteNoteService {
           jsonDecode(response.body) as Map<String, dynamic>,
         );
       }
-      throw RemoteServiceException('ask failed: ${response.statusCode}');
+      throw _httpFailure('ask', response);
     } on RemoteServiceException {
       rethrow;
     } catch (e) {
@@ -231,7 +247,7 @@ class RemoteNoteService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return data['text'] as String;
       }
-      throw RemoteServiceException('transcribe failed: ${response.statusCode}');
+      throw _httpFailure('transcribe', response);
     } on RemoteServiceException {
       rethrow;
     } catch (e) {

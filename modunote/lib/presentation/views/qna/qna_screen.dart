@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/errors/app_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/models/qna_answer.dart';
@@ -143,11 +144,8 @@ class _TurnView extends StatelessWidget {
         const SizedBox(height: 8),
         turn.answer.when(
           loading: () => const _AnswerBubble(child: _ThinkingRow()),
-          error: (_, __) => const _AnswerBubble(
-            child: _AnswerText(
-              'AI is unavailable right now. Check your connection and try again.',
-            ),
-          ),
+          error: (error, _) =>
+              _AnswerBubble(child: _ErrorContent(error: error)),
           data: (answer) => _AnswerBubble(child: _AnswerContent(answer: answer)),
         ),
       ],
@@ -247,6 +245,93 @@ class _AnswerContent extends StatelessWidget {
               for (final citation in answer.citations)
                 _CitationChip(citation: citation),
             ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Error bubble that names the failing source instead of a generic
+/// "unavailable": maps the [RemoteServiceException] status to a headline and
+/// shows the backend's `detail` (or the network cause) underneath, so the
+/// developer/user can tell a Groq/provider failure from an auth problem, a
+/// rate limit, or an unreachable server — straight from the UI.
+class _ErrorContent extends StatelessWidget {
+  const _ErrorContent({required this.error});
+
+  final Object error;
+
+  String get _headline {
+    final e = error;
+    if (e is! RemoteServiceException) {
+      return 'Something went wrong while asking. Try again.';
+    }
+    final code = e.statusCode;
+    if (code == null) {
+      return "Couldn't reach the AI server — it may be waking up, or your "
+          'connection blocked the request. Try again in a minute.';
+    }
+    if (code == 401 || code == 403) {
+      return 'The AI server rejected the sign-in. Sign out and back in, '
+          'then try again.';
+    }
+    if (code == 429) {
+      return 'The AI is rate-limited right now. Wait a moment and retry.';
+    }
+    if (code == 502) {
+      return 'An AI provider behind the server failed:';
+    }
+    if (code >= 500) {
+      return 'The AI server hit an internal error (HTTP $code).';
+    }
+    return 'The AI request failed (HTTP $code).';
+  }
+
+  /// The backend's `detail` message, else the network-layer cause — whichever
+  /// exists names the actual source of the failure.
+  String? get _source {
+    final e = error;
+    if (e is! RemoteServiceException) return null;
+    final text = e.detail ?? e.cause?.toString();
+    if (text == null || text.trim().isEmpty) return null;
+    return text.length > 220 ? '${text.substring(0, 220)}…' : text;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final source = _source;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.error_outline_rounded, size: 16, color: cs.error),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                _headline,
+                style: AppTypography.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: cs.onSurface,
+                ).copyWith(height: 1.45),
+              ),
+            ),
+          ],
+        ),
+        if (source != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            source,
+            style: AppTypography.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              color: cs.onSurfaceVariant,
+            ).copyWith(height: 1.4),
           ),
         ],
       ],

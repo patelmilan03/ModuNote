@@ -246,8 +246,13 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `lib/data/datasources/file/audio_file_storage.dart` | File I/O for audio recordings (create dir, generate path, delete, size) |
 | `lib/services/audio/audio_recording_service.dart` | flutter_sound wrapper — record AAC, stream amplitude, playback |
 | `lib/services/speech/speech_to_text_service.dart` | speech_to_text wrapper — live dictation with Android timeout recovery |
-| `lib/services/auth/firebase_auth_service.dart` | Singleton — `signInAnonymously()` (idempotent). Called from `main.dart`. |
-| `lib/services/remote/remote_note_service.dart` | HTTP client for the FastAPI backend — Stage 1: `suggestTags()` / `summariseNote()` / `assist()` / `transcribe()`; Stage 2 RAG: `indexNote()` / `deindexNote()` / `ask()` (returns `QnaAnswer`). Plain Dart class, not a Riverpod provider. Default base URL `http://10.0.2.2:8000/api/v1`; overridden in prod via `--dart-define API_BASE_URL`. |
+| `lib/services/auth/firebase_auth_service.dart` | Singleton — `signInWithGoogle()` (google_sign_in → Firebase credential), `signInAnonymously()` (escape hatch), `signOut()`, `authStateChanges`. The app is auth-gated on native (login screen); web bypasses the gate (`kIsWeb`). |
+| `lib/services/sync/cloud_sync_service.dart` | `@riverpod` keepAlive — durable cloud backup+restore of notes/tags/categories to Firestore (`/users/{uid}/...`). `backupToCloud()` (chunked ≤450/batch, on app-background) + `restoreFromCloud()` (atomic Drift txn on sign-in: categories→tags→notes→join; tags de-duped by NAME + id remap; note overwrite only when cloud `updatedAt` newer). |
+| `lib/presentation/views/auth/login_screen.dart` | Branded Google Sign-In gate + "Continue without an account" (anonymous) escape hatch. Shown by the router when signed out (native only). |
+| `lib/core/demo/demo_seeder.dart` | `demoNotes` (6 content-creator demo notes+tags) + `demoSeed` `@riverpod` — seeds them into local Drift **on web only** (watched in `app.dart`) so the login-free portfolio demo shows content. KEEP IN SYNC with `../modunote-api/scripts/seed_demo.py`. |
+| `lib/services/remote/remote_note_service.dart` | HTTP client for the FastAPI backend — Stage 1: `suggestTags()` / `summariseNote()` / `assist()` / `transcribe()`; Stage 2 RAG: `indexNote()` / `deindexNote()` / `ask()` (returns `QnaAnswer`). Sends `Authorization: Bearer <Firebase ID token>` (per-user RAG scoping); `ask()` hits the public `/qna/demo` on web. Non-200s throw via `_httpFailure()` → `RemoteServiceException` with `statusCode` + backend `detail` (FastAPI error body) so the UI can name the failing source (QnA `_ErrorContent`). Default base URL `http://10.0.2.2:8000/api/v1`; prod via `--dart-define API_BASE_URL`. |
+| `lib/firebase_options.dart` | Real Firebase config — **Android-only (no web config)**, so the web build runs Firebase-free by design (auth bypassed, sync off). Gitignored; re-run `flutterfire configure` on a fresh clone. |
+| `supabase/schema.sql` | Supabase tables (notes/tags/categories) + owner-only RLS — drafted for the Supabase migration (`SUPABASE_MIGRATION_PLAN.md`), not yet applied. |
 | `lib/data/models/qna_answer.dart` | `QnaAnswer` + `Citation` immutable models (Equatable) for RAG QnA responses (Phase 12 Stage 2). |
 | `lib/presentation/viewmodels/qna_view_model.dart` | `QnaViewModel` (`@riverpod`, auto-dispose) — holds `List<QnaTurn>` (question + `AsyncValue<QnaAnswer>`); `ask()` / `clear()`. |
 | `lib/presentation/viewmodels/rag_settings_view_model.dart` | `RagIndexTags` (`@riverpod`, keepAlive) — user-editable, SharedPreferences-persisted set of RAG trigger tags (key `rag_index_tags`), default `AppConstants.ragIndexTags`. Read by the editor's `_scheduleRagSync`; edited in Settings ("Ask your notes — scope" card). |
@@ -302,8 +307,11 @@ Do not wipe or truncate `session_context.md` at any point — entries accumulate
 | Key facts the next session must know | `STATUS.md` ("Current Status & Next Phase" section) |
 | New manual test steps for the feature | `TESTING.md` |
 | New package, route, folder, or convention | `CLAUDE.md` itself |
+| Proposed/potential feature or future-work idea | Root `README.md` → **"Roadmap"** section — the ONLY place roadmap items live (rule below) |
 
 Write only what is new — do not duplicate content already in the target file. Keep entries concise and factual (no session-specific wording like "in this session we…").
+
+**Rule (2026-07-08): all proposed/potential features and future work are recorded ONLY in the root `README.md` "Roadmap" section.** Never scatter roadmap/`NEXT`/"later" feature lists across other `.md` files — other docs may reference the Roadmap by pointer only. The spec docs (`PHASE_12_PLAN.md`, `UI_POLISH_PLAN.md`, `SUPABASE_MIGRATION_PLAN.md`) hold the *how* for items already on that roadmap, not their priority. When a roadmap item ships, remove it from the Roadmap and log completion in `STATUS.md`.
 
 ---
 

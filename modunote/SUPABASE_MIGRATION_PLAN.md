@@ -1,6 +1,8 @@
-# Supabase Consolidation — Migration Plan (PROPOSED — awaiting approval)
+# Supabase Consolidation — Migration Plan (IN PROGRESS)
 
-> Status: **DRAFT / not started.** Do not implement until the developer approves.
+> Status: **APPROVED — developer GO (2026-07-02), but PARKED at low priority (2026-07-08)** — everything works on the current stack; see the root `README.md` → "Roadmap" (P5) for where this sits. Interim mitigation queued instead (README "Near-term ops"): bare RLS (enable, no policies) on `documents`/`chunks` — safe now because the backend's `postgres` role bypasses RLS; it only blocks the PostgREST/anon path. Decisions locked (below).
+> Executing S1 → S4, one phase at a time (each: analyze 0 + tests + read-only
+> audit before the next). **This file is updated as each part completes.**
 > Goal: replace **Firebase (Auth + Firestore)** with **Supabase (Auth + Postgres + RLS)**
 > as the single backend for auth + data + vectors, so per-user isolation is enforced
 > by the database (Row-Level Security) instead of hand-written `WHERE user_id` filters.
@@ -28,11 +30,18 @@ deliberate architecture simplification with a real (large) migration cost.
 | RAG isolation | `WHERE Document.user_id == uid` (manual) | RLS on `documents`/`chunks` (`user_id uuid default auth.uid()`) |
 | Removed deps | — | `firebase_core`, `firebase_auth`, `cloud_firestore`, `google_sign_in`, `lib/firebase_options.dart`, `firestore.rules` |
 
-## Decisions to confirm BEFORE starting
-1. **Local store:** keep **Drift local-first** (offline-first UX, recommended) vs. go Supabase-direct (drop Drift — much bigger change, loses offline). → recommend **keep Drift**.
-2. **RAG retrieval path:** (a) keep FastAPI + verify Supabase JWT + filter by uid (least change, reuses current infra); vs. (b) a Supabase **RPC / edge function** doing the pgvector similarity under the user's JWT so **RLS** scopes it (pure "leak-impossible" story, more work). → recommend **(a)** first, **(b)** as a follow-up.
-3. **Data:** clean slate (everything was wiped → easiest) vs. migrate existing Firestore data. → recommend **clean slate**.
-4. **Anonymous / guest:** Supabase supports anonymous sign-in — keep the "Continue without an account" escape hatch on Supabase? → recommend **yes**.
+## Decisions (LOCKED — developer GO, defaults accepted)
+1. **Local store:** keep **Drift local-first** (offline-first preserved; Supabase is the sync/restore backend, not the live store).
+2. **RAG retrieval path:** **(a)** FastAPI verifies the Supabase JWT + filters by uid (least change now); **(b)** Supabase RPC under the user's JWT (pure RLS) kept as a follow-up.
+3. **Data:** **clean slate** (everything was wiped — no Firestore→Supabase data migration needed).
+4. **Anonymous / guest:** **keep** the "Continue without an account" escape hatch (Supabase anonymous sign-in).
+
+## Progress
+- ✅ **Schema + RLS drafted** — `supabase/schema.sql` (notes/tags/categories tables + owner-only RLS policies; documents/chunks RLS deferred to S3). *Run in Supabase SQL Editor when S2 lands.*
+- ⬜ **S1 — Supabase Auth (Google)** — next. **Blocked on developer Supabase setup:** enable the Google provider in Supabase Auth, add the Android redirect/deep-link URL, and give me the Supabase **project URL + anon key** (passed via `--dart-define`). Recommend committing + deploying the current Firebase-token fix FIRST (clean baseline) before the auth swap begins.
+- ⬜ S2 — Data tables + RLS (sync rewrite Firestore → Supabase).
+- ⬜ S3 — RAG on RLS (backend verifies Supabase JWT; documents/chunks user_id → uuid + RLS).
+- ⬜ S4 — Remove Firebase.
 
 ## Phased plan (each phase: analyze 0 + tests + read-only audit; developer approves before the next)
 - **S1 — Supabase Auth (Google).** Add `supabase_flutter`; init in `main.dart`; new `SupabaseAuthService` (OAuth Google + anonymous + signOut + `onAuthStateChange`); Android deep-link / redirect URL config; router gate + login screen + profile avatar switched to the Supabase session. *Developer:* enable Google provider in Supabase Auth, add the redirect URL / Android deep link, provide Supabase URL + anon key (via `--dart-define`).
