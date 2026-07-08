@@ -201,6 +201,7 @@ The AI features are served by a separate **FastAPI** service (`modunote-api/`, i
 | Vector store | Supabase Postgres + **pgvector** (HNSW cosine index), via SQLAlchemy async + asyncpg |
 | Auth | Firebase ID-token (RS256 JWT) verification against Google's JWKS (`python-jose`) |
 | Migrations / tests | Alembic · pytest + pytest-asyncio (service layer mocked) |
+| Monitoring | Sentry (errors-only, FastAPI integration; Langfuse LLM tracing planned) |
 
 **RAG pipeline:** note text → token-windowed chunks (`tiktoken`, ~600/100 overlap) → Jina embeddings → pgvector. A question is embedded, matched by cosine top-k **filtered to the caller's user id**, assembled into a labelled context block, and answered by Groq with source citations.
 
@@ -209,6 +210,7 @@ The AI features are served by a separate **FastAPI** service (`modunote-api/`, i
 - **Auth:** Google Sign-In via Firebase; the router gates the app behind a login screen (with a "continue without an account" anonymous escape hatch and a local-only fallback if Firebase is unavailable). The web build is intentionally login-free.
 - **Multi-tenant isolation:** the backend derives the real user id by **verifying the caller's Firebase ID token** (signature + audience + issuer + expiry against Google's JWKS) and scopes every RAG index / retrieval / delete to that id. This was hardened after an internal review caught — and closed — a cross-user retrieval leak in an earlier single-user design; the fix is covered by tests that assert the verified uid flows through and that unauthenticated/invalid tokens are rejected.
 - **Cloud sync:** notes/tags/categories back up to Firestore under `/users/{uid}/…` (owner-only security rules) and restore atomically on sign-in. *(A migration to consolidate auth + data + vectors on Supabase with Row-Level Security is planned — see `SUPABASE_MIGRATION_PLAN.md`.)*
+- **Defense in depth on the vector store:** the Supabase tables holding note text/embeddings have RLS enabled with no policies (deny-by-default), so Supabase's auto-exposed REST API can read nothing — only the backend's direct Postgres connection can touch them.
 
 ## Testing
 
@@ -277,7 +279,7 @@ A SQLite database is created automatically on first launch. The home screen will
 | 11 | Backend API scaffolding — FastAPI + PostgreSQL + SQLAlchemy async, stub AI endpoints | ✅ Complete |
 | 11.5 | Bug fixes + UX — swipe actions, note options sheet, archive screen, filter chips, system theme | ✅ Complete |
 | 11.6 | Bug fixes — hierarchical category filtering, filter bar empty state, editor category sync, tag browsing | ✅ Complete |
-| 12 | AI features — Stage 1 Groq writing assistant ✅ · Stage 2 RAG QnA ✅ · Stage 3 observability/evals (planned) · Stage 4 deployment | 🟢 Stages 1–2 complete |
+| 12 | AI features — Stage 1 Groq writing assistant ✅ · Stage 2 RAG QnA ✅ · Stage 3 observability/evals 🟡 in progress (Sentry shipped) · Stage 4 deployment | 🟢 Stages 1–2 complete |
 | W | Web portfolio preview — Flutter Web + WASM SQLite, phone-frame landing page, Firebase Hosting | ✅ Complete |
 | 13 | Accounts & durable sync — Google Sign-In, auth-gated router, Firestore cloud backup/restore, profile + sign-out | ✅ Complete |
 | — | Per-user RAG isolation (Firebase ID-token verification) · Flutter + backend test suites · login-free web demo with a pre-seeded RAG dataset | ✅ Complete |
@@ -292,14 +294,14 @@ Chronological order: 11.5 → W → 11.6 → 12 (Stages 1–2) → accounts/secu
 
 | Priority | Item | Scope / spec |
 |---|---|---|
-| **P1** | **Phase 12 Stage 3 — Observability & evals**: Sentry error monitoring, Langfuse tracing on every LLM + embedding call, a RAGAS eval dataset with baseline scores, light output guardrails | `PHASE_12_PLAN.md` Stage 3 (built incrementally — Sentry first) |
+| **P1** | **Phase 12 Stage 3 — Observability & evals** *(in progress — Sentry error monitoring shipped)*: Langfuse tracing on every LLM + embedding call, a RAGAS eval dataset with baseline scores, light output guardrails | `PHASE_12_PLAN.md` Stage 3 (built incrementally) |
 | **P2** | **Efficiency / de-bloat pass**: shrink the oversized `note_editor_screen.dart`, trim unused code/deps/assets, audit build size | `UI_POLISH_PLAN.md` item 4 (test suite already in place as the refactor safety net) |
 | **P3** | **Startup UX**: native splash screen + first-run onboarding carousel | `UI_POLISH_PLAN.md` item 5 |
 | **P4** | **Deployment hardening leftovers**: GitHub Actions lint/test quality gate, tighten backend `ALLOWED_ORIGINS`, scheduled `pg_dump` backup | `PHASE_12_PLAN.md` Stage 4 checklist remainder |
 | **P5** | **Supabase consolidation (S1–S4)**: auth + data + vectors on one Postgres with per-user isolation enforced by Row-Level Security; removes Firebase | `SUPABASE_MIGRATION_PLAN.md` — approved but deliberately parked (large; everything works on the current stack) |
 | Parked | Sync conflict-resolution UI (currently last-write-wins by `updatedAt`) · web audio recording (WebM/Opus + IndexedDB) · audio cloud backup (Supabase Storage, after S2) · category drag-to-reorder (schema ready, no UI) · iOS build (non-destructive to add) · Supabase Realtime live sync | Revisit when a concrete need appears |
 
-**Near-term ops** (not features): redeploy the web build so the live demo picks up the QnA error-source UI; enable bare RLS (`enable row level security`, no policies) on the Supabase `documents`/`chunks` tables to close the PostgREST/anon-key exposure ahead of migration S1.
+**Near-term ops** (not features): set `SENTRY_DSN` in the Render dashboard to activate the shipped Sentry integration. *(Done: web redeploy with the QnA error-source UI · bare RLS enabled on the Supabase vector tables.)*
 
 ### Project documentation
 

@@ -186,7 +186,7 @@ Tag 2–3 notes `#study`, close them (they index) → open QnA screen → ask a 
 - **Guardrails (light)**: start with Pydantic validation (already) + explicit checks — max output length, strip/refuse empty input, detect when retrieval is empty and short-circuit, basic profanity/PII check only if needed. Do NOT pull in a heavy framework unless a concrete need appears.
 
 **Stage 3 checklist**
-- [ ] Sentry in FastAPI (`SENTRY_DSN`); errors visible in Sentry
+- [x] Sentry in FastAPI (`SENTRY_DSN`) *(code done 2026-07-08: `sentry-sdk[fastapi]==2.64.0`, init in `main.py` gated on `settings.sentry_dsn` — errors-only, `traces_sample_rate=0.0` (Langfuse owns tracing), `send_default_pii=False`, environment from `DEV_MODE`; `SENTRY_DSN` added to config/.env.example/render.yaml `sync:false`; 26 pytest green. **Developer:** create the free sentry.io project (platform FastAPI), paste the DSN into Render, redeploy, force one error to confirm it lands.)*
 - [ ] Langfuse tracing on ALL Groq + embedding calls (no untraced call site)
 - [ ] `eval/dataset.jsonl` (≥10 Q/A from real notes) + `eval/run_eval.py` (RAGAS) producing scores
 - [ ] Baseline eval scores recorded in `STATUS.md`
