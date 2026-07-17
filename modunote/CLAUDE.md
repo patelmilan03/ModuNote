@@ -81,11 +81,14 @@ lib/
 └── presentation/
     ├── viewmodels/                    # AsyncNotifier classes (Phase 3+)
     ├── views/
-    │   ├── note_list/note_list_screen.dart
-    │   ├── note_editor/note_editor_screen.dart
+    │   ├── note_list/note_list_screen.dart       # Screen + _DataBody only (split 2026-07-08)
+    │   ├── note_list/widgets/             # ask_notes_card, swipeable_note_card, filter_chip_bar, app_bar_section (+_ProfileAvatar), section_header, note_list_states
+    │   ├── note_editor/note_editor_screen.dart   # Screen + state only (split 2026-07-08)
+    │   ├── note_editor/widgets/           # Extracted editor widgets: voice_panel, editor_app_bar, recording_overlay, note_options_sheet (+OptionsRow, shared w/ AI sheet), tag_suggest_banner, ai_tools_sheet, tag_input_sheet
     │   ├── search/search_screen.dart
     │   ├── tags/tags_screen.dart
-    │   └── settings/settings_screen.dart
+    │   ├── settings/settings_screen.dart          # Screen only (split 2026-07-08)
+    │   └── settings/widgets/              # rag_tags_card (+_TagPickerSheet), appearance_card, voice_notes_card, settings_app_bar, archive_card
     ├── widgets/                       # Shared widgets — mn_note_card.dart, mn_search_field.dart, mn_editor_toolbar.dart, mn_tag_row.dart, mn_category_picker_sheet.dart, mn_bottom_nav.dart (Phase 4+)
     └── router/
         ├── app_router.dart            # GoRouter config, ShellRoute, _AppShell (ConsumerStatefulWidget+WidgetsBindingObserver), routerProvider, ThemeModeNotifier
