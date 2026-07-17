@@ -12,7 +12,7 @@
 1. ✅ **Skeleton loaders** — DONE. `skeletonizer` + `presentation/widgets/mn_skeletons.dart`; Tags / Search / Archive / Note editor loading states. (STATUS S2-F11.)
 2. ✅ **Voice panel redesign** — DONE (2026-06-27). **Variant A** — pill→card grow via `AnimatedContainer`+`AnimatedSize` in `_VoicePanel.build()`; behavior preserved. B kept as a documented 1-prompt fallback (below). (STATUS S2-F12.)
 3. ✅ **Test suite** — DONE (2026-06-29). Focused-starter suite: Flutter models + view-models (mocktail) + local repos (in-memory Drift) + RemoteNoteService (http MockClient) = **73 tests**, `flutter analyze` = 0; backend pytest (`modunote-api/`) = **18 tests** (rag_service `_chunk_text` + answer_question short-circuit, ai_service `_parse_tags`, FastAPI endpoints via TestClient with the service layer mocked). Done *before* de-bloat as a refactor safety net. See the "Test suite" section in `STATUS.md`.
-4. ⬜ **Efficiency / de-bloat pass** — NEXT. Reduce app size/bloat: trim unused code/deps/assets, refactor hot spots, shrink the large `note_editor_screen.dart`, audit build size.
+4. 🟡 **Efficiency / de-bloat pass** — structure rounds DONE (2026-07-08): editor 2,697→944, note_list 1,137→137, settings 918→53; widgets extracted verbatim to per-screen `widgets/` subfolders (see STATUS). Remaining optional rounds: deps/assets/build-size audit (descoped by developer so far).
 5. ⬜ **Startup UX** — splash screen + first-run onboarding slides.
 
 > **Priority across ALL work streams is tracked canonically in the root `README.md` → "Roadmap"** (this file only specs the UI queue items). Per that roadmap, Stage 3 (Sentry/Langfuse/RAGAS, `PHASE_12_PLAN.md`) now comes BEFORE the remaining queue items here.
