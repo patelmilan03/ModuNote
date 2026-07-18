@@ -279,6 +279,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `.firebaserc` | Firebase project alias — `default → modunote-ba654` |
 | `MODUNOTE_UI_REFERENCE.md` | Full pixel-level UI spec from Claude Design |
 | `STATUS.md` | Project status + handoff — phase log, current state, next-phase scope (former `progress.md` + `THREAD_HANDOFF.md`, merged) |
+| `BUGS.md` | Permanent known-bug ledger (single source of truth for bug detail; `STATUS.md`/issues point here). Seeded by the 2026-07-18 audit — 16 pre-existing bugs w/ location, repro, fix, and fix-order. |
 | `PHASE_12_PLAN.md` | Detailed Phase 12 AI build spec — all 4 stages with per-stage task checklists. The standing plan any thread follows. |
 | `TESTING.md` | Manual testing checklist — 40 sections, ~175+ checks. Quick smoke test (~50 🔴 critical checks, ~20 min) + full regression (~175+ checks, ~1.5 hr). Section 40 = Firebase sync checks. |
 | `TECH_STACK.md` | Portfolio/interview reference — every implemented technology with how-we-used-it, why-over-alternatives, and likely interview Q&A. Implemented tech only (no roadmap items). |
