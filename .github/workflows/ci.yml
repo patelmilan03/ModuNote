@@ -159,8 +159,12 @@ jobs:
         run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Build release APK
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
         run: |
-          flutter build apk --release --dart-define=API_BASE_URL="${{ secrets.API_BASE_URL }}" --build-number=${{ github.run_number }}
+          CLEAN_API_BASE_URL=$(printf '%s' "$API_BASE_URL" | tr -d '[:space:]')
+          echo "API_BASE_URL length: ${#CLEAN_API_BASE_URL} chars"
+          flutter build apk --release --dart-define=API_BASE_URL="$CLEAN_API_BASE_URL" --build-number=${{ github.run_number }}
 
       - name: Write service account JSON
         run: |
