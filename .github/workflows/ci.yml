@@ -160,9 +160,7 @@ jobs:
 
       - name: Build release APK
         run: |
-          flutter build apk --release \
-            --dart-define=API_BASE_URL=${{ secrets.API_BASE_URL }} \
-            --build-number=${{ github.run_number }}
+          flutter build apk --release --dart-define=API_BASE_URL="${{ secrets.API_BASE_URL }}" --build-number=${{ github.run_number }}
 
       - name: Write service account JSON
         run: |
