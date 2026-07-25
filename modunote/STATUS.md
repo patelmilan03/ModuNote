@@ -82,7 +82,9 @@ The QnA error bubble now **names the failing source** instead of the generic "AI
 | 1 | `python-jose` 3.3.0 → 3.4.0 (backend CVE-2024-33663/33664) | ✅ done 2026-07-24 |
 | 2 | Activate Sentry in prod (`SENTRY_DSN` unset on Render → zero error monitoring today) | ⬜ not started |
 | 3 | Docs truth audit — status docs only (`DECISIONS.md`/`TESTING.md` explicitly out of scope) | ⬜ not started |
-| 4 | CI/CD — **Landing A** (quality gate, 1 secret) then **Landing B** (signed release → Firebase App Distribution) | 🟡 prerequisites in progress |
+| 4 | CI/CD — **Landing A** (quality gate, 1 secret) then **Landing B** (signed release → Firebase App Distribution) | 🟡 pushed 2026-07-25, first run failed — fix ready, awaiting re-push |
+
+**2026-07-25 — MN-04 first CI run failed, fix applied (not yet pushed):** `.github/workflows/ci.yml` pinned Flutter `3.22.0`, whose bundled Dart SDK (3.4.0) is below what `skeletonizer ^2.1.3` requires (Dart ≥3.7.0 — added 2026-06-27, never surfaced locally because the dev machine's Flutter is newer). Fixed: both CI jobs bumped to `flutter-version: '3.41.2'`; `pubspec.yaml`'s `environment.sdk` floor corrected `>=3.3.0` → `>=3.7.0` to match reality. Verified locally with 3.41.2 end-to-end before handing back: `flutter analyze` 0, `dart run custom_lint` clean, `flutter test` **+72 passed, 0 skips**. **Milan still needs to:** commit + push `.github/workflows/ci.yml` + `modunote/pubspec.yaml` to re-trigger the Quality Gate. Note: the Project Identity table's "Min Flutter 3.22.0" (line 18) is now stale too — flagged for the MN-03 docs audit rather than guessed here.
 
 **Done 2026-07-24 — do not redo:**
 - **MN-01 — `python-jose` bumped 3.3.0 → 3.4.0** (CVE-2024-33663/-33664, JWT-bomb DoS). `modunote-api/requirements.txt` one-line change; installed version verified 3.4.0; `core/auth.py:94` RS256 pin + `jose` imports confirmed unchanged; **26 pytest green**. **Milan still needs to:** commit + push `modunote-api` (GitHub Desktop), then confirm `GET /health` returns 200 after Render auto-redeploys.

@@ -29,7 +29,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.41.2'
           cache: true
 
       - name: Install host sqlite3 (Drift tests need it)
@@ -73,6 +73,39 @@ jobs:
         if: always()
         run: rm -f lib/firebase_options.dart
 
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then exit 0; fi
+
+          if [ "${{ job.status }}" = "success" ]; then
+            COLOR=3066993
+            EMOJI="✅"
+          else
+            COLOR=15158332
+            EMOJI="❌"
+          fi
+
+          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1 | sed 's/"/\\"/g' | sed "s/'/\\'/g")
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+
+          curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK_URL" -d "{
+            \"embeds\": [{
+              \"title\": \"${EMOJI} Quality Gate — ${{ job.status }}\",
+              \"color\": ${COLOR},
+              \"fields\": [
+                { \"name\": \"Branch\", \"value\": \"\`${{ github.ref_name }}\`\", \"inline\": true },
+                { \"name\": \"Commit\", \"value\": \"[\`${SHORT_SHA}\`](${{ github.event.head_commit.url }})\", \"inline\": true },
+                { \"name\": \"Message\", \"value\": \"${COMMIT_MSG}\", \"inline\": false }
+              ],
+              \"url\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\",
+              \"footer\": { \"text\": \"ModuNote CI\" }
+            }]
+          }"
+        working-directory: .
+
   # ──────────────────────────────────────────────
   # Landing B — signed release APK + Firebase App Distribution
   # ──────────────────────────────────────────────
@@ -92,7 +125,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.41.2'
           cache: true
 
       - name: Set up Node.js (for Firebase CLI)
@@ -154,3 +187,40 @@ jobs:
           rm -f android/key.properties
           rm -f android/app/google-services.json
           rm -f lib/firebase_options.dart
+
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then exit 0; fi
+
+          if [ "${{ job.status }}" = "success" ]; then
+            COLOR=3066993
+            EMOJI="🚀"
+            DESC="APK distributed to Firebase App Tester"
+          else
+            COLOR=15158332
+            EMOJI="❌"
+            DESC="Release failed — check the logs"
+          fi
+
+          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1 | sed 's/"/\\"/g' | sed "s/'/\\'/g")
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+
+          curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK_URL" -d "{
+            \"embeds\": [{
+              \"title\": \"${EMOJI} Release #${{ github.run_number }} — ${{ job.status }}\",
+              \"description\": \"${DESC}\",
+              \"color\": ${COLOR},
+              \"fields\": [
+                { \"name\": \"Branch\", \"value\": \"\`${{ github.ref_name }}\`\", \"inline\": true },
+                { \"name\": \"Commit\", \"value\": \"[\`${SHORT_SHA}\`](${{ github.event.head_commit.url }})\", \"inline\": true },
+                { \"name\": \"Build\", \"value\": \"#${{ github.run_number }}\", \"inline\": true },
+                { \"name\": \"Message\", \"value\": \"${COMMIT_MSG}\", \"inline\": false }
+              ],
+              \"url\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\",
+              \"footer\": { \"text\": \"ModuNote CI\" }
+            }]
+          }"
+        working-directory: .

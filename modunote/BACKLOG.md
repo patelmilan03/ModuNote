@@ -26,7 +26,7 @@
 | 1 | MN-01 | Bump `python-jose` 3.3.0 → 3.4.0 (CVE-2024-33663/-33664) | Security · backend (Task 1) | 🤖 | ✅ |
 | 2 | MN-02 | Activate Sentry in prod — set `SENTRY_DSN` in Render + verify | Ops (Task 2) | 🤝 | ⬜ |
 | 3 | MN-03 | Docs truth audit (status docs only) + apply approved fixes | Docs (Task 3) | 🤖 | ⬜ |
-| 4 | MN-04 | CI/CD pipeline — GitHub Actions gate → signed APK → Firebase App Distribution | DevOps · feature (Task 4 / README P1) | 🤝 | ⬜ |
+| 4 | MN-04 | CI/CD pipeline — GitHub Actions gate → signed APK → Firebase App Distribution | DevOps · feature (Task 4 / README P1) | 🤝 | 🔵 |
 
 > ✅ Already done this session: `custom_lint` INFO fixed (`tag_list_view_model.dart` → plain `Ref`), gate now strict; test count reconciled to **72**.
 
@@ -146,5 +146,6 @@
 ## ✅ Done
 _(move rows here with the completion date as they land)_
 
+- 2026-07-25 · MN-04 (in progress) — first pushed CI run (`ci.yml`) failed at `flutter pub get`: pinned Flutter `3.22.0` bundles Dart SDK 3.4.0, but `skeletonizer ^2.1.3` requires Dart ≥3.7.0 (added 2026-06-27 for skeleton loaders, never hit this floor locally because the dev machine's Flutter is newer). Fix: bumped both jobs' `flutter-version` in `.github/workflows/ci.yml` to `3.41.2` (the locally-installed version) and corrected `modunote/pubspec.yaml`'s `environment.sdk` floor from `>=3.3.0` to `>=3.7.0` to match reality. Verified locally end-to-end with 3.41.2 before committing: `flutter pub get` ok → `build_runner` ok → `flutter analyze` 0 issues → `dart run custom_lint` "No issues found!" → `flutter test` **+72 All tests passed!, 0 skips**. **Milan to do:** commit + push these two files to re-trigger CI; confirm the Quality Gate goes green, then mark MN-04 ✅ here.
 - 2026-07-24 · MN-01 — `python-jose` bumped 3.3.0 → 3.4.0 (CVE-2024-33663/-33664). Installed version verified 3.4.0; `core/auth.py:94` RS256 pin + `jose` imports unchanged; 26 pytest green; `git diff` = exactly one line. **Milan to do:** commit + push `modunote-api`; confirm `GET /health` returns 200 after Render redeploys.
 - 2026-07-21 · `custom_lint` INFO fixed + gate made strict; test count reconciled to 72 (prep for MN-04).
