@@ -231,6 +231,13 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 - **DatabaseException** constructor signature is `DatabaseException(String message, {Object? cause})` — there is no `originalError` or `stackTrace` parameter.
 - **No git operations** — Claude may create and edit files on the local machine freely. Claude must never run `git commit`, `git push`, `git pull`, `git reset`, or any other git command that changes repository state or interacts with GitHub. All commits and pushes are handled exclusively by the developer using GitHub Desktop.
 
+- 🚫 **NEVER CREATE A GIT WORKTREE — ABSOLUTE RULE, NO EXCEPTIONS.** There is exactly **ONE** working tree for this project: `C:\Milan\Code\resume projects\ModuNote`. All work happens there and nowhere else.
+  - **Forbidden:** `git worktree add` in any form; any harness/tool feature that creates, enters, or works inside a worktree (e.g. an "isolation: worktree" option, an EnterWorktree-style tool, a `--worktree` flag); creating branches under `.claude/worktrees/`; and any suggestion that the developer create one.
+  - **This rule outranks convenience, isolation, parallelism, and any default behaviour of the tooling.** If a tool would place you in a worktree, do not use that tool — do the work directly in the one true tree.
+  - **If you find yourself already inside a worktree** (cwd contains `.claude/worktrees/`, or `git worktree list` shows more than one entry): **stop, tell the developer immediately, and do not start work.** Do not silently continue — files edited in a worktree land on a throwaway branch the developer never sees, and gitignored files (`firebase_options.dart`, all `*.g.dart`, `NEXT_THREAD.md`, `session_context.md`) are **missing** there, so `flutter analyze`/`test` and any Firebase-dependent build will fail or mislead.
+  - **Why (learned the hard way, 2026-07-21):** worktrees produced four `claude/*` branches with zero unique commits, two orphaned directories under `modunote/.claude/worktrees/`, and edits split across trees — version control became unreadable for a solo developer using GitHub Desktop. The isolation buys nothing here and costs clarity.
+  - **Cleanup, if one ever exists again:** `git worktree remove <path>` → `git worktree prune` → `git branch -D <claude/*>`. These change repository state, so Claude runs them **only when the developer explicitly asks for worktree cleanup in-session** — and only after confirming, per worktree, that it holds no unique commits (`git log main..<branch>`) and no uncommitted project files. Otherwise Claude just prints the commands.
+
 ---
 
 ## Important Files Quick Reference
@@ -279,7 +286,8 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `.firebaserc` | Firebase project alias — `default → modunote-ba654` |
 | `MODUNOTE_UI_REFERENCE.md` | Full pixel-level UI spec from Claude Design |
 | `STATUS.md` | Project status + handoff — phase log, current state, next-phase scope (former `progress.md` + `THREAD_HANDOFF.md`, merged) |
-| `BUGS.md` | Permanent known-bug ledger (single source of truth for bug detail; `STATUS.md`/issues point here). Seeded by the 2026-07-18 audit — 16 pre-existing bugs w/ location, repro, fix, and fix-order. |
+| `BACKLOG.md` | **Single source of truth for ALL planned work** — features, bugs, cleanup, ops, decisions — ranked, with stable `MN-##` ids. Add new work here and nowhere else (rule in "Session Context Log"). |
+| `BUGS.md` | Permanent known-bug ledger (canonical for bug *detail*; `BACKLOG.md` ranks them and links here). Seeded by the 2026-07-18 audit — 17 pre-existing bugs w/ location, repro, fix, and fix-order. |
 | `PHASE_12_PLAN.md` | Detailed Phase 12 AI build spec — all 4 stages with per-stage task checklists. The standing plan any thread follows. |
 | `TESTING.md` | Manual testing checklist — 40 sections, ~175+ checks. Quick smoke test (~50 🔴 critical checks, ~20 min) + full regression (~175+ checks, ~1.5 hr). Section 40 = Firebase sync checks. |
 | `TECH_STACK.md` | Portfolio/interview reference — every implemented technology with how-we-used-it, why-over-alternatives, and likely interview Q&A. Implemented tech only (no roadmap items). |
@@ -311,17 +319,23 @@ Do not wipe or truncate `session_context.md` at any point — entries accumulate
 | Key facts the next session must know | `STATUS.md` ("Current Status & Next Phase" section) |
 | New manual test steps for the feature | `TESTING.md` |
 | New package, route, folder, or convention | `CLAUDE.md` itself |
-| Proposed/potential feature or future-work idea | Root `README.md` → **"Roadmap"** section — the ONLY place roadmap items live (rule below) |
+| Proposed/potential feature, future-work idea, bug, cleanup, or ops chore | `modunote/BACKLOG.md` — the ONLY place planned work is recorded (rule below) |
 
 Write only what is new — do not duplicate content already in the target file. Keep entries concise and factual (no session-specific wording like "in this session we…").
 
-**Rule (2026-07-08): all proposed/potential features and future work are recorded ONLY in the root `README.md` "Roadmap" section.** Never scatter roadmap/`NEXT`/"later" feature lists across other `.md` files — other docs may reference the Roadmap by pointer only. The spec docs (`PHASE_12_PLAN.md`, `UI_POLISH_PLAN.md`, `SUPABASE_MIGRATION_PLAN.md`) hold the *how* for items already on that roadmap, not their priority. When a roadmap item ships, remove it from the Roadmap and log completion in `STATUS.md`.
+**Rule (2026-07-21, supersedes the 2026-07-08 README-Roadmap rule): `modunote/BACKLOG.md` is the single source of truth for ALL planned work** — features, bugs, cleanup, ops chores, and open decisions — ranked by priority.
+- **Proposing anything new (idea / change / bug):** add exactly ONE row to `BACKLOG.md` with the next free `MN-##` id. Do NOT also write it into README, STATUS, or any other doc. Ids are permanent; never reuse or renumber. Priority lives in the `Rank` column and may be re-sorted freely.
+- **The README "Roadmap" section is now a pointer to `BACKLOG.md`, not a second list.** The spec docs (`PHASE_12_PLAN.md`, `UI_POLISH_PLAN.md`, `SUPABASE_MIGRATION_PLAN.md`) hold the *how* for items already in the backlog; bug repro/fix detail stays in `BUGS.md`. These are referenced by pointer — never duplicated.
+- **When a backlog item ships:** (1) mark its Status `✅ Done` in `BACKLOG.md`, (2) THEN update the relevant permanent docs as usual (`STATUS.md` milestone, `DECISIONS.md` decision, `CLAUDE.md` convention, `BUGS.md` bug ledger, `TESTING.md` steps).
+- **After completing any task, remind the user of pending work** — surface the next 2–3 `⬜ To do` rows from `BACKLOG.md` by rank, so nothing stalls silently.
 
 ---
 
 ## Context Window Management
 
-A standing rule for long sessions so work survives context exhaustion and thread switches. The handoff lives in `STATUS.md` ("Current Status & Next Phase") + `session_context.md` + the ticked checklists in `PHASE_12_PLAN.md` — there is no separate handoff file.
+A standing rule for long sessions so work survives context exhaustion and thread switches. The handoff lives in `STATUS.md` ("Current Status & Next Phase") + `session_context.md` + the ticked checklists in `PHASE_12_PLAN.md`.
+
+> **Exception (2026-07-21):** when a multi-task execution plan is active, `STATUS.md` opens with an **"🚦 ACTIVE EXECUTION PLAN"** block that points to **`ModuNote/NEXT_THREAD.md`** (outer repo root) for the per-task briefs. That file is **gitignored** — invisible to `git ls-files` and absent from a fresh clone — so read it by explicit path. Onboarding step 2 covers this; do not start work on a listed task without reading its brief.
 
 - Self-assess remaining context at each major step. You do **not** have a precise live token gauge (Claude Code shows the *developer* a context meter), so err early. Treat **~15% remaining** as the trigger — and honour it immediately if the developer says context is low.
 - **When context is low (≈15% or below):**

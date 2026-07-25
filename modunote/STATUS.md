@@ -73,11 +73,55 @@ Browser-tested https://modunote-ba654.web.app: the redeploy is live (demo notes 
 ### Error-source UI — 2026-07-08 (accepted)
 The QnA error bubble now **names the failing source** instead of the generic "AI is unavailable": `RemoteServiceException` carries `statusCode` + `detail` (FastAPI error body, parsed defensively in a shared `_httpFailure()` helper used by ALL `RemoteNoteService` endpoints); `_ErrorContent` in `qna_screen.dart` maps status → headline (no response = server waking/unreachable; 401/403 = sign-in rejected; 429 = rate-limited; 502 = provider failure + backend detail; other codes labelled) with the detail/cause as a dimmer second line. `flutter analyze` = 0; 72 tests green; read-only audit ALL PASS. Web demo shows the new errors after the next `flutter build web` + hosting deploy (manual test steps: `TESTING.md` Section 42).
 
-### ⏸️ SESSION PAUSE — 2026-07-18 (read this first on resume)
-Thread paused here. Full resume prompt: **`NEXT_THREAD.md`** (project root). Quick state:
-- **Uncommitted, awaiting GitHub Desktop commit** (see the ready commit message in `NEXT_THREAD.md`): the 3-screen refactor + `.gitignore` fix + docs. ⚠️ The commit **must include** `.gitignore`, the three `views/*/widgets/` dirs, and the **newly-visible** `lib/core/demo/` + `supabase/` (hidden until the gitignore fix). No secrets among them (re-scanned clean). Both repos push via GitHub Desktop.
-- **Bug audit done (2026-07-18):** a 4-agent read-only sweep (models↔viewmodels↔views↔services) found **16 pre-existing bugs, 0 blockers, and ZERO in the refactored widget code** (refactor verified clean). **Full ranked detail + fix order lives in `BUGS.md`** (the permanent bug ledger — single source of truth). To file them as GitHub issues, ask Claude to regenerate a `gh` script from `BUGS.md`.
-- **Stage 3 (observability) is PAUSED** after the Sentry step (below) — Langfuse + RAGAS remain.
+### 🚦 ACTIVE EXECUTION PLAN — 2026-07-21 (READ THIS FIRST ON RESUME)
+
+**Four tasks, run in order, ONE task per thread.** The full self-contained briefs live in **`NEXT_THREAD.md`** at the **outer repo root** (`ModuNote/NEXT_THREAD.md`) — that file is **gitignored**, so it is invisible to `git` and absent from a fresh clone. Open it directly by path; do not assume a file listing will surface it. Paste the relevant task brief verbatim as the first message of the executing thread.
+
+| # | Task | State |
+|---|---|---|
+| 1 | `python-jose` 3.3.0 → 3.4.0 (backend CVE-2024-33663/33664) | ✅ done 2026-07-24 |
+| 2 | Activate Sentry in prod (`SENTRY_DSN` unset on Render → zero error monitoring today) | ⬜ not started |
+| 3 | Docs truth audit — status docs only (`DECISIONS.md`/`TESTING.md` explicitly out of scope) | ⬜ not started |
+| 4 | CI/CD — **Landing A** (quality gate, 1 secret) then **Landing B** (signed release → Firebase App Distribution) | 🟡 prerequisites in progress |
+
+**Done 2026-07-24 — do not redo:**
+- **MN-01 — `python-jose` bumped 3.3.0 → 3.4.0** (CVE-2024-33663/-33664, JWT-bomb DoS). `modunote-api/requirements.txt` one-line change; installed version verified 3.4.0; `core/auth.py:94` RS256 pin + `jose` imports confirmed unchanged; **26 pytest green**. **Milan still needs to:** commit + push `modunote-api` (GitHub Desktop), then confirm `GET /health` returns 200 after Render auto-redeploys.
+
+**Done 2026-07-21 — do not redo:**
+- **custom_lint INFO fixed** so the CI gate can be strict: `tag_list_view_model.dart:65` now takes `Ref` + imports `flutter_riverpod` (matches `search_view_model.dart:15`, `cloud_sync_service.dart:31`). Verified: `flutter analyze` = 0 · `dart run custom_lint` = **No issues found!** · `flutter test` = **72 passed, 0 skipped**.
+- **72 is the correct test count** — the "73 tests" at the Test-suite section below is a docs bug for Task 3 to fix.
+- **CI/CD decisions settled (do not reopen):** `applicationId` → `dev.milanpatel.modunote` while `namespace` + `MainActivity.kt` package stay `com.example.modunote`; gitignored configs injected as base64 GitHub Secrets; quality gate on push + PR, distribution on every push to `main`.
+
+**Still open:** bug ledger = **17 bugs, none fixed** (`BUGS.md` is the single source of truth); 16 filed as GitHub issues #7–#22, **#17 unfiled**. **Stage 3 (observability) PAUSED** after Sentry — Langfuse + RAGAS remain.
+
+> *Superseded:* the 2026-07-18 pause block that used to sit here described the 3-screen refactor and BUGS.md work as "uncommitted, awaiting GitHub Desktop commit". Both landed — `3fa96f8` and `242eca6`. That stale block is what caused an executor thread to onboard without finding the plan.
+
+### 🧹 Project-health sweep — 2026-07-18 (3 read-only agents; cleanup backlog, nothing actioned yet)
+> Bugs found by this sweep went into `BUGS.md` (#17). Everything below is **cleanup**, not bugs.
+
+**Safe deletions / untracking:** `lib/core/utils/string_extensions.dart` (1-line re-export shim, **zero** importers) · untrack `web/drift_worker.js.map` (370 KB) + `web/drift_worker.js.deps` (61 KB) (dart2js byproducts) · untrack `.firebase/hosting.*.cache` (**fails CLAUDE.md checklist S3**) · 4 × `.gitkeep` (dirs now populated) · empty stray dir `modunote/{android/`.
+
+**Repo integrity:** `modunote/.gitignore` **is a binary file** — NUL bytes at offset 1480 where a UTF-16 `build/` blob was appended without a newline, fusing it to the `**/.claude/*` rule. Behaviour is accidentally still correct; rewrite as clean UTF-8 with `**/.claude/*` on its own line.
+
+**Dead code — 22 dead symbols, 0 deprecated APIs.** Codebase is modern (zero `withOpacity`/`MaterialState*`/`WillPopScope`/legacy `TextTheme`; 21 sites use `withValues(`; zero TODO/FIXME/commented-out code). Dead weight is concentrated in **over-specified Phase-2 repository interfaces the UI never grew into**:
+- Delete whole chains (interface+impl+DAO): `INoteRepository.watchByCategory` (superseded by `watchByCategoryIds`), `ICategoryRepository.{update,updateSortOrder,findRoots}`, `ITagRepository.{setTagsForNote,findByNote}`, `IAudioRecordRepository.{findByNote,findById}`, `AudioRecordsDao.totalFileSizeBytes`, `NotFoundException`, `AppConstants.notePreviewMaxChars`.
+- Delete interface+impl only, KEEP the DAO (alive internally): `ICategoryRepository.findChildren`, `ICategoryRepository.findById`.
+- **Wire up instead of deleting** (missing validation, not surplus): `AppConstants.{noteTitleMaxLength,tagNameMaxLength,categoryNameMaxLength}`; use `AppConstants.appName` at 3 hardcoded `'ModuNote'` sites + `dbFileName` at `app_database.dart:70`; move `audio_pref_view_model.dart:12`'s pref key into `AppConstants`.
+- Stale comments: `tags_dao.dart:9`, `i_category_repository.dart:28`, `i_note_repository.dart:4`.
+
+**Duplicates:** the bottom-sheet grabber is duplicated **6×** (ai_tools_sheet, note_options_sheet, tag_input_sheet, swipeable_note_card, rag_tags_card, mn_category_picker_sheet) → extract `MNSheetGrabber` (~60 lines); `_AddTagChip` vs `_AddTriggerTagChip` → one `MNAddChip`.
+
+**Dependencies — zero unused packages** (all 22 runtime + 8 dev verified imported). Findings:
+- 🔴 **Backend security:** `python-jose==3.3.0` → **3.4.0** (CVE-2024-33663/-33664). Algorithm-confusion path is closed (`core/auth.py:94` pins `algorithms=["RS256"]`); the JWT-bomb DoS path is not.
+- ⚠️ **`custom_lint`/`riverpod_lint` never actually run** — `flutter analyze` does NOT execute them. `dart run custom_lint` reports **1 INFO** (`tag_list_view_model.dart:65`). Add it to the pre-commit routine; `TECH_STACK.md:171` overstates the quality bar.
+- Zero-risk minors: `equatable`, `path_provider`, `speech_to_text`, `uuid`, `flutter_floating_bottom_bar`; relax `google_sign_in: 6.2.1` → `^6.2.1`.
+- Majors (one at a time + full regression): flutter_quill 10→11 (also removes the `intl` override), go_router 14→17, Firebase trio (atomic), Riverpod 2→3 (largest blast radius), flutter_lints 4→6. Keep flutter_sound 9.
+
+**🚫 Release blockers (before any Play upload):** `applicationId = "com.example.modunote"` is rejected by Google Play (changing it post-install breaks upgrades — decide now, update `google-services.json` + Firebase app + SHA-1 together); release builds are **signed with debug keys** and `android/key.properties` doesn't exist (so checklist S5 passes vacuously).
+
+**Docs hygiene:** ~77 stale lines in this file (a "Documentation Produced" section referencing the long-merged `THREAD_HANDOFF.md`/`progress.md`, and a "Decisions Log/Pending Decisions" block still saying *"AI provider (Gemini vs Groq) — TBD"* when Groq shipped in Stage 1) → delete the first, merge the second into `DECISIONS.md`. The **phase table exists in 3 places and they disagree** (README has Phase 13; STATUS + CLAUDE.md don't) → keep README's as canonical, reduce the others to a pointer. `TECH_STACK.md` is gitignored yet listed in CLAUDE.md's Important Files table — decide which is right.
+
+**Open design questions:** `AppColors.darkPinTint` is unused because `mn_note_card.dart:76` uses `darkCard` for pinned notes in dark mode — **pinned notes may be visually indistinguishable in dark mode** (wire it up or delete the token?); `SyncStatus.conflict` is never written/compared (keep for planned conflict resolution or delete?); `ITagRepository.findById` has no `lib/` callers but is exercised by a test.
 
 ### Stage 3 — observability (STARTED 2026-07-08)
 - ✅ **Sentry (backend)** — `sentry-sdk[fastapi]==2.64.0`; init in `main.py` only when `SENTRY_DSN` is set (errors-only: `traces_sample_rate=0.0` since Langfuse will own LLM tracing; `send_default_pii=False`; environment derived from `DEV_MODE`). `core/config.py` + `.env.example` + `render.yaml` (`sync:false`) updated. Verified: no-op without a DSN, activates + auto-enables the FastAPI integration with one; **26 pytest green**. *Developer step: create the sentry.io project, set `SENTRY_DSN` in Render, redeploy, force a test error.*

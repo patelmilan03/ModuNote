@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../core/errors/app_exception.dart';
@@ -62,5 +63,5 @@ class TagListViewModel extends _$TagListViewModel {
 /// Provides a one-shot map of tagId → note count.
 /// Recreated each time the TagsScreen is mounted (not keepAlive).
 @riverpod
-Future<Map<String, int>> tagNoteCounts(TagNoteCountsRef ref) =>
+Future<Map<String, int>> tagNoteCounts(Ref ref) =>
     ref.watch(tagRepositoryProvider).getNoteCounts();

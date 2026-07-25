@@ -290,18 +290,9 @@ Chronological order: 11.5 → W → 11.6 → 12 (Stages 1–2) → accounts/secu
 
 ## Roadmap
 
-> **This section is the single, canonical list of proposed/future work.** Roadmap items are recorded here and nowhere else; the other planning docs hold the *how* for items already listed here (`PHASE_12_PLAN.md` for AI stages, `UI_POLISH_PLAN.md` for the UI queue, `SUPABASE_MIGRATION_PLAN.md` for the migration). Ordered by priority — effectiveness against the current state of the app vs. effort.
+> **The single, canonical, priority-ranked list of ALL planned work now lives in [`modunote/BACKLOG.md`](modunote/BACKLOG.md)** — features, bugs, cleanup, ops, and open decisions, each with a stable `MN-##` id. It supersedes the old per-section `P1–P5` list that used to live here. The spec docs hold the *how* for items already in the backlog (`PHASE_12_PLAN.md` for AI stages, `UI_POLISH_PLAN.md` for the UI queue, `SUPABASE_MIGRATION_PLAN.md` for the migration); `BUGS.md` holds bug repro/fix detail.
 
-| Priority | Item | Scope / spec |
-|---|---|---|
-| **P1** | **CI/CD pipeline**: GitHub Actions — `flutter analyze` + `flutter test` quality gate, then a release APK auto-distributed to the developer's device via Firebase App Distribution (no Play Store) | Confirmed 2026-07-14 (cross-project plan) — absorbs the quality-gate part of the old deployment-hardening item |
-| **P2** | **Startup UX**: native splash screen + first-run onboarding carousel | `UI_POLISH_PLAN.md` item 5 |
-| **P3** | **Phase 12 Stage 3 remainder — Observability & evals** *(Sentry error monitoring already shipped)*: Langfuse tracing on every LLM + embedding call, a RAGAS eval dataset with baseline scores, light output guardrails | `PHASE_12_PLAN.md` Stage 3 (built incrementally) |
-| **P4** | **Deployment hardening leftovers**: tighten backend `ALLOWED_ORIGINS`, scheduled `pg_dump` backup | `PHASE_12_PLAN.md` Stage 4 checklist remainder (lint/test gate moved into P1) |
-| **P5** | **Supabase consolidation (S1–S4)**: auth + data + vectors on one Postgres with per-user isolation enforced by Row-Level Security; removes Firebase | `SUPABASE_MIGRATION_PLAN.md` — approved but deliberately last (large; everything works on the current stack) |
-| Parked | Efficiency-pass remainder (trim unused deps/assets, build-size audit — the screen-split rounds shipped 2026-07-08) · sync conflict-resolution UI (currently last-write-wins by `updatedAt`) · web audio recording (WebM/Opus + IndexedDB) · audio cloud backup (Supabase Storage, after S2) · category drag-to-reorder (schema ready, no UI) · iOS build (non-destructive to add) · Supabase Realtime live sync | Revisit when a concrete need appears |
-
-**Near-term ops** (not features): set `SENTRY_DSN` in the Render dashboard to activate the shipped Sentry integration. *(Done: web redeploy with the QnA error-source UI · bare RLS enabled on the Supabase vector tables.)*
+**Current focus (Chunk A, in order):** `python-jose` security bump → activate Sentry in prod → docs truth audit → **CI/CD pipeline** (GitHub Actions gate → release-signed APK → Firebase App Distribution). See `BACKLOG.md` for the full ranked list and `NEXT_THREAD.md` for executor briefs.
 
 ### Project documentation
 

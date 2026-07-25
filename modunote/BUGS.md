@@ -118,5 +118,17 @@
 
 ---
 
+## Added after the original audit
+
+### 17. Deleting a note orphans its audio records AND leaks the audio files on disk
+- **Where:** `lib/data/datasources/local/daos/notes_dao.dart:158` (`deleteNote`) · `lib/data/datasources/local/tables/audio_records_table.dart` (no FK) · dead cleanup method at `local_audio_record_repository.dart:80` · area: data, audio
+- **Found:** 2026-07-18 project-health sweep (dead-code agent surfaced `deleteAllForNote` as unreferenced; verified it is a missing call, not surplus code).
+- **Problem:** `deleteNote` deletes only the `notes` row. `audio_records_table` declares **no foreign key / ON DELETE CASCADE**, and nothing calls `deleteAllForNote`. The note-delete path (`note_editor_screen._showDeleteConfirm` → repo delete → RAG deindex → tag `pruneOrphans`) has **no audio cleanup step**, and `AudioFileStorage.deleteFile` is only ever called from the voice panel's per-clip delete.
+- **Failure:** Delete a note that has voice recordings → its `audio_records` rows persist forever AND the `.aac` files stay in `getApplicationDocumentsDirectory()/audio_notes/`. Unbounded growth (~0.24 MB per recorded minute), invisible to the user, never reclaimed. Worse than the tag-orphan bug (#2) because it leaks real files, not just rows.
+- **Fix:** In the note-delete path, call `deleteAllForNote(noteId)` **and** delete each clip's file via `AudioFileStorage.deleteFile` before removing the note (fetch the records first, since the rows are needed to know the paths). Consider also adding the FK + `ON DELETE CASCADE` as a defence-in-depth follow-up (note: DB cascade alone will NOT delete the on-disk files).
+- **Severity:** MEDIUM (storage leak, unbounded, silent).
+
+---
+
 ## Fixed
 _(none yet — move items here with the fixing commit/date as they land)_
