@@ -77,10 +77,19 @@ jobs:
         if: always()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # Everything below is user-controlled text. It goes through env vars
+          # (never `${{ }}` in the script body, which GitHub substitutes BEFORE
+          # the shell parses — a quote or backtick would break or inject) and is
+          # encoded into JSON by jq, which escapes quotes/backslashes/newlines.
+          JOB_STATUS: ${{ job.status }}
+          BRANCH: ${{ github.ref_name }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then exit 0; fi
 
-          if [ "${{ job.status }}" = "success" ]; then
+          if [ "$JOB_STATUS" = "success" ]; then
             COLOR=3066993
             EMOJI="✅"
           else
@@ -88,22 +97,37 @@ jobs:
             EMOJI="❌"
           fi
 
-          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1 | sed 's/"/\\"/g' | sed "s/'/\\'/g")
-          SHORT_SHA="${GITHUB_SHA:0:7}"
+          # Subject line only, bounded well under Discord's 1024-char field cap.
+          SUBJECT=$(printf '%s' "$COMMIT_MESSAGE" | head -1 | cut -c1-500)
+          [ -n "$SUBJECT" ] || SUBJECT="(no commit message)"
 
-          curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK_URL" -d "{
-            \"embeds\": [{
-              \"title\": \"${EMOJI} Quality Gate — ${{ job.status }}\",
-              \"color\": ${COLOR},
-              \"fields\": [
-                { \"name\": \"Branch\", \"value\": \"\`${{ github.ref_name }}\`\", \"inline\": true },
-                { \"name\": \"Commit\", \"value\": \"[\`${SHORT_SHA}\`](${{ github.event.head_commit.url }})\", \"inline\": true },
-                { \"name\": \"Message\", \"value\": \"${COMMIT_MSG}\", \"inline\": false }
-              ],
-              \"url\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\",
-              \"footer\": { \"text\": \"ModuNote CI\" }
-            }]
-          }"
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          # head_commit is null on pull_request events — degrade to a plain sha.
+          if [ -n "$COMMIT_URL" ]; then
+            COMMIT_FIELD="[\`${SHORT_SHA}\`](${COMMIT_URL})"
+          else
+            COMMIT_FIELD="\`${SHORT_SHA}\`"
+          fi
+
+          jq -n \
+            --arg title "${EMOJI} Quality Gate — ${JOB_STATUS}" \
+            --argjson color "$COLOR" \
+            --arg branch "\`${BRANCH}\`" \
+            --arg commit "$COMMIT_FIELD" \
+            --arg message "$SUBJECT" \
+            --arg url "$RUN_URL" \
+            '{embeds: [{
+                title: $title,
+                color: $color,
+                fields: [
+                  {name: "Branch",  value: $branch,  inline: true},
+                  {name: "Commit",  value: $commit,  inline: true},
+                  {name: "Message", value: $message, inline: false}
+                ],
+                url: $url,
+                footer: {text: "ModuNote CI"}
+              }]}' \
+            | curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK_URL" -d @-
         working-directory: .
 
   # ──────────────────────────────────────────────
@@ -173,13 +197,24 @@ jobs:
       - name: Distribute via Firebase App Distribution
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-sa.json
+          # Passed as an env var, NOT interpolated into the script body — a
+          # commit message containing a quote or backtick would otherwise break
+          # (or inject into) the shell.
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           npm install -g firebase-tools
+
+          # Firebase App Distribution caps release notes at 5000 chars, and a
+          # full commit body easily exceeds that. Use the subject line only,
+          # hard-truncated well under the cap.
+          SUBJECT=$(printf '%s' "$COMMIT_MESSAGE" | head -1 | cut -c1-500)
+          RELEASE_NOTES="Build #${{ github.run_number }} (${GITHUB_SHA:0:7}) — ${SUBJECT}"
+
           firebase appdistribution:distribute \
             build/app/outputs/flutter-apk/app-release.apk \
             --app "${{ secrets.FIREBASE_ANDROID_APP_ID }}" \
             --groups milan \
-            --release-notes "Build #${{ github.run_number }} — ${{ github.event.head_commit.message }}"
+            --release-notes "$RELEASE_NOTES"
 
       - name: Cleanup sensitive files
         if: always()
@@ -194,10 +229,18 @@ jobs:
         if: always()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # See the quality job's notify step for why these go through env + jq
+          # instead of being interpolated into the script body.
+          JOB_STATUS: ${{ job.status }}
+          BRANCH: ${{ github.ref_name }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then exit 0; fi
 
-          if [ "${{ job.status }}" = "success" ]; then
+          if [ "$JOB_STATUS" = "success" ]; then
             COLOR=3066993
             EMOJI="🚀"
             DESC="APK distributed to Firebase App Tester"
@@ -207,22 +250,38 @@ jobs:
             DESC="Release failed — check the logs"
           fi
 
-          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1 | sed 's/"/\\"/g' | sed "s/'/\\'/g")
-          SHORT_SHA="${GITHUB_SHA:0:7}"
+          # Subject line only, bounded well under Discord's 1024-char field cap.
+          SUBJECT=$(printf '%s' "$COMMIT_MESSAGE" | head -1 | cut -c1-500)
+          [ -n "$SUBJECT" ] || SUBJECT="(no commit message)"
 
-          curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK_URL" -d "{
-            \"embeds\": [{
-              \"title\": \"${EMOJI} Release #${{ github.run_number }} — ${{ job.status }}\",
-              \"description\": \"${DESC}\",
-              \"color\": ${COLOR},
-              \"fields\": [
-                { \"name\": \"Branch\", \"value\": \"\`${{ github.ref_name }}\`\", \"inline\": true },
-                { \"name\": \"Commit\", \"value\": \"[\`${SHORT_SHA}\`](${{ github.event.head_commit.url }})\", \"inline\": true },
-                { \"name\": \"Build\", \"value\": \"#${{ github.run_number }}\", \"inline\": true },
-                { \"name\": \"Message\", \"value\": \"${COMMIT_MSG}\", \"inline\": false }
-              ],
-              \"url\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\",
-              \"footer\": { \"text\": \"ModuNote CI\" }
-            }]
-          }"
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          if [ -n "$COMMIT_URL" ]; then
+            COMMIT_FIELD="[\`${SHORT_SHA}\`](${COMMIT_URL})"
+          else
+            COMMIT_FIELD="\`${SHORT_SHA}\`"
+          fi
+
+          jq -n \
+            --arg title "${EMOJI} Release #${BUILD_NUMBER} — ${JOB_STATUS}" \
+            --arg desc "$DESC" \
+            --argjson color "$COLOR" \
+            --arg branch "\`${BRANCH}\`" \
+            --arg commit "$COMMIT_FIELD" \
+            --arg build "#${BUILD_NUMBER}" \
+            --arg message "$SUBJECT" \
+            --arg url "$RUN_URL" \
+            '{embeds: [{
+                title: $title,
+                description: $desc,
+                color: $color,
+                fields: [
+                  {name: "Branch",  value: $branch,  inline: true},
+                  {name: "Commit",  value: $commit,  inline: true},
+                  {name: "Build",   value: $build,   inline: true},
+                  {name: "Message", value: $message, inline: false}
+                ],
+                url: $url,
+                footer: {text: "ModuNote CI"}
+              }]}' \
+            | curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK_URL" -d @-
         working-directory: .
