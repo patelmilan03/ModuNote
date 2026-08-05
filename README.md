@@ -1,6 +1,6 @@
 # ModuNote
 
-**ModuNote** is an offline-first, AI-assisted note-taking app for a solo content creator who needs to capture ideas the moment they happen — open, tap the FAB, start typing, and the note saves itself. On top of fast local capture it adds an **AI writing assistant**, **"Ask your notes" retrieval-augmented QnA** over your own notes, **Google Sign-In**, and **durable cloud backup/restore** so nothing is lost across reinstalls.
+**ModuNote** is an offline-first, AI-assisted note-taking app for a solo content creator who needs to capture ideas the moment they happen open, tap the FAB, start typing, and the note saves itself. On top of fast local capture it adds an **AI writing assistant**, **"Ask your notes" retrieval-augmented QnA** over your own notes, **Google Sign-In**, and **durable cloud backup/restore** so nothing is lost across reinstalls.
 
 Built with **Flutter** (strict **MVVM + Repository** architecture), a **Drift/SQLite** local database with **FTS5 full-text search**, **Riverpod 2** with full code generation, a **flutter_quill** Delta-JSON rich text editor, and **Firebase** (Google auth + Firestore sync). The AI features are served by a separate **FastAPI** backend — **Groq** LLM, **Jina** embeddings, **Supabase Postgres + pgvector** — deployed on Render, with per-user data isolation enforced by verifying Firebase ID tokens server-side.
 
