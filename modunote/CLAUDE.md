@@ -341,6 +341,20 @@ Write only what is new — do not duplicate content already in the target file. 
 - **When a backlog item ships:** (1) mark its Status `✅ Done` in `BACKLOG.md`, (2) THEN update the relevant permanent docs as usual (`STATUS.md` milestone, `DECISIONS.md` decision, `CLAUDE.md` convention, `BUGS.md` bug ledger, `TESTING.md` steps).
 - **After completing any task, remind the user of pending work** — surface the next 2–3 `⬜ To do` rows from `BACKLOG.md` by rank, so nothing stalls silently.
 
+### `BOARD.md` — the active kanban view (works with `BACKLOG.md`, does not replace it)
+
+`modunote/BOARD.md` is a plain-Markdown Kanban board (Obsidian Kanban format) following the cross-project convention shared with Pitwall and every future project. It is the **at-a-glance working view**; `BACKLOG.md` stays the **deep, exhaustive ranked list + parked tail**. Same `MN-##` ids across both — an item is never renumbered when it moves between them.
+
+- **Columns:** 🧊 Backlog · 📋 To Do · 🔵 In Progress · ⛔ Blocked · ❓ Needs Decision · ✅ Done. Card order within a column = priority (top = first).
+- **Card format (mandatory, identical in every project):** `- [ ] <MN-##> · <short title>  @owner  #tag`. Owners: `@milan` (human-only), `@agent` (Claude executor), `@both`. Tags: one of `#bug #feature #techdebt #cleanup #docs #ops #devops #security`. Check the box `- [x]` only in ✅ Done and append ` — <YYYY-MM-DD>`.
+- **Maintenance:**
+  1. New idea/bug/task → add ONE card to `BOARD.md` in the right column with the next free `MN-##` (and, for anything beyond a quick card, its full row in `BACKLOG.md`). Never scatter it into README/STATUS.
+  2. When work starts → move the card to **In Progress**; when it stalls → move to **Blocked** and write what it's waiting on and who.
+  3. When it ships → move to **Done**, check the box, add the date; keep ~last 10 Done, then prune. Mirror the status in `BACKLOG.md` and update the permanent docs as the existing rule above requires.
+  4. After finishing any task, tell Milan the top 2–3 **To Do** cards so nothing stalls.
+  5. `BOARD.md` is plain Markdown — edit it directly, never via an API/MCP/external tool. Do NOT duplicate an open item's full detail into both files; the board card is a pointer, the backlog row (or `BUGS.md`) holds the detail.
+- **Cross-project index:** `../PROJECTS.md` (parent of all project folders) has one row per project — update ModuNote's row whenever `BOARD.md`'s top In Progress / Blocked card changes.
+
 ---
 
 ## Context Window Management
