@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import 'settings_icon_tile.dart';
 import '../../../router/app_router.dart';
 
 /// "Archived Notes" navigation card — pushes the archive screen.
@@ -27,20 +28,20 @@ class ArchiveCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: card,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: outline, width: 0.5),
+          border: Border.all(color: outline),
         ),
         child: Row(
           children: [
-            Icon(Icons.archive_outlined, size: 22, color: muted),
-            const SizedBox(width: 14),
+            const SettingsIconTile(icon: Icons.archive_outlined, tintIndex: 1),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Archived Notes',
-                    style: AppTypography.plusJakartaSans(
+                    'Archived notes',
+                    style: AppTypography.heading(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: onSurface,
@@ -58,7 +59,7 @@ class ArchiveCard extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, size: 20, color: muted),
+            Icon(Icons.chevron_right_rounded, size: 20, color: muted),
           ],
         ),
       ),

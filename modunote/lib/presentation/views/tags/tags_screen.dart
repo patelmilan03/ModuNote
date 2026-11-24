@@ -2,17 +2,23 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../data/models/category.dart';
 import '../../../data/models/tag.dart';
+import '../../router/app_router.dart';
+import '../../viewmodels/category_tree_view_model.dart';
+import '../../viewmodels/note_list_view_model.dart';
 import '../../viewmodels/tag_list_view_model.dart';
+import '../../widgets/mn_empty_badge.dart';
 import '../../widgets/mn_skeletons.dart';
 
-/// Tags management screen.
-/// Shows all tags with note-count density bars.
-/// Spec: MODUNOTE_UI_REFERENCE.md § 3.3
+/// Tags tab (UI revamp 2026-11): tag bubbles sized by note count, then a
+/// Folders card listing the category tree. Tapping a bubble or a folder
+/// filters Home by it; long-pressing a bubble deletes the tag.
 class TagsScreen extends ConsumerWidget {
   const TagsScreen({super.key});
 
@@ -85,65 +91,97 @@ class TagsScreen extends ConsumerWidget {
     Map<String, int> counts,
     bool isDark,
   ) {
-    if (tags.isEmpty) {
+    final cats = ref.watch(categoryTreeViewModelProvider).valueOrNull ?? const [];
+    if (tags.isEmpty && cats.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'No tags yet',
-              style: AppTypography.plusJakartaSans(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.3,
-                color: isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 120),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const MNEmptyBadge(icon: Icons.sell_outlined, tintIndex: 1),
+              const SizedBox(height: 16),
+              Text(
+                'No tags yet',
+                style: AppTypography.heading(
+                  fontSize: 19,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Tap + to create your first tag',
-              style: AppTypography.inter(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w400,
-                color: isDark
-                    ? AppColors.darkOnSurfaceMuted
-                    : AppColors.lightOnSurfaceMuted,
+              const SizedBox(height: 6),
+              Text(
+                'Tap + to create your first tag.',
+                style: AppTypography.inter(
+                  fontSize: 13.5,
+                  color: AppColors.mutedOf(context),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }
 
+    // Biggest first, so the bubble cloud reads from the top.
+    final sorted = [...tags]
+      ..sort((a, b) => (counts[b.id] ?? 0).compareTo(counts[a.id] ?? 0));
     final maxCount =
         counts.values.isEmpty ? 1 : max(1, counts.values.reduce(max));
-    final cardBg = isDark ? AppColors.darkCard : AppColors.lightCard;
-    final outlineColor = isDark ? AppColors.darkOutline : AppColors.lightOutline;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 150),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 150),
       children: [
-        Container(
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: outlineColor, width: 0.5),
-          ),
-          padding: const EdgeInsets.all(6),
-          child: Column(
+        if (sorted.isNotEmpty)
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              for (int i = 0; i < tags.length; i++)
-                _TagRow(
-                  tag: tags[i],
-                  noteCount: counts[tags[i].id] ?? 0,
+              for (var i = 0; i < sorted.length; i++)
+                _TagBubble(
+                  tag: sorted[i],
+                  count: counts[sorted[i].id] ?? 0,
                   maxCount: maxCount,
-                  showDivider: i < tags.length - 1,
-                  isDark: isDark,
-                  onDelete: () => _confirmDelete(context, ref, tags[i], isDark),
+                  tintIndex: i,
+                  onTap: () {
+                    ref
+                        .read(noteFilterNotifierProvider.notifier)
+                        .setTag(sorted[i].id, sorted[i].name);
+                    context.go(AppRoutes.home);
+                  },
+                  onLongPress: () =>
+                      _confirmDelete(context, ref, sorted[i], isDark),
                 ),
             ],
           ),
-        ),
+        if (cats.isNotEmpty) ...[
+          const SizedBox(height: 22),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+            child: Text(
+              'FOLDERS',
+              style: AppTypography.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: AppColors.mutedOf(context),
+              ),
+            ),
+          ),
+          _FoldersCard(
+            categories: cats,
+            counts: ref.watch(categoryNoteCountsProvider).valueOrNull ??
+                const {},
+            tintIndex: ref.watch(categoryTintIndexProvider),
+            onTap: (c) {
+              ref
+                  .read(noteFilterNotifierProvider.notifier)
+                  .setCategory(c.id, c.name);
+              context.go(AppRoutes.home);
+            },
+          ),
+        ],
       ],
     );
   }
@@ -155,7 +193,7 @@ class TagsScreen extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         title: Text(
           'New tag',
-          style: AppTypography.plusJakartaSans(
+          style: AppTypography.heading(
             fontSize: 17,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.2,
@@ -202,7 +240,7 @@ class TagsScreen extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         title: Text(
           'Delete "#${tag.name}"?',
-          style: AppTypography.plusJakartaSans(
+          style: AppTypography.heading(
             fontSize: 17,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.2,
@@ -259,21 +297,11 @@ class _TagsAppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final onSurface =
-        isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface;
-    final mutedColor =
-        isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
-    final primaryContainer = isDark
-        ? AppColors.darkPrimaryContainer
-        : AppColors.lightPrimaryContainer;
-    final onPrimaryContainer = isDark
-        ? AppColors.darkOnPrimaryContainer
-        : AppColors.lightOnPrimaryContainer;
+    final cs = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 16, 8),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
             child: Column(
@@ -282,35 +310,38 @@ class _TagsAppBar extends StatelessWidget {
               children: [
                 Text(
                   'Tags',
-                  style: AppTypography.plusJakartaSans(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                    color: onSurface,
+                  style: AppTypography.heading(
+                    fontSize: 34,
+                    letterSpacing: -0.8,
+                    color: cs.onSurface,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   tagCount == 1 ? '1 tag' : '$tagCount tags',
                   style: AppTypography.inter(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w400,
-                    color: mutedColor,
+                    fontSize: 13,
+                    color: AppColors.mutedOf(context),
                   ),
                 ),
               ],
             ),
           ),
-          GestureDetector(
-            onTap: onAdd,
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: primaryContainer,
-                borderRadius: BorderRadius.circular(14),
+          Semantics(
+            button: true,
+            label: 'New tag',
+            excludeSemantics: true,
+            child: GestureDetector(
+              onTap: onAdd,
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: cs.primary,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(Icons.add_rounded, size: 24, color: cs.onPrimary),
               ),
-              child: Icon(Icons.add, size: 20, color: onPrimaryContainer),
             ),
           ),
         ],
@@ -319,140 +350,208 @@ class _TagsAppBar extends StatelessWidget {
   }
 }
 
-// ─── Tag Row ────────────────────────────────────────────────────────────────────
+// ─── Tag bubble ─────────────────────────────────────────────────────────────
 
-class _TagRow extends StatelessWidget {
-  const _TagRow({
+/// Circle sized 64–128 px by the tag's share of the busiest tag's count.
+class _TagBubble extends StatelessWidget {
+  const _TagBubble({
     required this.tag,
-    required this.noteCount,
+    required this.count,
     required this.maxCount,
-    required this.showDivider,
-    required this.isDark,
-    required this.onDelete,
+    required this.tintIndex,
+    required this.onTap,
+    required this.onLongPress,
   });
 
   final Tag tag;
-  final int noteCount;
+  final int count;
   final int maxCount;
-  final bool showDivider;
-  final bool isDark;
-  final VoidCallback onDelete;
+  final int tintIndex;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  static const double _min = 64;
+  static const double _max = 128;
 
   @override
   Widget build(BuildContext context) {
-    final outlineColor =
-        isDark ? AppColors.darkOutline : AppColors.lightOutline;
-    final chipBg = isDark ? AppColors.darkChipBg : AppColors.lightChipBg;
-    final chipText = isDark ? AppColors.darkChipText : AppColors.lightChipText;
-    final onSurface =
-        isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface;
-    final mutedColor =
-        isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
-    final surfaceContainer = isDark
-        ? AppColors.darkSurfaceContainer
-        : AppColors.lightSurfaceContainer;
-    final primary = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
+    final size = _min + (_max - _min) * (count / maxCount).clamp(0.0, 1.0);
+    final fg = Theme.of(context).colorScheme.onSurface;
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    // Staggered pop-in: each bubble starts 40 ms after the previous one
+    // (capped so a long tag list doesn't keep popping for seconds).
+    final delayMs = (tintIndex * 40).clamp(0, 480);
+    final total = 320 + delayMs;
 
-    final densityFraction = noteCount / maxCount;
-
-    return GestureDetector(
-      onLongPress: onDelete,
-      child: Container(
-        decoration: BoxDecoration(
-          border: showDivider
-              ? Border(bottom: BorderSide(color: outlineColor, width: 0.5))
-              : null,
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-        child: Row(
-          children: [
-            // Hash icon container
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: chipBg,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: Text(
-                  '#',
-                  style: AppTypography.plusJakartaSans(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: chipText,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            // Name + density bar
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    tag.name,
-                    style: AppTypography.plusJakartaSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.1,
-                      color: onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  LayoutBuilder(
-                    builder: (_, constraints) => Stack(
-                      children: [
-                        // Track
-                        Container(
-                          height: 3,
-                          width: constraints.maxWidth,
-                          decoration: BoxDecoration(
-                            color: surfaceContainer,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                        // Fill
-                        Container(
-                          height: 3,
-                          width: constraints.maxWidth * densityFraction,
-                          decoration: BoxDecoration(
-                            color: primary.withValues(alpha: 0.55),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            // Count badge
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
-              decoration: BoxDecoration(
-                color: surfaceContainer,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Text(
-                '$noteCount',
+    final bubble = Semantics(
+      button: true,
+      label: '#${tag.name}, $count notes',
+      hint: 'Long press to delete',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Container(
+          width: size,
+          height: size,
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppColors.tintOf(context, tintIndex),
+            shape: BoxShape.circle,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '#${tag.name}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
                 style: AppTypography.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: mutedColor,
+                  fontSize: size > 90 ? 12.5 : 11,
+                  fontWeight: FontWeight.w700,
+                  color: fg,
                 ),
               ),
-            ),
-            const SizedBox(width: 6),
-            Icon(Icons.chevron_right, size: 16, color: mutedColor),
-          ],
+              Text(
+                '$count',
+                style: AppTypography.heading(
+                  fontSize: size > 90 ? 18 : 15,
+                  color: fg,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
+    );
+    if (reduceMotion) return bubble;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: total),
+      curve: Interval(delayMs / total, 1, curve: Curves.easeOutBack),
+      builder: (_, v, c) => Transform.scale(
+        scale: v,
+        child: Opacity(opacity: v.clamp(0.0, 1.0), child: c),
+      ),
+      child: bubble,
     );
   }
 }
 
+// ─── Folders card ───────────────────────────────────────────────────────────
+
+/// White card listing the category tree depth-first, children indented.
+class _FoldersCard extends StatelessWidget {
+  const _FoldersCard({
+    required this.categories,
+    required this.counts,
+    required this.tintIndex,
+    required this.onTap,
+  });
+
+  final List<Category> categories;
+  final Map<String, int> counts;
+  final Map<String, int> tintIndex;
+  final ValueChanged<Category> onTap;
+
+  List<(Category, int)> _flatten() {
+    final children = <String?, List<Category>>{};
+    for (final c in categories) {
+      (children[c.parentId] ??= []).add(c);
+    }
+    for (final list in children.values) {
+      list.sort((a, b) {
+        final o = a.sortOrder.compareTo(b.sortOrder);
+        return o != 0 ? o : a.createdAt.compareTo(b.createdAt);
+      });
+    }
+    final out = <(Category, int)>[];
+    void walk(String? parent, int depth) {
+      if (depth > 5) return; // max depth is 5; also guards cycles
+      for (final c in children[parent] ?? const <Category>[]) {
+        out.add((c, depth));
+        walk(c.id, depth + 1);
+      }
+    }
+
+    walk(null, 0);
+    return out;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final rows = _flatten();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardOf(context),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: cs.outline),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < rows.length; i++)
+            Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                onTap: () => onTap(rows[i].$1),
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: i == 0
+                        ? null
+                        : Border(top: BorderSide(color: cs.outline)),
+                  ),
+                  padding: EdgeInsets.fromLTRB(
+                      16 + 22.0 * rows[i].$2.clamp(0, 3), 12, 16, 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: tintIndex[rows[i].$1.id] == null
+                              ? cs.surfaceContainer
+                              : AppColors.tintOf(
+                                  context, tintIndex[rows[i].$1.id]!),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(Icons.folder_outlined,
+                            size: 18, color: cs.onSurface),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          rows[i].$1.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.inter(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${counts[rows[i].$1.id] ?? 0}',
+                        style: AppTypography.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.mutedOf(context),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.chevron_right_rounded,
+                          size: 18, color: AppColors.mutedOf(context)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}

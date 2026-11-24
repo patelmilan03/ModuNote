@@ -40,9 +40,9 @@ class TagSuggestBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 1),
-            child: Icon(Icons.auto_awesome, size: 16, color: AppColors.accent),
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(Icons.auto_awesome, size: 16, color: AppColors.accentOf(context)),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -70,18 +70,18 @@ class TagSuggestBanner extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
-                            color: AppColors.accent.withValues(alpha: 0.12),
+                            color: AppColors.accentOf(context).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(999),
                             border: Border.all(
-                              color: AppColors.accent.withValues(alpha: 0.40),
+                              color: AppColors.accentOf(context).withValues(alpha: 0.40),
                               width: 0.5,
                             ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.add,
-                                  size: 13, color: AppColors.accent),
+                              Icon(Icons.add,
+                                  size: 13, color: AppColors.accentOf(context)),
                               const SizedBox(width: 3),
                               Text(
                                 name,

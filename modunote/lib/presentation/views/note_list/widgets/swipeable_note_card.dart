@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../data/models/note.dart';
 import '../../../router/app_router.dart';
+import '../../../router/route_transitions.dart';
 import '../../../viewmodels/note_list_view_model.dart';
 import '../../../viewmodels/tag_list_view_model.dart';
 import '../../../widgets/mn_note_card.dart';
@@ -18,10 +19,14 @@ class SwipeableNoteCard extends ConsumerWidget {
     super.key,
     required this.note,
     required this.tagNames,
+    this.tintIndex,
   });
 
   final Note note;
   final List<String> tagNames;
+
+  /// Root-category tint for the card (null = plain card).
+  final int? tintIndex;
 
   void _showActionsSheet(BuildContext context, WidgetRef ref) {
     showModalBottomSheet<void>(
@@ -93,9 +98,9 @@ class SwipeableNoteCard extends ConsumerWidget {
       },
       background: _SwipeBg(
         alignment: Alignment.centerLeft,
-        color: AppColors.accent.withValues(alpha: 0.15),
+        color: AppColors.accentOf(context).withValues(alpha: 0.18),
         icon: note.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
-        iconColor: AppColors.accent,
+        iconColor: AppColors.accentOf(context),
       ),
       secondaryBackground: _SwipeBg(
         alignment: Alignment.centerRight,
@@ -110,7 +115,9 @@ class SwipeableNoteCard extends ConsumerWidget {
       child: MNNoteCard(
         note: note,
         tagNames: tagNames,
-        onTap: () => context.push(AppRoutes.editNotePath(note.id)),
+        tintIndex: tintIndex,
+        onTap: () => context.push(AppRoutes.editNotePath(note.id),
+            extra: RevealOrigin.of(context)?.toExtra()),
         onLongPress: () => _showActionsSheet(context, ref),
       ),
     );
@@ -136,7 +143,7 @@ class _SwipeBg extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
       ),
       alignment: alignment,
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -194,7 +201,7 @@ class _NoteActionsSheet extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
             child: Text(
               note.title.isEmpty ? 'Untitled' : note.title,
-              style: AppTypography.plusJakartaSans(
+              style: AppTypography.heading(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: onSurface,

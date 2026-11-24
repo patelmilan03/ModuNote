@@ -33,7 +33,7 @@ class FilterChipBar extends ConsumerWidget {
     final isAll = filter.type == NoteFilterType.all;
 
     return SizedBox(
-      height: 36,
+      height: 34,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -42,8 +42,8 @@ class FilterChipBar extends ConsumerWidget {
           _FilterChip(
             label: 'All',
             isSelected: isAll,
-            selectedBg: cs.primaryContainer,
-            selectedFg: cs.onPrimaryContainer,
+            selectedBg: cs.primary,
+            selectedFg: cs.onPrimary,
             defaultBg: chipBg,
             defaultFg: chipText,
             onTap: () =>
@@ -56,8 +56,8 @@ class FilterChipBar extends ConsumerWidget {
                 label: cat.name,
                 isSelected: filter.type == NoteFilterType.category &&
                     filter.id == cat.id,
-                selectedBg: cs.primaryContainer,
-                selectedFg: cs.onPrimaryContainer,
+                selectedBg: cs.primary,
+                selectedFg: cs.onPrimary,
                 defaultBg: chipBg,
                 defaultFg: chipText,
                 prefix: Icons.folder_outlined,
@@ -75,8 +75,8 @@ class FilterChipBar extends ConsumerWidget {
                 label: '#${tag.name}',
                 isSelected: filter.type == NoteFilterType.tag &&
                     filter.id == tag.id,
-                selectedBg: cs.primaryContainer,
-                selectedFg: cs.onPrimaryContainer,
+                selectedBg: cs.primary,
+                selectedFg: cs.onPrimary,
                 defaultBg: chipBg,
                 defaultFg: chipText,
                 onTap: () => ref
@@ -122,8 +122,13 @@ class _FilterChip extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        height: 32,
+      // Selected chip fills with ink (cream in dark), 150 ms.
+      child: AnimatedContainer(
+        duration: MediaQuery.of(context).disableAnimations
+            ? Duration.zero
+            : const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+        height: 34,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: bg,

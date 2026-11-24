@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import 'settings_icon_tile.dart';
 
 /// "Confirm before deleting voice notes" toggle card.
 class VoiceNotesCard extends StatelessWidget {
@@ -33,12 +34,12 @@ class VoiceNotesCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: card,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: outline, width: 0.5),
+        border: Border.all(color: outline),
       ),
       child: Row(
         children: [
-          Icon(Icons.mic_none, size: 22, color: muted),
-          const SizedBox(width: 14),
+          const SettingsIconTile(icon: Icons.mic_none_rounded, tintIndex: 0),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -46,7 +47,7 @@ class VoiceNotesCard extends StatelessWidget {
               children: [
                 Text(
                   'Confirm before deleting voice notes',
-                  style: AppTypography.plusJakartaSans(
+                  style: AppTypography.heading(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: onSurface,
@@ -71,12 +72,12 @@ class VoiceNotesCard extends StatelessWidget {
             // (the default off-state thumb/track was hard to see).
             thumbColor: WidgetStateProperty.resolveWith(
               (states) => states.contains(WidgetState.selected)
-                  ? Colors.white
+                  ? AppColors.accentOn
                   : muted,
             ),
             trackColor: WidgetStateProperty.resolveWith(
               (states) => states.contains(WidgetState.selected)
-                  ? AppColors.accent
+                  ? AppColors.accentOf(context)
                   : surfaceContainer,
             ),
             trackOutlineColor: WidgetStateProperty.all(outline),

@@ -188,17 +188,11 @@ class _VoicePanelState extends ConsumerState<VoicePanel> {
     final current = clips.isEmpty ? null : clips[_index];
 
     final cs = Theme.of(context).colorScheme;
-    final cardBg = widget.isDark ? AppColors.darkCard : AppColors.lightCard;
-    final outlineColor =
-        widget.isDark ? AppColors.darkOutline : AppColors.lightOutline;
-    final onSurface =
-        widget.isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface;
-    final variantColor = widget.isDark
-        ? AppColors.darkOnSurfaceVariant
-        : AppColors.lightOnSurfaceVariant;
-    final mutedColor = widget.isDark
-        ? AppColors.darkOnSurfaceMuted
-        : AppColors.lightOnSurfaceMuted;
+    // Revamp: an ink pill in light mode, the dock colour in dark mode.
+    final pillBg = AppColors.dockOf(context);
+    const onSurface = AppColors.cream;
+    const variantColor = Color(0xFFCFC8DD);
+    final mutedColor = AppColors.cream.withValues(alpha: 0.55);
 
     // Variant A — the panel reads as a rounded pill when collapsed and animates
     // growing into a rounded card when expanded (height via AnimatedSize, corner
@@ -210,12 +204,21 @@ class _VoicePanelState extends ConsumerState<VoicePanel> {
     return AnimatedContainer(
       duration: motion,
       curve: curve,
-      margin: const EdgeInsets.fromLTRB(12, 4, 12, 10),
-      padding: EdgeInsets.fromLTRB(12, expanded ? 10 : 6, 12, expanded ? 12 : 6),
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+      padding: EdgeInsets.fromLTRB(10, 10, 10, expanded ? 14 : 10),
       decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(expanded ? 22 : 28),
-        border: Border.all(color: outlineColor, width: 0.5),
+        color: pillBg,
+        borderRadius: BorderRadius.circular(expanded ? 26 : 34),
+        border: widget.isDark
+            ? Border.all(color: AppColors.darkOutline, width: 1)
+            : null,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: widget.isDark ? 0.35 : 0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: AnimatedSize(
         duration: motion,
@@ -236,77 +239,105 @@ class _VoicePanelState extends ConsumerState<VoicePanel> {
 
   Widget _topRow(List<AudioRecord> clips, AudioRecord? current, ColorScheme cs,
       Color onSurface, Color variantColor, Color mutedColor) {
+    final coral = AppColors.accentOf(context);
     return Row(
       children: [
-        // Record button (disabled while the recording overlay is active).
-        GestureDetector(
-          onTap: widget.isRecording ? null : widget.onRecordTap,
-          child: Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: widget.isRecording
-                  ? cs.error.withValues(alpha: 0.15)
-                  : AppColors.accent,
-            ),
-            child: Icon(
-              widget.isRecording ? Icons.mic : Icons.mic_none,
-              size: 19,
-              color: widget.isRecording ? cs.error : AppColors.accentOn,
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
         Expanded(
           child: current == null
-              ? Text(
-                  widget.isRecording ? 'Recording…' : 'Tap to record a voice note',
-                  style: AppTypography.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: mutedColor,
+              ? Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Text(
+                    widget.isRecording
+                        ? 'Recording…'
+                        : 'Tap the mic to record a voice note',
+                    style: AppTypography.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: mutedColor,
+                    ),
                   ),
                 )
               : _playbackControls(current, variantColor, mutedColor),
         ),
         if (clips.length > 1) ...[
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: _index > 0
+          _iconTap(
+            Icons.chevron_left_rounded,
+            _index > 0 ? variantColor : mutedColor,
+            'Previous recording',
+            _index > 0
                 ? () {
                     _stopAndReset();
                     setState(() => _index--);
                   }
                 : null,
-            child: Icon(Icons.chevron_left,
-                size: 22, color: _index > 0 ? variantColor : mutedColor),
           ),
           Text('${_index + 1}/${clips.length}',
               style: AppTypography.inter(
                   fontSize: 11, fontWeight: FontWeight.w600, color: mutedColor)),
-          GestureDetector(
-            onTap: _index < clips.length - 1
+          _iconTap(
+            Icons.chevron_right_rounded,
+            _index < clips.length - 1 ? variantColor : mutedColor,
+            'Next recording',
+            _index < clips.length - 1
                 ? () {
                     _stopAndReset();
                     setState(() => _index++);
                   }
                 : null,
-            child: Icon(Icons.chevron_right,
-                size: 22,
-                color: _index < clips.length - 1 ? variantColor : mutedColor),
           ),
         ],
         if (current != null)
-          GestureDetector(
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              padding: const EdgeInsets.only(left: 2),
-              child: Icon(_expanded ? Icons.expand_more : Icons.expand_less,
-                  size: 22, color: variantColor),
+          _iconTap(
+            _expanded ? Icons.expand_more_rounded : Icons.expand_less_rounded,
+            variantColor,
+            _expanded ? 'Hide transcript' : 'Show transcript',
+            () => setState(() => _expanded = !_expanded),
+          ),
+        const SizedBox(width: 4),
+        // Record button (disabled while the recording overlay is active).
+        Semantics(
+          button: true,
+          label: 'Record voice note',
+          enabled: !widget.isRecording,
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: widget.isRecording ? null : widget.onRecordTap,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: widget.isRecording
+                    ? cs.error.withValues(alpha: 0.25)
+                    : coral,
+              ),
+              child: Icon(
+                widget.isRecording ? Icons.mic : Icons.mic_none_rounded,
+                size: 22,
+                color: widget.isRecording ? cs.error : AppColors.accentOn,
+              ),
             ),
           ),
+        ),
       ],
+    );
+  }
+
+  Widget _iconTap(
+      IconData icon, Color color, String label, VoidCallback? onTap) {
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: 30,
+          height: 44,
+          child: Icon(icon, size: 22, color: color),
+        ),
+      ),
     );
   }
 
@@ -318,31 +349,46 @@ class _VoicePanelState extends ConsumerState<VoicePanel> {
     final posMs = isThis ? _posMs.clamp(0, durMs) : 0;
     final val = posMs.toDouble().clamp(0.0, maxD);
     final timerStyle = AppTypography.inter(
-        fontSize: 11, fontWeight: FontWeight.w600, color: mutedColor);
+        fontSize: 12, fontWeight: FontWeight.w600, color: variantColor);
+
+    final coral = AppColors.accentOf(context);
+    final playing = isThis && !_paused;
 
     return Row(
       children: [
-        GestureDetector(
-          onTap: () => _togglePlay(current),
-          child: Icon(
-            isThis && !_paused
-                ? Icons.pause_circle_filled
-                : Icons.play_circle_filled,
-            size: 30,
-            color: AppColors.accent,
+        Semantics(
+          button: true,
+          label: playing ? 'Pause' : 'Play',
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: () => _togglePlay(current),
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.cream,
+              ),
+              child: Icon(
+                playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                size: 26,
+                color: AppColors.ink,
+              ),
+            ),
           ),
         ),
-        const SizedBox(width: 6),
-        Text(_fmt(posMs), style: timerStyle),
         Expanded(
           child: SliderTheme(
             data: SliderTheme.of(context).copyWith(
-              trackHeight: 3,
+              trackHeight: 4,
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-              activeTrackColor: AppColors.accent,
-              inactiveTrackColor: variantColor.withValues(alpha: 0.25),
-              thumbColor: AppColors.accent,
+              activeTrackColor: coral,
+              inactiveTrackColor: Colors.white.withValues(alpha: 0.2),
+              disabledActiveTrackColor: coral,
+              disabledInactiveTrackColor: Colors.white.withValues(alpha: 0.2),
+              thumbColor: coral,
+              disabledThumbColor: coral,
             ),
             child: Slider(
               value: val,
@@ -353,7 +399,8 @@ class _VoicePanelState extends ConsumerState<VoicePanel> {
             ),
           ),
         ),
-        Text(_fmt(durMs), style: timerStyle),
+        Text('${_fmt(posMs)} / ${_fmt(durMs)}', style: timerStyle),
+        const SizedBox(width: 4),
       ],
     );
   }
@@ -362,9 +409,7 @@ class _VoicePanelState extends ConsumerState<VoicePanel> {
       Color variantColor, Color mutedColor) {
     final transcript = current.transcribedText?.trim() ?? '';
     final hasTranscript = transcript.isNotEmpty;
-    final surfaceContainer = widget.isDark
-        ? AppColors.darkSurfaceContainer
-        : AppColors.lightSurfaceContainer;
+    final surfaceContainer = Colors.white.withValues(alpha: 0.08);
 
     return Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -396,7 +441,8 @@ class _VoicePanelState extends ConsumerState<VoicePanel> {
           Row(
             children: [
               if (hasTranscript) ...[
-                _chip('Paraphrase', Icons.auto_awesome, AppColors.accent,
+                _chip('Paraphrase', Icons.auto_awesome,
+                    AppColors.accentOf(context),
                     () => widget.onParaphrase(transcript)),
                 const SizedBox(width: 8),
                 _chip('Insert', Icons.south, variantColor,
@@ -405,7 +451,8 @@ class _VoicePanelState extends ConsumerState<VoicePanel> {
               const Spacer(),
               GestureDetector(
                 onTap: () => _confirmDelete(current),
-                child: Icon(Icons.delete_outline, size: 22, color: cs.error),
+                child: const Icon(Icons.delete_outline,
+                    size: 22, color: AppColors.darkRecordRed),
               ),
             ],
           ),
@@ -420,7 +467,7 @@ class _VoicePanelState extends ConsumerState<VoicePanel> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
+          color: color.withValues(alpha: 0.16),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(

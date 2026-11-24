@@ -8,6 +8,8 @@ import '../../../data/models/note.dart';
 import '../../router/app_router.dart';
 import '../../viewmodels/archived_notes_view_model.dart';
 import '../../viewmodels/tag_list_view_model.dart';
+import '../../viewmodels/category_tree_view_model.dart';
+import '../../widgets/mn_empty_badge.dart';
 import '../../widgets/mn_note_card.dart';
 import '../../widgets/mn_skeletons.dart';
 
@@ -78,30 +80,40 @@ class _ArchiveAppBar extends StatelessWidget {
         isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 4, 20, 8),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(8, 8, 20, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IconButton(
-            icon: Icon(Icons.arrow_back, color: onSurface),
-            onPressed: () => context.pop(),
+          Row(
+            children: [
+              Transform.translate(
+                offset: const Offset(-2, 0),
+                child: IconButton(
+                  tooltip: 'Back',
+                  icon: Icon(Icons.arrow_back_rounded,
+                      size: 26, color: onSurface),
+                  onPressed: () => context.pop(),
+                ),
+              ),
+              Text(
+                'Archive',
+                style: AppTypography.heading(
+                  fontSize: 30,
+                  letterSpacing: -0.7,
+                  color: onSurface,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 4),
-          Text(
-            'Archived',
-            style: AppTypography.plusJakartaSans(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.4,
-              color: onSurface,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '(swipe to restore or delete)',
-            style: AppTypography.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-              color: muted,
+          Padding(
+            padding: const EdgeInsets.only(left: 12, top: 2),
+            child: Text(
+              'Swipe right to restore, left to delete for good.',
+              style: AppTypography.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: muted,
+              ),
             ),
           ),
         ],
@@ -129,8 +141,8 @@ class _NotesList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final errorColor = Theme.of(context).colorScheme.error;
-    final restoreColor =
-        isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
+    final tintIndex = ref.watch(categoryTintIndexProvider);
+    final restoreColor = isDark ? AppColors.darkSavedGreen : AppColors.savedGreen;
 
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 40),
@@ -193,6 +205,9 @@ class _NotesList extends ConsumerWidget {
           child: MNNoteCard(
             note: note,
             tagNames: _tagNames(note.tagIds),
+            tintIndex: note.categoryId == null
+                ? null
+                : tintIndex[note.categoryId],
             onTap: () => context.push(AppRoutes.editNotePath(note.id)),
           ),
         );
@@ -219,7 +234,7 @@ class _SwipeBg extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
       ),
       alignment: alignment,
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -245,11 +260,11 @@ class _EmptyArchive extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.archive_outlined, size: 52, color: muted),
+          const MNEmptyBadge(icon: Icons.archive_outlined, tintIndex: 1),
           const SizedBox(height: 16),
           Text(
             'No archived notes',
-            style: AppTypography.plusJakartaSans(
+            style: AppTypography.heading(
               fontSize: 18,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.3,

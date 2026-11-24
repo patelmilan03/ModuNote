@@ -28,10 +28,12 @@ import '../../viewmodels/note_editor_view_model.dart';
 import '../../viewmodels/rag_settings_view_model.dart';
 import '../../viewmodels/tag_list_view_model.dart';
 import '../../widgets/mn_editor_toolbar.dart';
+import '../../widgets/mn_capture_button.dart' show CaptureKind;
 import '../../widgets/mn_category_picker_sheet.dart';
 import '../../widgets/mn_tag_row.dart';
 import 'widgets/ai_tools_sheet.dart';
 import 'widgets/editor_app_bar.dart';
+import 'widgets/editor_quill_styles.dart';
 import 'widgets/note_options_sheet.dart';
 import 'widgets/recording_overlay.dart';
 import 'widgets/tag_input_sheet.dart';
@@ -42,10 +44,19 @@ import 'widgets/voice_panel.dart';
 /// Owns the QuillController lifecycle and 800 ms auto-save debounce.
 /// Spec: MODUNOTE_UI_REFERENCE.md § 3.4
 class NoteEditorScreen extends ConsumerStatefulWidget {
-  const NoteEditorScreen({super.key, this.noteId});
+  const NoteEditorScreen({
+    super.key,
+    this.noteId,
+    this.startMode = CaptureKind.text,
+  });
 
   /// Null = new note. Non-null = editing existing note.
   final String? noteId;
+
+  /// How a NEW note starts (from the capture menu): text (default),
+  /// voice (recording starts straight away) or checklist (the first line is
+  /// an unchecked checklist item). Ignored when editing an existing note.
+  final CaptureKind startMode;
 
   @override
   ConsumerState<NoteEditorScreen> createState() => _NoteEditorScreenState();
@@ -148,6 +159,22 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _titleController.addListener(_onTitleChanged);
 
     _maybeAutoSuggestTags(note);
+
+    if (note == null) _applyStartMode();
+  }
+
+  /// Capture-menu start modes for a brand-new note.
+  void _applyStartMode() {
+    switch (widget.startMode) {
+      case CaptureKind.text:
+        break;
+      case CaptureKind.checklist:
+        _quillController!.formatSelection(Attribute.unchecked);
+      case CaptureKind.voice:
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_isRecording) _onMicTap();
+        });
+    }
   }
 
   // ─── Auto-save ────────────────────────────────────────────────────────────
@@ -764,6 +791,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
 
     // Resolve category name (full wiring in Phase 8).
     String? categoryName;
+    int? tintIndex;
     if (_currentNote?.categoryId != null) {
       final cats =
           ref.watch(categoryTreeViewModelProvider).valueOrNull ?? [];
@@ -771,17 +799,25 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           .where((c) => c.id == _currentNote!.categoryId)
           .map((c) => c.name)
           .firstOrNull;
+      tintIndex = ref.watch(categoryTintIndexProvider)[_currentNote!.categoryId];
     }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final headerTint = tintIndex != null
+        ? AppColors.tintOf(context, tintIndex)
+        : (isDark
+            ? AppColors.darkSurfaceContainer
+            : AppColors.lightSurfaceContainer);
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: isDark ? AppColors.darkBg : AppColors.lightBg,
       body: SafeArea(
+        // The tinted header runs up under the status bar.
+        top: _quillController == null,
         child: _quillController == null
             ? _buildUnready(noteAsync, isDark)
-            : _buildEditor(allTags, categoryName, isDark),
+            : _buildEditor(allTags, categoryName, isDark, headerTint),
       ),
     );
   }
@@ -820,7 +856,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           children: [
             Text(
               'Placeholder note title here',
-              style: AppTypography.plusJakartaSans(
+              style: AppTypography.heading(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
                 color: onSurface,
@@ -860,8 +896,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     );
   }
 
-  Widget _buildEditor(
-      List<Tag> allTags, String? categoryName, bool isDark) {
+  Widget _buildEditor(List<Tag> allTags, String? categoryName, bool isDark,
+      Color headerTint) {
     final keyboardUp = MediaQuery.of(context).viewInsets.bottom > 0;
     return Stack(
       children: [
@@ -873,9 +909,19 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
               isDark: isDark,
               titleController: _titleController,
               onBack: _onBack,
+              tint: headerTint,
               onMoreTap: _currentNote != null ? _onMoreTap : null,
+              bottom: MNTagRow(
+                tagIds: _currentNote?.tagIds ?? const [],
+                allTags: allTags,
+                categoryName: categoryName,
+                onRemoveTag: _onRemoveTag,
+                onAddTagTap: _onAddTagTap,
+                onCategoryTap: _onCategoryTap,
+                maxTagsReached: (_currentNote?.tagIds.length ?? 0) >=
+                    AppConstants.maxTagsPerNote,
+              ),
             ),
-            // Tags + category at the top, directly under the title.
             if (_tagSuggestions.isNotEmpty && !_tagSuggestDismissed)
               TagSuggestBanner(
                 suggestions: _tagSuggestions,
@@ -883,17 +929,6 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                 onAccept: _acceptSuggestedTag,
                 onDismiss: () => setState(() => _tagSuggestDismissed = true),
               ),
-            MNTagRow(
-              tagIds: _currentNote?.tagIds ?? const [],
-              allTags: allTags,
-              categoryName: categoryName,
-              onRemoveTag: _onRemoveTag,
-              onAddTagTap: _onAddTagTap,
-              onCategoryTap: _onCategoryTap,
-              maxTagsReached:
-                  (_currentNote?.tagIds.length ?? 0) >=
-                  AppConstants.maxTagsPerNote,
-            ),
             Expanded(
               child: QuillEditor(
                 focusNode: _editorFocusNode,
@@ -902,9 +937,11 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                 configurations: QuillEditorConfigurations(
                   scrollable: true,
                   expands: false,
-                  autoFocus: widget.noteId == null,
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                  autoFocus: widget.noteId == null &&
+                      widget.startMode != CaptureKind.voice,
+                  padding: const EdgeInsets.fromLTRB(22, 18, 22, 8),
                   placeholder: 'Start writing…',
+                  customStyles: buildEditorStyles(context),
                 ),
               ),
             ),

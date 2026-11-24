@@ -1,6 +1,6 @@
 ---
 project: ModuNote
-updated: 2026-09-11
+updated: 2026-11-24
 source: BACKLOG.md (deep, full ranked list — this board holds the active/near-term view)
 ---
 
@@ -48,7 +48,7 @@ source: BACKLOG.md (deep, full ranked list — this board holds the active/near-
 
 ## 🔵 In Progress
 
-_(no dev thread mid-flight — MN-04 pipeline shipped; its one manual acceptance check is MN-04a in To Do)_
+- [ ] MN-74 · UI revamp (Tangerine Pop, Nav A dock, tints, dark mode, motion) on branch `ui-revamp` — draft PR, awaiting Milan's on-device review  @both #feature
 
 ## ⛔ Blocked
 

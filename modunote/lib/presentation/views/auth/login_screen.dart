@@ -76,7 +76,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final variant = isDark
         ? AppColors.darkOnSurfaceVariant
         : AppColors.lightOnSurfaceVariant;
-    final primary = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
 
     return Scaffold(
       backgroundColor: bg,
@@ -86,27 +85,49 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           child: Column(
             children: [
               const Spacer(flex: 3),
-              // Brand mark.
-              Container(
-                width: 84,
-                height: 84,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [primary, AppColors.accent],
-                  ),
-                  borderRadius: BorderRadius.circular(24),
+              // Brand mark: coral tile over two tilted pastel note tiles.
+              SizedBox(
+                width: 132,
+                height: 112,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Positioned(
+                      left: 4,
+                      top: 18,
+                      child: Transform.rotate(
+                        angle: -0.22,
+                        child: _NoteTile(color: AppColors.tintOf(context, 2)),
+                      ),
+                    ),
+                    Positioned(
+                      right: 4,
+                      top: 10,
+                      child: Transform.rotate(
+                        angle: 0.2,
+                        child: _NoteTile(color: AppColors.tintOf(context, 1)),
+                      ),
+                    ),
+                    Container(
+                      width: 84,
+                      height: 84,
+                      decoration: BoxDecoration(
+                        color: AppColors.accentOf(context),
+                        borderRadius: BorderRadius.circular(26),
+                      ),
+                      child: const Icon(Icons.bolt_rounded,
+                          color: AppColors.accentOn, size: 44),
+                    ),
+                  ],
                 ),
-                child: const Icon(Icons.bolt_rounded,
-                    color: Colors.white, size: 44),
               ),
               const SizedBox(height: 24),
               Text(
                 'ModuNote',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 32,
+                style: GoogleFonts.bricolageGrotesque(
+                  fontSize: 40,
                   fontWeight: FontWeight.w800,
+                  letterSpacing: -1,
                   color: onSurface,
                 ),
               ),
@@ -169,11 +190,14 @@ class _GoogleButton extends StatelessWidget {
         onPressed: busy ? null : onTap,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF1F1F1F),
+          foregroundColor: AppColors.ink,
           disabledBackgroundColor: Colors.white70,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(27),
+            side: isDark
+                ? BorderSide.none
+                : const BorderSide(color: AppColors.lightOutlineStrong),
           ),
         ),
         child: busy
@@ -182,7 +206,7 @@ class _GoogleButton extends StatelessWidget {
                 height: 22,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.4,
-                  color: Color(0xFF5B4EFF),
+                  color: AppColors.ink,
                 ),
               )
             : Row(
@@ -207,6 +231,24 @@ class _GoogleButton extends StatelessWidget {
                   ),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+class _NoteTile extends StatelessWidget {
+  const _NoteTile({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 54,
+      height: 64,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(16),
       ),
     );
   }

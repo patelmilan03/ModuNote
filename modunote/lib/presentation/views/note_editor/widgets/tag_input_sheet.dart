@@ -152,7 +152,7 @@ class _TagInputSheetState extends ConsumerState<TagInputSheet> {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Text(
                 'Add tag',
-                style: AppTypography.plusJakartaSans(
+                style: AppTypography.heading(
                   fontSize: 19,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -0.3,

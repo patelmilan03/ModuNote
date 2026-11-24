@@ -4,7 +4,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/models/tag.dart';
 
-/// Tag/category strip that sits between the Quill editor body and the toolbar.
+/// Category + tag chips, wrapped, inside the tinted editor header.
 /// Purely presentational — all state callbacks are passed from NoteEditorScreen.
 /// Spec: MODUNOTE_UI_REFERENCE.md § 3.4
 class MNTagRow extends StatelessWidget {
@@ -30,47 +30,29 @@ class MNTagRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final outlineColor = isDark ? AppColors.darkOutline : AppColors.lightOutline;
-    final surfaceBg = isDark ? AppColors.darkBg : AppColors.lightBg;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: surfaceBg,
-        border: Border(top: BorderSide(color: outlineColor, width: 0.5)),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      child: Row(
-        children: [
-          _CategoryChip(
-            label: categoryName ?? 'No category',
-            onTap: onCategoryTap,
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _CategoryChip(
+          label: categoryName ?? 'No category',
+          onTap: onCategoryTap,
+          isDark: isDark,
+        ),
+        for (final tagId in tagIds)
+          _TagChip(
+            label: _resolveName(tagId),
+            onDismiss: () => onRemoveTag(tagId),
             isDark: isDark,
           ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final tagId in tagIds) ...[
-                    _TagChip(
-                      label: _resolveName(tagId),
-                      onDismiss: () => onRemoveTag(tagId),
-                      isDark: isDark,
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                  _AddTagChip(
-                    onTap: maxTagsReached ? null : onAddTagTap,
-                    isDark: isDark,
-                    disabled: maxTagsReached,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+        _AddTagChip(
+          onTap: maxTagsReached ? null : onAddTagTap,
+          isDark: isDark,
+          disabled: maxTagsReached,
+        ),
+      ],
     );
   }
 
@@ -82,6 +64,12 @@ class MNTagRow extends StatelessWidget {
     }
   }
 }
+
+/// Chip fill on the tinted editor header: white over light tints, a faint
+/// cream wash over dark ones.
+Color _chipFill(bool isDark, {required bool strong}) => isDark
+    ? AppColors.cream.withValues(alpha: strong ? 0.14 : 0.09)
+    : Colors.white.withValues(alpha: strong ? 0.8 : 0.6);
 
 class _CategoryChip extends StatelessWidget {
   const _CategoryChip({
@@ -96,49 +84,45 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final surfaceContainer = isDark
-        ? AppColors.darkSurfaceContainer
-        : AppColors.lightSurfaceContainer;
-    final outlineColor =
-        isDark ? AppColors.darkOutline : AppColors.lightOutline;
-    final variantColor =
-        isDark ? AppColors.darkOnSurfaceVariant : AppColors.lightOnSurfaceVariant;
-    final mutedColor =
-        isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
+    final fg = isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 30,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: surfaceContainer,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: outlineColor, width: 0.5),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.folder_outlined, size: 14, color: variantColor),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: AppTypography.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: variantColor,
+    return Semantics(
+      button: true,
+      label: 'Category: $label',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: _chipFill(isDark, strong: true),
+            borderRadius: BorderRadius.circular(99),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.folder_outlined, size: 15, color: fg),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppTypography.inter(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: fg,
+                ),
               ),
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.keyboard_arrow_down, size: 12, color: mutedColor),
-          ],
+              const SizedBox(width: 2),
+              Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: fg),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Dismissible sm filled tag chip.
+/// Dismissible tag chip.
 class _TagChip extends StatelessWidget {
   const _TagChip({
     required this.label,
@@ -152,15 +136,14 @@ class _TagChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chipBg = isDark ? AppColors.darkChipBg : AppColors.lightChipBg;
-    final chipText = isDark ? AppColors.darkChipText : AppColors.lightChipText;
+    final fg = isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface;
 
     return Container(
-      height: 24,
-      padding: const EdgeInsets.only(left: 10, right: 6),
+      height: 32,
+      padding: const EdgeInsets.only(left: 12, right: 4),
       decoration: BoxDecoration(
-        color: chipBg,
-        borderRadius: BorderRadius.circular(999),
+        color: _chipFill(isDark, strong: false),
+        borderRadius: BorderRadius.circular(99),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -168,22 +151,24 @@ class _TagChip extends StatelessWidget {
           Text(
             label,
             style: AppTypography.inter(
-              fontSize: 11,
+              fontSize: 12.5,
               fontWeight: FontWeight.w600,
-              color: chipText,
+              color: fg,
             ),
           ),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: onDismiss,
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.black.withValues(alpha: 0.08),
+          Semantics(
+            button: true,
+            label: 'Remove $label',
+            excludeSemantics: true,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onDismiss,
+              child: SizedBox(
+                width: 26,
+                height: 32,
+                child: Icon(Icons.close_rounded,
+                    size: 14, color: fg.withValues(alpha: 0.6)),
               ),
-              child: Icon(Icons.close, size: 10, color: chipText),
             ),
           ),
         ],
@@ -192,7 +177,7 @@ class _TagChip extends StatelessWidget {
   }
 }
 
-/// "+ tag" outlined chip that opens the tag input sheet.
+/// Dashed "+ tag" chip that opens the tag input sheet.
 /// When [disabled] is true the chip renders at reduced opacity and ignores taps.
 class _AddTagChip extends StatelessWidget {
   const _AddTagChip({
@@ -207,33 +192,29 @@ class _AddTagChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final outlineStrong =
-        isDark ? AppColors.darkOutlineStrong : AppColors.lightOutlineStrong;
-    final variantColor =
-        isDark ? AppColors.darkOnSurfaceVariant : AppColors.lightOnSurfaceVariant;
+    final fg = isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface;
 
-    return GestureDetector(
-      onTap: disabled ? null : onTap,
-      child: Opacity(
-        opacity: disabled ? 0.4 : 1.0,
-        child: Container(
-          height: 24,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: outlineStrong,
-              width: 1,
-              style: BorderStyle.solid,
-            ),
-          ),
-          child: Center(
-            child: Text(
-              '+ tag',
-              style: AppTypography.inter(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: variantColor,
+    return Semantics(
+      button: true,
+      enabled: !disabled,
+      label: 'Add tag',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: disabled ? null : onTap,
+        child: Opacity(
+          opacity: disabled ? 0.4 : 1.0,
+          child: CustomPaint(
+            painter: _DashedPillPainter(color: fg.withValues(alpha: 0.4)),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 7.5),
+              child: Text(
+                '+ tag',
+                style: AppTypography.inter(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: fg,
+                ),
               ),
             ),
           ),
@@ -243,3 +224,30 @@ class _AddTagChip extends StatelessWidget {
   }
 }
 
+/// Paints a 1.5 px dashed pill outline (Flutter borders can't dash).
+class _DashedPillPainter extends CustomPainter {
+  const _DashedPillPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const stroke = 1.5;
+    final rect = (Offset.zero & size).deflate(stroke / 2);
+    final path = Path()
+      ..addRRect(RRect.fromRectAndRadius(rect, Radius.circular(rect.height / 2)));
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke;
+    const dash = 4.0, gap = 3.0;
+    for (final metric in path.computeMetrics()) {
+      for (var d = 0.0; d < metric.length; d += dash + gap) {
+        canvas.drawPath(metric.extractPath(d, d + dash), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedPillPainter old) => old.color != color;
+}

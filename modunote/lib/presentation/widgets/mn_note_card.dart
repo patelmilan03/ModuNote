@@ -4,8 +4,39 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/models/note.dart';
 
+/// Short relative time for a note's last edit ("Just now", "3h ago",
+/// "Yesterday", "Nov 2"). Shared by the note card and Search results.
+String noteTimestamp(DateTime updatedAt) {
+  final now = DateTime.now();
+  final diff = now.difference(updatedAt);
+  if (diff.inMinutes < 1) return 'Just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays == 1) return 'Yesterday';
+  if (diff.inDays < 7) return '${diff.inDays}d ago';
+  const mo = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final d = updatedAt;
+  if (d.year == now.year) return '${mo[d.month - 1]} ${d.day}';
+  return '${mo[d.month - 1]} ${d.day}, ${d.year}';
+}
+
+
 /// Purely presentational note card. No providers.
-/// Spec: MODUNOTE_UI_REFERENCE.md § 2.3
+/// UI revamp: tinted by root category, 22 px radius, sized for the
+/// two-column Home grid (title and preview up to 3 lines, 2 tags).
 class MNNoteCard extends StatelessWidget {
   const MNNoteCard({
     super.key,
@@ -13,7 +44,12 @@ class MNNoteCard extends StatelessWidget {
     required this.onTap,
     this.tagNames = const [],
     this.onLongPress,
+    this.tintIndex,
   });
+
+  /// Note tint index (0..4) from the note's root category, or null for a
+  /// plain card. See `categoryTintIndexProvider`.
+  final int? tintIndex;
 
   final Note note;
   final VoidCallback onTap;
@@ -24,32 +60,7 @@ class MNNoteCard extends StatelessWidget {
   /// Optional long-press callback (e.g. opens an actions sheet).
   final VoidCallback? onLongPress;
 
-  String _timestamp() {
-    final now = DateTime.now();
-    final diff = now.difference(note.updatedAt);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    const mo = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    final d = note.updatedAt;
-    if (d.year == now.year) return '${mo[d.month - 1]} ${d.day}';
-    return '${mo[d.month - 1]} ${d.day}, ${d.year}';
-  }
+  String _timestamp() => noteTimestamp(note.updatedAt);
 
   // Extracts plain-text preview from Quill Delta JSON.
   String _preview() {
@@ -72,20 +83,21 @@ class MNNoteCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;
 
-    final cardBg = note.isPinned
-        ? (isDark ? AppColors.darkCard : AppColors.lightPinTint)
-        : (isDark ? AppColors.darkCard : AppColors.lightCard);
-
-    // rgba(245,158,11,0.35) ≈ 0x59
-    final borderColor = note.isPinned ? const Color(0x59F59E0B) : cs.outline;
-
-    final muted =
-        isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
-    final chipBg = isDark ? AppColors.darkChipBg : AppColors.lightChipBg;
-    final chipFg = isDark ? AppColors.darkChipText : AppColors.lightChipText;
+    // Tinted by root category (UI revamp); no category → plain card.
+    final tint = tintIndex == null ? null : AppColors.tintOf(context, tintIndex!);
+    final cardBg = tint ?? AppColors.cardOf(context);
+    final metaColor = tint != null ? cs.onSurfaceVariant : AppColors.mutedOf(context);
+    // Pin icon: ink/cream on a light tint, the tint's stripe colour on dark.
+    final pinColor = tint != null && isDark
+        ? AppColors.tintStripes[tintIndex! % AppColors.tintStripes.length]
+        : AppColors.accentOf(context);
+    final chipBg = tint != null
+        ? Colors.white.withValues(alpha: isDark ? 0.10 : 0.6)
+        : (isDark ? AppColors.darkChipBg : AppColors.lightChipBg);
+    final chipFg = cs.onSurface;
 
     final preview = _preview();
-    final shownTags = tagNames.take(3).toList();
+    final shownTags = tagNames.take(2).toList();
 
     return GestureDetector(
       onTap: onTap,
@@ -93,84 +105,70 @@ class MNNoteCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: cardBg,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: borderColor, width: 0.5),
+          borderRadius: BorderRadius.circular(22),
+          border: tint == null ? Border.all(color: cs.outline) : null,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // ── Header row ──────────────────────────────────────────
+            // ── Meta row: pin · time ───────────────────────────────
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (note.isPinned) ...[
-                  const Padding(
-                    padding: EdgeInsets.only(top: 3),
-                    child: Icon(
-                      Icons.push_pin,
-                      size: 14,
-                      color: AppColors.accent,
-                    ),
+                if (note.isPinned)
+                  _PinPop(
+                    reduceMotion: MediaQuery.of(context).disableAnimations,
+                    child: Icon(Icons.push_pin_rounded,
+                        size: 15, color: pinColor),
                   ),
-                  const SizedBox(width: 8),
-                ],
-                Expanded(
-                  child: Text(
-                    note.title.isEmpty ? 'Untitled' : note.title,
-                    style: AppTypography.plusJakartaSans(
-                      fontSize: 16.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.2,
-                      color: cs.onSurface,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    _timestamp(),
-                    style: AppTypography.inter(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                      color: muted,
-                    ),
+                const Spacer(),
+                Text(
+                  _timestamp(),
+                  style: AppTypography.inter(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                    color: metaColor,
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 6),
+            // ── Title ───────────────────────────────────────────────
+            Text(
+              note.title.isEmpty ? 'Untitled' : note.title,
+              style: AppTypography.heading(
+                fontSize: 16.5,
+                letterSpacing: -0.3,
+                height: 1.2,
+                color: cs.onSurface,
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
             // ── Body preview ────────────────────────────────────────
             if (preview.isNotEmpty) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
               Text(
                 preview,
                 style: AppTypography.inter(
-                  fontSize: 13.5,
+                  fontSize: 13,
                   fontWeight: FontWeight.w400,
                   color: cs.onSurfaceVariant,
-                ),
-                maxLines: 1,
+                ).copyWith(height: 1.4),
+                maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
             ],
-            // ── Tag chips ───────────────────────────────────────────
+            // ── Tag chips (max 2 in the two-column grid) ────────────
             if (shownTags.isNotEmpty) ...[
               const SizedBox(height: 10),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
                 children: [
-                  for (int i = 0; i < shownTags.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 4),
-                    _TagChip(
-                      label: '#${shownTags[i]}',
-                      chipBg: chipBg,
-                      chipFg: chipFg,
-                    ),
-                  ],
+                  for (final t in shownTags)
+                    _TagChip(label: '#$t', chipBg: chipBg, chipFg: chipFg),
                 ],
               ),
             ],
@@ -194,14 +192,13 @@ class _TagChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // No `alignment` here: inside a Wrap it would stretch the chip full width.
     return Container(
-      height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         color: chipBg,
         borderRadius: BorderRadius.circular(999),
       ),
-      alignment: Alignment.center,
       child: Text(
         label,
         style: AppTypography.inter(
@@ -211,6 +208,26 @@ class _TagChip extends StatelessWidget {
           color: chipFg,
         ),
       ),
+    );
+  }
+}
+
+/// Pops the pin in with a small overshoot when a pinned card appears.
+class _PinPop extends StatelessWidget {
+  const _PinPop({required this.reduceMotion, required this.child});
+
+  final bool reduceMotion;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (reduceMotion) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.elasticOut,
+      builder: (_, v, c) => Transform.scale(scale: v, child: c),
+      child: child,
     );
   }
 }

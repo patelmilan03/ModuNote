@@ -5,8 +5,8 @@ import 'app_colors.dart';
 import 'app_typography.dart';
 
 /// Produces ThemeData for light and dark modes.
-/// Phase 1: minimal viable config — Color seed + fonts.
-/// Phase 9: will flesh out NavigationBar, Card, Chip, FAB themes fully.
+/// UI revamp 2026-11: "Tangerine Pop" — ink primary, coral secondary.
+/// [ColorScheme.secondary] is the theme-aware coral (capture, send, record).
 abstract class AppTheme {
   static ThemeData light() {
     final cs = ColorScheme.fromSeed(
@@ -24,6 +24,13 @@ abstract class AppTheme {
       onSurfaceVariant: AppColors.lightOnSurfaceVariant,
       outline: AppColors.lightOutline,
       outlineVariant: AppColors.lightOutlineStrong,
+      onPrimary: AppColors.lightBg,
+      secondary: AppColors.lightAccent,
+      onSecondary: AppColors.accentOn,
+      secondaryContainer: AppColors.lightSurfaceContainer,
+      onSecondaryContainer: AppColors.lightOnSurface,
+      error: AppColors.lightRecordRed,
+      surfaceTint: Colors.transparent,
     );
 
     return ThemeData(
@@ -42,8 +49,8 @@ abstract class AppTheme {
         color: AppColors.lightCard,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: AppColors.lightOutline, width: 0.5),
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: AppColors.lightOutline, width: 1),
         ),
       ),
     );
@@ -65,6 +72,13 @@ abstract class AppTheme {
       onSurfaceVariant: AppColors.darkOnSurfaceVariant,
       outline: AppColors.darkOutline,
       outlineVariant: AppColors.darkOutlineStrong,
+      onPrimary: AppColors.ink,
+      secondary: AppColors.darkAccent,
+      onSecondary: AppColors.accentOn,
+      secondaryContainer: AppColors.darkSurfaceContainer,
+      onSecondaryContainer: AppColors.darkOnSurface,
+      error: AppColors.darkRecordRed,
+      surfaceTint: Colors.transparent,
     );
 
     return ThemeData(
@@ -83,8 +97,8 @@ abstract class AppTheme {
         color: AppColors.darkCard,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: AppColors.darkOutline, width: 0.5),
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: AppColors.darkOutline, width: 1),
         ),
       ),
     );

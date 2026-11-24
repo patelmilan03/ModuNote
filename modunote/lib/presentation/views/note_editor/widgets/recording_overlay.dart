@@ -23,11 +23,11 @@ class RecordingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardBg = isDark ? AppColors.darkCard : AppColors.lightCard;
-    final recordRed =
-        isDark ? AppColors.darkRecordRed : AppColors.lightRecordRed;
-    final mutedColor =
-        isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
+    // Revamp: same ink / dock pill as the voice panel it replaces.
+    final pillBg = AppColors.dockOf(context);
+    const recordRed = AppColors.darkRecordRed; // reads on ink in both themes
+    final mutedColor = AppColors.cream.withValues(alpha: 0.6);
+    const wave = AppColors.darkAccent;
     final m = seconds ~/ 60;
     final s = seconds % 60;
     final timerText =
@@ -35,9 +35,9 @@ class RecordingOverlay extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: recordRed, width: 1),
+        color: pillBg,
+        borderRadius: BorderRadius.circular(34),
+        border: Border.all(color: recordRed.withValues(alpha: 0.6), width: 1),
         boxShadow: [
           BoxShadow(
             color: recordRed.withValues(alpha: 0.35),
@@ -47,7 +47,7 @@ class RecordingOverlay extends StatelessWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       child: Row(
         children: [
           _PulsingStopButton(onTap: onStop, recordRed: recordRed),
@@ -61,7 +61,7 @@ class RecordingOverlay extends StatelessWidget {
                   children: [
                     Text(
                       'Recording',
-                      style: AppTypography.plusJakartaSans(
+                      style: AppTypography.heading(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: recordRed,
@@ -95,7 +95,7 @@ class RecordingOverlay extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          _WaveformBars(recordRed: recordRed, amplitude: amplitude),
+          _WaveformBars(recordRed: wave, amplitude: amplitude),
         ],
       ),
     );
@@ -103,18 +103,25 @@ class RecordingOverlay extends StatelessWidget {
 }
 
 class _WaveformBars extends StatelessWidget {
-  const _WaveformBars({
-    required this.recordRed,
-    required this.amplitude,
-  });
+  const _WaveformBars({required this.recordRed, required this.amplitude});
 
   final Color recordRed;
   final double amplitude;
 
   // Per-bar scale coefficients — gives each bar a distinct relative height.
   static const List<double> _coefficients = [
-    0.33, 0.67, 0.50, 1.00, 0.67, 0.83,
-    0.33, 0.58, 0.75, 0.42, 0.92, 0.67,
+    0.33,
+    0.67,
+    0.50,
+    1.00,
+    0.67,
+    0.83,
+    0.33,
+    0.58,
+    0.75,
+    0.42,
+    0.92,
+    0.67,
   ];
 
   static const double _minH = 4.0;
@@ -164,10 +171,21 @@ class _PulsingStopButtonState extends State<_PulsingStopButton>
     _anim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
-    )..repeat(reverse: true);
-    _scale = Tween<double>(begin: 0.95, end: 1.05).animate(
-      CurvedAnimation(parent: _anim, curve: Curves.easeInOut),
     );
+    _scale = Tween<double>(
+      begin: 0.95,
+      end: 1.05,
+    ).animate(CurvedAnimation(parent: _anim, curve: Curves.easeInOut));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.of(context).disableAnimations) {
+      _anim.stop();
+    } else if (!_anim.isAnimating) {
+      _anim.repeat(reverse: true);
+    }
   }
 
   @override
@@ -180,29 +198,34 @@ class _PulsingStopButtonState extends State<_PulsingStopButton>
   Widget build(BuildContext context) {
     return ScaleTransition(
       scale: _scale,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: widget.recordRed,
-            boxShadow: [
-              BoxShadow(
-                color: widget.recordRed.withValues(alpha: 0.20),
-                blurRadius: 0,
-                spreadRadius: 4,
-              ),
-            ],
-          ),
-          child: Center(
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(2),
+      child: Semantics(
+        button: true,
+        label: 'Stop recording',
+        excludeSemantics: true,
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: widget.recordRed,
+              boxShadow: [
+                BoxShadow(
+                  color: widget.recordRed.withValues(alpha: 0.20),
+                  blurRadius: 0,
+                  spreadRadius: 4,
+                ),
+              ],
+            ),
+            child: Center(
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: AppColors.ink,
+                  borderRadius: BorderRadius.circular(3),
+                ),
               ),
             ),
           ),
