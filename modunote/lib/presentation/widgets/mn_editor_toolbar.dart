@@ -82,85 +82,93 @@ class _MNEditorToolbarState extends State<MNEditorToolbar> {
         isDark ? AppColors.darkOnSurfaceVariant : AppColors.lightOnSurfaceVariant;
     final cardBg = isDark ? AppColors.darkCard : AppColors.lightCard;
 
+    // Revamp: a floating rounded bar above the keyboard; active = ink tile.
     return Container(
+      margin: const EdgeInsets.fromLTRB(10, 4, 10, 8),
       decoration: BoxDecoration(
         color: cardBg,
-        border: Border(
-          top: BorderSide(color: outlineColor, width: 0.5),
-        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: outlineColor, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _ToolButton(
             isActive: _isBoldActive(),
-            activeColor: cs.onPrimaryContainer,
-            activeBg: cs.primaryContainer,
+            activeColor: cs.onPrimary,
+            activeBg: cs.primary,
             inactiveColor: inactiveIconColor,
             onTap: () => _toggle(Attribute.bold, _isBoldActive()),
             child: const Icon(Icons.format_bold, size: 18),
           ),
           _ToolButton(
             isActive: _isItalicActive(),
-            activeColor: cs.onPrimaryContainer,
-            activeBg: cs.primaryContainer,
+            activeColor: cs.onPrimary,
+            activeBg: cs.primary,
             inactiveColor: inactiveIconColor,
             onTap: () => _toggle(Attribute.italic, _isItalicActive()),
             child: const Icon(Icons.format_italic, size: 18),
           ),
           _ToolButton(
             isActive: _isUnderlineActive(),
-            activeColor: cs.onPrimaryContainer,
-            activeBg: cs.primaryContainer,
+            activeColor: cs.onPrimary,
+            activeBg: cs.primary,
             inactiveColor: inactiveIconColor,
             onTap: () => _toggle(Attribute.underline, _isUnderlineActive()),
             child: const Icon(Icons.format_underlined, size: 18),
           ),
           _ToolButton(
             isActive: _isH1Active(),
-            activeColor: cs.onPrimaryContainer,
-            activeBg: cs.primaryContainer,
+            activeColor: cs.onPrimary,
+            activeBg: cs.primary,
             inactiveColor: inactiveIconColor,
             onTap: () => _toggle(Attribute.h1, _isH1Active()),
             child: const _HeaderLabel('H1'),
           ),
           _ToolButton(
             isActive: _isH2Active(),
-            activeColor: cs.onPrimaryContainer,
-            activeBg: cs.primaryContainer,
+            activeColor: cs.onPrimary,
+            activeBg: cs.primary,
             inactiveColor: inactiveIconColor,
             onTap: () => _toggle(Attribute.h2, _isH2Active()),
             child: const _HeaderLabel('H2'),
           ),
           _ToolButton(
             isActive: _isBulletActive(),
-            activeColor: cs.onPrimaryContainer,
-            activeBg: cs.primaryContainer,
+            activeColor: cs.onPrimary,
+            activeBg: cs.primary,
             inactiveColor: inactiveIconColor,
             onTap: () => _toggle(Attribute.ul, _isBulletActive()),
             child: const Icon(Icons.format_list_bulleted, size: 18),
           ),
           _ToolButton(
             isActive: _isOrderedActive(),
-            activeColor: cs.onPrimaryContainer,
-            activeBg: cs.primaryContainer,
+            activeColor: cs.onPrimary,
+            activeBg: cs.primary,
             inactiveColor: inactiveIconColor,
             onTap: () => _toggle(Attribute.ol, _isOrderedActive()),
             child: const Icon(Icons.format_list_numbered, size: 18),
           ),
           _ToolButton(
             isActive: _isChecklistActive(),
-            activeColor: cs.onPrimaryContainer,
-            activeBg: cs.primaryContainer,
+            activeColor: cs.onPrimary,
+            activeBg: cs.primary,
             inactiveColor: inactiveIconColor,
             onTap: () => _toggleChecklist(_isChecklistActive()),
             child: const Icon(Icons.checklist, size: 18),
           ),
           _ToolButton(
             isActive: _isBlockquoteActive(),
-            activeColor: cs.onPrimaryContainer,
-            activeBg: cs.primaryContainer,
+            activeColor: cs.onPrimary,
+            activeBg: cs.primary,
             inactiveColor: inactiveIconColor,
             onTap: () => _toggle(Attribute.blockQuote, _isBlockquoteActive()),
             child: const Icon(Icons.format_quote, size: 18),
@@ -171,7 +179,7 @@ class _MNEditorToolbarState extends State<MNEditorToolbar> {
   }
 }
 
-/// 34×34 rounded slot that shows active/inactive state.
+/// 36×36 rounded slot that shows active/inactive state.
 class _ToolButton extends StatelessWidget {
   const _ToolButton({
     required this.isActive,
@@ -192,13 +200,17 @@ class _ToolButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Container(
-        width: 34,
-        height: 34,
+      child: AnimatedContainer(
+        duration: MediaQuery.of(context).disableAnimations
+            ? Duration.zero
+            : const Duration(milliseconds: 150),
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
           color: isActive ? activeBg : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: IconTheme(
           data: IconThemeData(color: isActive ? activeColor : inactiveColor),

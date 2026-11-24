@@ -183,14 +183,13 @@ class _TagChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // No `alignment` here: inside a Wrap it would stretch the chip full width.
     return Container(
-      height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         color: chipBg,
         borderRadius: BorderRadius.circular(999),
       ),
-      alignment: Alignment.center,
       child: Text(
         label,
         style: AppTypography.inter(
