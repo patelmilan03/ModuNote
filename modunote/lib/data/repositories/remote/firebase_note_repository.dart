@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../models/note.dart';
 import '../interfaces/i_note_repository.dart';
+import 'note_cloud_codec.dart';
 
 /// Remote [INoteRepository] backed by Cloud Firestore.
 ///
@@ -140,7 +141,8 @@ class FirebaseNoteRepository implements INoteRepository {
   Map<String, dynamic> _toMap(Note note) => {
         'id': note.id,
         'title': note.title,
-        'content': note.content,
+        // Delta stored as a JSON string (+ plain-text copy + schemaVersion).
+        ...NoteCloudCodec.encodeContent(note.id, note.content),
         'categoryId': note.categoryId,
         'tagIds': note.tagIds,
         'isPinned': note.isPinned,
