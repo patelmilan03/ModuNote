@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # Keeps action versions (checkout, setup-java, flutter-action, ...) current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # Gradle wrapper and Android plugins. AGP / Kotlin / Gradle bumps must be
+  # merged together with a matching CI JDK, so review these PRs by hand.
+  - package-ecosystem: gradle
+    directory: /modunote/android
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
