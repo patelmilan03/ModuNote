@@ -48,7 +48,7 @@ source: BACKLOG.md (deep, full ranked list — this board holds the active/near-
 
 ## 🔵 In Progress
 
-- [ ] MN-74 · UI revamp (Tangerine Pop, Nav A dock, tints, dark mode, motion) on branch `ui-revamp` — draft PR, awaiting Milan's on-device review  @both #feature
+_(nothing in flight)_
 
 ## ⛔ Blocked
 
@@ -67,6 +67,7 @@ source: BACKLOG.md (deep, full ranked list — this board holds the active/near-
 
 ## ✅ Done
 
+- [x] MN-74 · UI revamp (Tangerine Pop, Nav A dock, tints, dark mode, motion) — merged via PR #24 after on-device review — 2026-11-24  @both #feature
 - [x] Supabase `modunote` restored from PAUSED (docs=8, chunks=8, pgvector ok); Groq default model switched to `openai/gpt-oss-120b` in `config.py`/`.env*`/`render.yaml` — 2026-09-11  @agent #ops
 - [x] CI hardening · release-notes 5000-char cap + shell-injection fix in `ci.yml` (3 steps) — 2026-07-31  @agent #devops
 - [x] MN-04 · CI/CD pipeline green end-to-end — signed APK built + distributed via Firebase App Distribution — 2026-07-25  @both #devops

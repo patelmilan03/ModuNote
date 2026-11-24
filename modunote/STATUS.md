@@ -46,9 +46,9 @@
 
 ## Current Status & Next Phase
 
-### 🎨 UI revamp — branch `ui-revamp` (2026-11-24, MN-74) — built, awaiting device review
+### 🎨 UI revamp — branch `ui-revamp` (2026-11-24, MN-74) — ✅ merged into `main` (PR #24)
 
-> **This work lives on branch `ui-revamp`, not `main`** (an agreed exception to the "all work lands on `main`" rule — see `CLAUDE.md`). It merges only after Milan approves it on a device, via the draft PR.
+> Built on branch `ui-revamp` (an agreed one-off exception to the "all work lands on `main`" rule) and merged into `main` via PR #24 on 2026-11-24 after Milan's on-device review.
 
 - **Look:** "Tangerine Pop" — paper `#FBF6EC` / ink `#211B2E` / coral `#FF5C3A` (dark: night `#16131F`, cream `#F4EEE2`, coral `#FF7A5C`). Headings in **Bricolage Grotesque** (`AppTypography.heading()`, was `plusJakartaSans()`), body Inter. Notes take a pastel **tint from their root category** (`categoryTintIndexProvider`; no category = plain card).
 - **Nav A:** floating ink dock (Notes · Ask · Search · Tags) + separate coral capture button that fans out Voice / Text / Checklist (`/note/new?start=voice|checklist`). **Ask is now a tab** (`/qna`); **Settings moved behind the Home avatar** (pushed `/settings`).
