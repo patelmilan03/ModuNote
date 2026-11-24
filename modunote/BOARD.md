@@ -1,6 +1,6 @@
 ---
 project: ModuNote
-updated: 2026-08-21
+updated: 2026-09-11
 source: BACKLOG.md (deep, full ranked list — this board holds the active/near-term view)
 ---
 
@@ -36,6 +36,8 @@ source: BACKLOG.md (deep, full ranked list — this board holds the active/near-
 
 ## 📋 To Do (next up)
 
+- [ ] MN-72 · Render env: set `GROQ_MODEL=openai/gpt-oss-120b` (70B moved to Enterprise tier → QnA 502) + regenerate expired local Groq key in `.env`; then re-test `/api/v1/qna/demo`  @milan #ops
+- [ ] MN-73 · Supabase free-tier auto-pause (7 idle days) — add a daily GitHub Actions ping that runs a real `SELECT 1` through the API (keep-warm only hits `/health`, which never touches the DB)  @agent #devops
 - [ ] MN-04a · Verify Google Sign-In in installed release APK — closes MN-04 acceptance  @milan #devops
 - [ ] MN-03 · Docs truth audit (status docs) + apply approved fixes  @agent #docs
 - [ ] MN-69 · Cloud restore fails after `applicationId` change (notes not restored)  @both #bug
@@ -65,6 +67,7 @@ _(no dev thread mid-flight — MN-04 pipeline shipped; its one manual acceptance
 
 ## ✅ Done
 
+- [x] Supabase `modunote` restored from PAUSED (docs=8, chunks=8, pgvector ok); Groq default model switched to `openai/gpt-oss-120b` in `config.py`/`.env*`/`render.yaml` — 2026-09-11  @agent #ops
 - [x] CI hardening · release-notes 5000-char cap + shell-injection fix in `ci.yml` (3 steps) — 2026-07-31  @agent #devops
 - [x] MN-04 · CI/CD pipeline green end-to-end — signed APK built + distributed via Firebase App Distribution — 2026-07-25  @both #devops
 - [x] MN-05 · `modunote/.gitignore` rewritten clean UTF-8 (was binary, 16 NUL bytes) — 2026-07-26  @agent #cleanup
