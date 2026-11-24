@@ -7,10 +7,23 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
 
-  # Gradle wrapper and Android plugins. AGP / Kotlin / Gradle bumps must be
-  # merged together with a matching CI JDK, so review these PRs by hand.
+  # Gradle wrapper and Android plugins. The Android Gradle Plugin, Gradle and
+  # Kotlin versions are coupled to Flutter's own Gradle plugin and to the CI
+  # JDK (Temurin 17), so a Dependabot PR for one of them can't be merged on its
+  # own. Their big jumps (AGP 8 -> 9, Gradle 8 -> 9, Kotlin 2.2 -> 2.4) are
+  # ignored; move them by hand together with a Flutter upgrade. Patch/minor
+  # updates of AGP and Gradle, and everything else, still arrive as PRs.
   - package-ecosystem: gradle
     directory: /modunote/android
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: com.android.application
+        update-types: ["version-update:semver-major"]
+      - dependency-name: gradle-wrapper
+        update-types: ["version-update:semver-major"]
+      - dependency-name: org.jetbrains.kotlin.android
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
