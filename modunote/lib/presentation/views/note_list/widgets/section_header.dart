@@ -19,14 +19,14 @@ class SectionHeader extends StatelessWidget {
         isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
       child: Row(
         children: [
           Text(
             title,
             style: AppTypography.inter(
               fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
               letterSpacing: 0.6,
               color: muted,
             ),

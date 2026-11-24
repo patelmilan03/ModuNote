@@ -18,10 +18,14 @@ class SwipeableNoteCard extends ConsumerWidget {
     super.key,
     required this.note,
     required this.tagNames,
+    this.tintIndex,
   });
 
   final Note note;
   final List<String> tagNames;
+
+  /// Root-category tint for the card (null = plain card).
+  final int? tintIndex;
 
   void _showActionsSheet(BuildContext context, WidgetRef ref) {
     showModalBottomSheet<void>(
@@ -93,9 +97,9 @@ class SwipeableNoteCard extends ConsumerWidget {
       },
       background: _SwipeBg(
         alignment: Alignment.centerLeft,
-        color: AppColors.accent.withValues(alpha: 0.15),
+        color: AppColors.accentOf(context).withValues(alpha: 0.18),
         icon: note.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
-        iconColor: AppColors.accent,
+        iconColor: AppColors.accentOf(context),
       ),
       secondaryBackground: _SwipeBg(
         alignment: Alignment.centerRight,
@@ -110,6 +114,7 @@ class SwipeableNoteCard extends ConsumerWidget {
       child: MNNoteCard(
         note: note,
         tagNames: tagNames,
+        tintIndex: tintIndex,
         onTap: () => context.push(AppRoutes.editNotePath(note.id)),
         onLongPress: () => _showActionsSheet(context, ref),
       ),
@@ -136,7 +141,7 @@ class _SwipeBg extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
       ),
       alignment: alignment,
       padding: const EdgeInsets.symmetric(horizontal: 24),
