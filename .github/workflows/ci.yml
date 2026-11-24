@@ -152,6 +152,14 @@ jobs:
           flutter-version: '3.41.2'
           cache: true
 
+      # Pin the JDK: ubuntu-latest's default JDK moves on its own (25 as of
+      # 2026-11) and Gradle 8.14 cannot parse it ("What went wrong: 25.0.5").
+      - name: Set up Java 17 (for Gradle)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Set up Node.js (for Firebase CLI)
         uses: actions/setup-node@v4
         with:
