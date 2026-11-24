@@ -2,73 +2,76 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_typography.dart';
 import '../router/app_router.dart';
 
-/// Persistent floating pill bottom nav rendered by the GoRouter ShellRoute.
-/// Never instantiated per-screen — rendered once by [_AppShell] in app_router.dart.
-/// Layout: 2 tabs | center gap (FAB notch) | 2 tabs.
-/// Spec: MODUNOTE_UI_REFERENCE.md § 2.5
+/// Persistent floating dock rendered by the GoRouter ShellRoute (Nav A,
+/// UI revamp 2026-11). Never instantiated per-screen — rendered once by
+/// `_AppShell` in app_router.dart, beside the separate capture button.
+///
+/// 4 tabs: Notes · Ask · Search · Tags. Settings lives behind the Home avatar.
+/// Inactive tabs are icon-only; the active tab is a cream pill with an ink
+/// icon + label that grows in (width + colour animate, 280 ms, slight
+/// overshoot). Light dock = ink, dark dock = #2B2639.
 class MNBottomNav extends StatelessWidget {
   const MNBottomNav({super.key, required this.activeIndex});
 
-  /// 0 = Home, 1 = Explore, 2 = Tags, 3 = Settings.
+  /// 0 = Notes, 1 = Ask, 2 = Search, 3 = Tags.
   final int activeIndex;
+
+  static const double height = 64;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final card = isDark ? AppColors.darkCard : AppColors.lightCard;
-    final outlineStrong =
-        isDark ? AppColors.darkOutlineStrong : AppColors.lightOutlineStrong;
 
     return Container(
-      height: 64,
+      height: height,
       decoration: BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: outlineStrong, width: 0.5),
+        color: AppColors.dockOf(context),
+        borderRadius: BorderRadius.circular(height / 2),
+        border: isDark
+            ? Border.all(color: AppColors.darkOutline, width: 1)
+            : null,
         boxShadow: [
           BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.35)
-                : const Color(0xFF1C1B2E).withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(6),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _NavTab(
-            icon: Icons.article_outlined,
-            activeIcon: Icons.article,
-            label: 'Home',
+          _DockTab(
+            icon: Icons.sticky_note_2_outlined,
+            activeIcon: Icons.sticky_note_2_rounded,
+            label: 'Notes',
             isActive: activeIndex == 0,
             onTap: () => context.go(AppRoutes.home),
           ),
-          _NavTab(
-            icon: Icons.explore_outlined,
-            activeIcon: Icons.search,
-            label: 'Search',
+          _DockTab(
+            icon: Icons.auto_awesome_outlined,
+            activeIcon: Icons.auto_awesome,
+            label: 'Ask',
             isActive: activeIndex == 1,
+            onTap: () => context.go(AppRoutes.qna),
+          ),
+          _DockTab(
+            icon: Icons.search_rounded,
+            activeIcon: Icons.search_rounded,
+            label: 'Search',
+            isActive: activeIndex == 2,
             onTap: () => context.go(AppRoutes.search),
           ),
-          // Center gap — the protruding FAB sits here (rendered by _AppShell).
-          const SizedBox(width: 60),
-          _NavTab(
-            icon: Icons.label_outline,
-            activeIcon: Icons.label,
+          _DockTab(
+            icon: Icons.sell_outlined,
+            activeIcon: Icons.sell_rounded,
             label: 'Tags',
-            isActive: activeIndex == 2,
-            onTap: () => context.go(AppRoutes.tags),
-          ),
-          _NavTab(
-            icon: Icons.settings_outlined,
-            activeIcon: Icons.settings,
-            label: 'Settings',
             isActive: activeIndex == 3,
-            onTap: () => context.go(AppRoutes.settings),
+            onTap: () => context.go(AppRoutes.tags),
           ),
         ],
       ),
@@ -76,8 +79,8 @@ class MNBottomNav extends StatelessWidget {
   }
 }
 
-class _NavTab extends StatelessWidget {
-  const _NavTab({
+class _DockTab extends StatelessWidget {
+  const _DockTab({
     required this.icon,
     required this.activeIcon,
     required this.label,
@@ -91,38 +94,59 @@ class _NavTab extends StatelessWidget {
   final bool isActive;
   final VoidCallback onTap;
 
+  static const _duration = Duration(milliseconds: 280);
+
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryContainer = isDark
-        ? AppColors.darkPrimaryContainer
-        : AppColors.lightPrimaryContainer;
-    final onPrimaryContainer = isDark
-        ? AppColors.darkOnPrimaryContainer
-        : AppColors.lightOnPrimaryContainer;
-    final variantColor = isDark
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final duration = reduceMotion ? Duration.zero : _duration;
+    final inactive = Theme.of(context).brightness == Brightness.dark
         ? AppColors.darkOnSurfaceVariant
-        : AppColors.lightOnSurfaceVariant;
+        : const Color(0xFFCFC8DD);
 
-    return Expanded(
+    return Semantics(
+      button: true,
+      selected: isActive,
+      label: label,
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Container(
-            decoration: isActive
-                ? BoxDecoration(
-                    color: primaryContainer,
-                    borderRadius: BorderRadius.circular(26),
-                  )
-                : null,
-            child: Center(
-              child: Icon(
+        child: AnimatedContainer(
+          duration: duration,
+          curve: Curves.easeOutBack,
+          height: 48,
+          constraints: const BoxConstraints(minWidth: 48),
+          padding: EdgeInsets.symmetric(horizontal: isActive ? 16 : 12),
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.cream : Colors.transparent,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
                 isActive ? activeIcon : icon,
                 size: 22,
-                color: isActive ? onPrimaryContainer : variantColor,
+                color: isActive ? AppColors.ink : inactive,
               ),
-            ),
+              AnimatedSize(
+                duration: duration,
+                curve: Curves.easeOutCubic,
+                child: isActive
+                    ? Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: Text(
+                          label,
+                          style: AppTypography.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
           ),
         ),
       ),

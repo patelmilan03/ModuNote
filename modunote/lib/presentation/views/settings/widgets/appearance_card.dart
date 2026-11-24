@@ -128,11 +128,11 @@ class _ThemeTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
           decoration: BoxDecoration(
-            color: isSelected ? cs.primaryContainer : surfaceContainer,
-            borderRadius: BorderRadius.circular(16),
+            color: isSelected ? AppColors.cardOf(context) : surfaceContainer,
+            borderRadius: BorderRadius.circular(18),
             border: isSelected
-                ? Border.all(color: cs.primary, width: 2)
-                : Border.all(color: outlineStrong, width: 0.5),
+                ? Border.all(color: AppColors.accentOf(context), width: 2)
+                : Border.all(color: outlineStrong, width: 1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

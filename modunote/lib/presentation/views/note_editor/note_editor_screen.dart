@@ -28,6 +28,7 @@ import '../../viewmodels/note_editor_view_model.dart';
 import '../../viewmodels/rag_settings_view_model.dart';
 import '../../viewmodels/tag_list_view_model.dart';
 import '../../widgets/mn_editor_toolbar.dart';
+import '../../widgets/mn_capture_button.dart' show CaptureKind;
 import '../../widgets/mn_category_picker_sheet.dart';
 import '../../widgets/mn_tag_row.dart';
 import 'widgets/ai_tools_sheet.dart';
@@ -42,10 +43,19 @@ import 'widgets/voice_panel.dart';
 /// Owns the QuillController lifecycle and 800 ms auto-save debounce.
 /// Spec: MODUNOTE_UI_REFERENCE.md § 3.4
 class NoteEditorScreen extends ConsumerStatefulWidget {
-  const NoteEditorScreen({super.key, this.noteId});
+  const NoteEditorScreen({
+    super.key,
+    this.noteId,
+    this.startMode = CaptureKind.text,
+  });
 
   /// Null = new note. Non-null = editing existing note.
   final String? noteId;
+
+  /// How a NEW note starts (from the capture menu): text (default),
+  /// voice (recording starts straight away) or checklist (the first line is
+  /// an unchecked checklist item). Ignored when editing an existing note.
+  final CaptureKind startMode;
 
   @override
   ConsumerState<NoteEditorScreen> createState() => _NoteEditorScreenState();
@@ -148,6 +158,22 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _titleController.addListener(_onTitleChanged);
 
     _maybeAutoSuggestTags(note);
+
+    if (note == null) _applyStartMode();
+  }
+
+  /// Capture-menu start modes for a brand-new note.
+  void _applyStartMode() {
+    switch (widget.startMode) {
+      case CaptureKind.text:
+        break;
+      case CaptureKind.checklist:
+        _quillController!.formatSelection(Attribute.unchecked);
+      case CaptureKind.voice:
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_isRecording) _onMicTap();
+        });
+    }
   }
 
   // ─── Auto-save ────────────────────────────────────────────────────────────
@@ -902,7 +928,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                 configurations: QuillEditorConfigurations(
                   scrollable: true,
                   expands: false,
-                  autoFocus: widget.noteId == null,
+                  autoFocus: widget.noteId == null &&
+                      widget.startMode != CaptureKind.voice,
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
                   placeholder: 'Start writing…',
                 ),

@@ -59,26 +59,28 @@ class _QnaScreenState extends ConsumerState<QnaScreen> {
     // Auto-scroll when a new turn or answer lands.
     ref.listen(qnaViewModelProvider, (_, __) => _scrollToBottomSoon());
 
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      backgroundColor: isDark ? AppColors.darkBg : AppColors.lightBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _Header(hasTurns: turns.isNotEmpty),
-            Expanded(
-              child: turns.isEmpty
-                  ? const _QnaEmptyState()
-                  : ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      itemCount: turns.length,
-                      itemBuilder: (_, i) => _TurnView(turn: turns[i]),
-                    ),
-            ),
-            _InputBar(controller: _controller, onSend: _send),
-          ],
-        ),
+    // A dock tab (UI revamp): the shell provides Scaffold + SafeArea, and the
+    // dock floats over the bottom, so the input bar clears it by 96 px
+    // unless the keyboard is up (the shell hides the dock then).
+    final keyboardUp = MediaQuery.of(context).viewInsets.bottom > 0;
+    return ColoredBox(
+      color: isDark ? AppColors.darkBg : AppColors.lightBg,
+      child: Column(
+        children: [
+          _Header(hasTurns: turns.isNotEmpty),
+          Expanded(
+            child: turns.isEmpty
+                ? const _QnaEmptyState()
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    itemCount: turns.length,
+                    itemBuilder: (_, i) => _TurnView(turn: turns[i]),
+                  ),
+          ),
+          _InputBar(controller: _controller, onSend: _send),
+          SizedBox(height: keyboardUp ? 0 : 96),
+        ],
       ),
     );
   }
@@ -95,23 +97,48 @@ class _Header extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_rounded),
-            onPressed: () => context.pop(),
-            tooltip: 'Back',
-          ),
           Expanded(
-            child: Text(
-              'Ask your notes',
-              style: AppTypography.heading(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.4,
-                color: cs.onSurface,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: AppColors.tintOf(context, 2), // lilac
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.auto_awesome,
+                          size: 19, color: cs.onSurface),
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        'Ask your notes',
+                        style: AppTypography.heading(
+                          fontSize: 30,
+                          letterSpacing: -0.5,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Answers come only from what you wrote.',
+                  style: AppTypography.inter(
+                    fontSize: 13,
+                    color: AppColors.mutedOf(context),
+                  ),
+                ),
+              ],
             ),
           ),
           if (hasTurns)
@@ -167,20 +194,20 @@ class _QuestionBubble extends StatelessWidget {
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.78,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: cs.primary,
           borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-            bottomLeft: Radius.circular(16),
-            bottomRight: Radius.circular(4),
+            topLeft: Radius.circular(22),
+            topRight: Radius.circular(22),
+            bottomLeft: Radius.circular(22),
+            bottomRight: Radius.circular(6),
           ),
         ),
         child: Text(
           text,
           style: AppTypography.inter(
-            fontSize: 14,
+            fontSize: 14.5,
             fontWeight: FontWeight.w500,
             color: cs.onPrimary,
           ),
@@ -197,28 +224,39 @@ class _AnswerBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardBg = isDark ? AppColors.darkCard : AppColors.lightCard;
-    final outline =
-        isDark ? AppColors.darkOutlineStrong : AppColors.lightOutlineStrong;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.85,
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    // Answers rise in: fade + 12 px slide up, 250 ms (motion spec).
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(
+          offset: Offset(0, 12 * (1 - t)),
+          child: child,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-            bottomLeft: Radius.circular(4),
-            bottomRight: Radius.circular(16),
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.85,
           ),
-          border: Border.all(color: outline, width: 0.5),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.tintOf(context, 2), // lilac
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(22),
+              topRight: Radius.circular(22),
+              bottomLeft: Radius.circular(6),
+              bottomRight: Radius.circular(22),
+            ),
+          ),
+          child: child,
         ),
-        child: child,
       ),
     );
   }
@@ -372,9 +410,9 @@ class _CitationChip extends StatelessWidget {
     return GestureDetector(
       onTap: () => context.push(AppRoutes.editNotePath(citation.noteId)),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
         decoration: BoxDecoration(
-          color: cs.secondaryContainer,
+          color: AppColors.cardOf(context),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(
@@ -383,7 +421,7 @@ class _CitationChip extends StatelessWidget {
             Icon(
               Icons.description_outlined,
               size: 13,
-              color: cs.onSecondaryContainer,
+              color: cs.onSurface,
             ),
             const SizedBox(width: 5),
             ConstrainedBox(
@@ -395,7 +433,7 @@ class _CitationChip extends StatelessWidget {
                 style: AppTypography.inter(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: cs.onSecondaryContainer,
+                  color: cs.onSurface,
                 ),
               ),
             ),
@@ -415,11 +453,7 @@ class _ThinkingRow extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          width: 15,
-          height: 15,
-          child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
-        ),
+        const _BouncingDots(),
         const SizedBox(width: 10),
         Text(
           'Searching your notes…',
@@ -431,6 +465,60 @@ class _ThinkingRow extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// Three dots bouncing in turn while the answer loads (motion spec).
+class _BouncingDots extends StatefulWidget {
+  const _BouncingDots();
+
+  @override
+  State<_BouncingDots> createState() => _BouncingDotsState();
+}
+
+class _BouncingDotsState extends State<_BouncingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.onSurface;
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < 3; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
+            Transform.translate(
+              offset: Offset(0, -4 * _bounce((_c.value - i * 0.15) % 1.0)),
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration:
+                    BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// 0→1→0 over the first 40% of the cycle, then rest.
+  static double _bounce(double t) {
+    if (t > 0.4) return 0;
+    final x = t / 0.4;
+    return 4 * x * (1 - x);
   }
 }
 
@@ -451,7 +539,15 @@ class _QnaEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.auto_awesome, size: 52, color: muted),
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppColors.tintOf(context, 2),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Icon(Icons.auto_awesome, size: 34, color: cs.onSurface),
+            ),
             const SizedBox(height: 16),
             Text(
               'Ask anything about your notes',
@@ -492,56 +588,61 @@ class _InputBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fieldBg =
-        isDark ? AppColors.darkSurfaceContainer : AppColors.lightSurfaceContainer;
+    final coral = AppColors.accentOf(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: controller,
-              minLines: 1,
-              maxLines: 4,
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => onSend(),
-              style: AppTypography.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w400,
-                color: cs.onSurface,
-              ),
-              decoration: InputDecoration(
-                hintText: 'Ask a question…',
-                filled: true,
-                fillColor: fieldBg,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(4, 4, 6, 4),
+        decoration: BoxDecoration(
+          color: AppColors.cardOf(context),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: cs.outline),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: controller,
+                minLines: 1,
+                maxLines: 4,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => onSend(),
+                style: AppTypography.inter(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w400,
+                  color: cs.onSurface,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Ask about your notes…',
+                  hintStyle: AppTypography.inter(
+                    fontSize: 14.5,
+                    color: AppColors.mutedOf(context),
+                  ),
+                  border: InputBorder.none,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Material(
-            color: cs.primary,
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: onSend,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Icon(
-                  Icons.arrow_upward_rounded,
-                  size: 22,
-                  color: cs.onPrimary,
+            Material(
+              color: coral,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onSend,
+                child: const Padding(
+                  padding: EdgeInsets.all(11),
+                  child: Icon(
+                    Icons.arrow_upward_rounded,
+                    size: 22,
+                    color: AppColors.accentOn,
+                    semanticLabel: 'Send',
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -23,6 +23,9 @@ import '../views/tags/tags_screen.dart';
 import '../views/archive/archived_notes_screen.dart';
 import '../views/settings/settings_screen.dart';
 import '../widgets/mn_bottom_nav.dart';
+import '../widgets/mn_capture_button.dart';
+
+export '../widgets/mn_capture_button.dart' show CaptureKind;
 
 part 'app_router.g.dart';
 
@@ -40,11 +43,16 @@ abstract class AppRoutes {
 
   /// Builds the edit-note path for a specific [id].
   static String editNotePath(String id) => '/note/$id';
+
+  /// New-note path that asks the editor to start as [kind]
+  /// (voice → recording starts, checklist → first line is a checklist item).
+  static String newNoteAs(CaptureKind kind) =>
+      kind == CaptureKind.text ? newNote : '$newNote?start=${kind.name}';
 }
 
 /// GoRouter instance provided to [MaterialApp.router].
-/// A [ShellRoute] wraps the 4 main tabs (Home, Explore, Tags, Settings)
-/// so [MNBottomNav] persists across tab switches.
+/// A [ShellRoute] wraps the 4 dock tabs (Notes, Ask, Search, Tags)
+/// so [MNBottomNav] persists across tab switches. Settings is pushed.
 /// Note Editor routes are outside the shell (full-screen pushes).
 @riverpod
 GoRouter router(Ref ref) {
@@ -100,6 +108,10 @@ GoRouter router(Ref ref) {
             builder: (context, state) => const NoteListScreen(),
           ),
           GoRoute(
+            path: AppRoutes.qna,
+            builder: (context, state) => const QnaScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.search,
             builder: (context, state) => const SearchScreen(),
           ),
@@ -107,15 +119,22 @@ GoRouter router(Ref ref) {
             path: AppRoutes.tags,
             builder: (context, state) => const TagsScreen(),
           ),
-          GoRoute(
-            path: AppRoutes.settings,
-            builder: (context, state) => const SettingsScreen(),
-          ),
         ],
       ),
       GoRoute(
         path: AppRoutes.newNote,
-        builder: (context, state) => const NoteEditorScreen(),
+        builder: (context, state) => NoteEditorScreen(
+          startMode: CaptureKind.values.asNameMap()[
+                  state.uri.queryParameters['start']] ??
+              CaptureKind.text,
+        ),
+      ),
+      // Settings is pushed from the Home avatar (UI revamp — no longer a tab).
+      GoRoute(
+        path: AppRoutes.settings,
+        builder: (context, state) => const Scaffold(
+          body: SafeArea(child: SettingsScreen()),
+        ),
       ),
       GoRoute(
         path: AppRoutes.editNote,
@@ -127,10 +146,6 @@ GoRouter router(Ref ref) {
       GoRoute(
         path: AppRoutes.archive,
         builder: (context, state) => const ArchivedNotesScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.qna,
-        builder: (context, state) => const QnaScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(
@@ -195,27 +210,31 @@ class _AppShellState extends ConsumerState<_AppShell>
   }
 
   static int _tabIndex(String loc) {
-    if (loc.startsWith('/search')) return 1;
-    if (loc.startsWith('/tags')) return 2;
-    if (loc.startsWith('/settings')) return 3;
+    if (loc.startsWith(AppRoutes.qna)) return 1;
+    if (loc.startsWith(AppRoutes.search)) return 2;
+    if (loc.startsWith(AppRoutes.tags)) return 3;
     return 0;
   }
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    // Hide the dock while the keyboard is up (Ask input, search field).
+    final keyboardUp = media.viewInsets.bottom > 0;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: BottomBar(
         showIcon: true,
         layout: BottomBarLayout(
-          width: MediaQuery.of(context).size.width - 32,
+          width: media.size.width - 32,
           respectSafeArea: true,
           clip: Clip.none,
         ),
-        theme: const BottomBarThemeData(
-          barDecoration: BoxDecoration(color: Colors.transparent),
+        theme: BottomBarThemeData(
+          barDecoration: const BoxDecoration(color: Colors.transparent),
           iconDecoration: BoxDecoration(
-            color: AppColors.accent,
+            color: AppColors.accentOf(context),
             shape: BoxShape.circle,
           ),
           iconWidth: 52,
@@ -235,51 +254,20 @@ class _AppShellState extends ConsumerState<_AppShell>
           curve: Curves.easeInOut,
         ),
         body: SafeArea(child: widget.child),
-        child: Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            MNBottomNav(activeIndex: _tabIndex(widget.location)),
-            Positioned(
-              top: -20,
-              child: _NavFab(onTap: () => context.push(AppRoutes.newNote)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Accent-coloured circular FAB used in the nav bar notch.
-/// Navigates to the new-note editor when tapped.
-class _NavFab extends StatelessWidget {
-  const _NavFab({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 52,
-        height: 52,
-        decoration: BoxDecoration(
-          color: AppColors.accent,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.accent.withValues(alpha: 0.40),
-              blurRadius: 14,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: const Icon(
-          Icons.add_rounded,
-          color: AppColors.accentOn,
-          size: 26,
+        child: AnimatedSlide(
+          offset: keyboardUp ? const Offset(0, 2) : Offset.zero,
+          duration: const Duration(milliseconds: 200),
+          child: Row(
+            children: [
+              Expanded(
+                child: MNBottomNav(activeIndex: _tabIndex(widget.location)),
+              ),
+              const SizedBox(width: 10),
+              MNCaptureButton(
+                onCapture: (kind) => context.push(AppRoutes.newNoteAs(kind)),
+              ),
+            ],
+          ),
         ),
       ),
     );
