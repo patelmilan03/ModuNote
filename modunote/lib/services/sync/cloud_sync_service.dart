@@ -7,6 +7,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../data/datasources/local/app_database.dart';
 import '../../data/datasources/local/database_providers.dart';
+import '../../data/repositories/remote/note_cloud_codec.dart';
 
 part 'cloud_sync_service.g.dart';
 
@@ -63,7 +64,12 @@ class CloudSyncService {
       final ops =
           <(DocumentReference<Map<String, dynamic>>, Map<String, dynamic>)>[];
       for (final n in await _db.select(_db.notesTable).get()) {
-        ops.add((notesCol.doc(n.id), _noteToMap(n)));
+        try {
+          ops.add((notesCol.doc(n.id), _noteToMap(n)));
+        } on NoteTooLargeException catch (e) {
+          // One oversized note must not stop every other note from backing up.
+          debugPrint('CloudSyncService.backupToCloud: skipped — $e');
+        }
       }
       for (final t in await _db.select(_db.tagsTable).get()) {
         ops.add((tagsCol.doc(t.id), _tagToMap(t)));
@@ -195,7 +201,8 @@ class CloudSyncService {
   Map<String, dynamic> _noteToMap(NoteRow n) => {
         'id': n.id,
         'title': n.title,
-        'content': n.content,
+        // Delta stored as a JSON string (+ plain-text copy + schemaVersion).
+        ...NoteCloudCodec.encodeContent(n.id, n.content),
         'categoryId': n.categoryId,
         'tagIds': n.tagIds,
         'isPinned': n.isPinned,
@@ -229,9 +236,8 @@ class CloudSyncService {
       NotesTableCompanion.insert(
         id: id,
         title: (m['title'] as String?) ?? '',
-        content: m['content'] is Map
-            ? Map<String, dynamic>.from(m['content'] as Map)
-            : const <String, dynamic>{},
+        // Accepts v2 `contentJson` and every legacy shape (map / string / text).
+        content: NoteCloudCodec.decodeContent(m),
         categoryId: drift.Value(categoryId),
         tagIds: drift.Value(tagIds),
         isPinned: drift.Value((m['isPinned'] as bool?) ?? false),
