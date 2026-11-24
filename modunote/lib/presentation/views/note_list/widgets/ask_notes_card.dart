@@ -43,7 +43,7 @@ class AskNotesCard extends StatelessWidget {
                 children: [
                   Text(
                     'Ask your notes',
-                    style: AppTypography.plusJakartaSans(
+                    style: AppTypography.heading(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: cs.onPrimaryContainer,

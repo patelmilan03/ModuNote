@@ -41,7 +41,7 @@ class AppearanceCard extends StatelessWidget {
         children: [
           Text(
             'Appearance',
-            style: AppTypography.plusJakartaSans(
+            style: AppTypography.heading(
               fontSize: 15,
               fontWeight: FontWeight.w700,
               color: onSurface,
@@ -152,7 +152,7 @@ class _ThemeTile extends StatelessWidget {
                   Expanded(
                     child: Text(
                       label,
-                      style: AppTypography.plusJakartaSans(
+                      style: AppTypography.heading(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: isSelected

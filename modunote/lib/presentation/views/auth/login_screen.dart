@@ -104,7 +104,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 24),
               Text(
                 'ModuNote',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.bricolageGrotesque(
                   fontSize: 32,
                   fontWeight: FontWeight.w800,
                   color: onSurface,

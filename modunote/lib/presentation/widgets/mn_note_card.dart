@@ -119,7 +119,7 @@ class MNNoteCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     note.title.isEmpty ? 'Untitled' : note.title,
-                    style: AppTypography.plusJakartaSans(
+                    style: AppTypography.heading(
                       fontSize: 16.5,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -0.2,

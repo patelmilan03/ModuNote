@@ -820,7 +820,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           children: [
             Text(
               'Placeholder note title here',
-              style: AppTypography.plusJakartaSans(
+              style: AppTypography.heading(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
                 color: onSurface,

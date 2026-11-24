@@ -294,7 +294,7 @@ class _EmptyPrompt extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             'Search your notes',
-            style: AppTypography.plusJakartaSans(
+            style: AppTypography.heading(
               fontSize: 17,
               fontWeight: FontWeight.w700,
               color: Theme.of(context).colorScheme.onSurface,
@@ -334,7 +334,7 @@ class _NoResults extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             'No results for "$query"',
-            style: AppTypography.plusJakartaSans(
+            style: AppTypography.heading(
               fontSize: 17,
               fontWeight: FontWeight.w700,
               color: Theme.of(context).colorScheme.onSurface,

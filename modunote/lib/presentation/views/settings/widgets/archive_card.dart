@@ -40,7 +40,7 @@ class ArchiveCard extends StatelessWidget {
                 children: [
                   Text(
                     'Archived Notes',
-                    style: AppTypography.plusJakartaSans(
+                    style: AppTypography.heading(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: onSurface,

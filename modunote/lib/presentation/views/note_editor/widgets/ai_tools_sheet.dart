@@ -155,7 +155,7 @@ class _AiToolsSheetState extends ConsumerState<AiToolsSheet> {
                   const SizedBox(width: 8),
                   Text(
                     _action == null ? 'AI assist' : _action!.label,
-                    style: AppTypography.plusJakartaSans(
+                    style: AppTypography.heading(
                       fontSize: 19,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.3,

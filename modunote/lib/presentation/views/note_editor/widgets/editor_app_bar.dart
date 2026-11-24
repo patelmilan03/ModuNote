@@ -41,7 +41,7 @@ class EditorAppBar extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: titleController,
-              style: AppTypography.plusJakartaSans(
+              style: AppTypography.heading(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.2,
@@ -49,7 +49,7 @@ class EditorAppBar extends StatelessWidget {
               ),
               decoration: InputDecoration.collapsed(
                 hintText: 'Title…',
-                hintStyle: AppTypography.plusJakartaSans(
+                hintStyle: AppTypography.heading(
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
                   letterSpacing: -0.2,

@@ -50,7 +50,7 @@ class AppBarSection extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   'ModuNote',
-                  style: AppTypography.plusJakartaSans(
+                  style: AppTypography.heading(
                     fontSize: 26,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.6,
@@ -136,7 +136,7 @@ class _ProfileAvatar extends StatelessWidget {
     }
     return Text(
       initials,
-      style: AppTypography.plusJakartaSans(
+      style: AppTypography.heading(
         fontSize: 14,
         fontWeight: FontWeight.w800,
         color: Colors.white,
@@ -190,7 +190,7 @@ class _ProfileAvatar extends StatelessWidget {
                 ),
                 title: Text(
                   title,
-                  style: AppTypography.plusJakartaSans(
+                  style: AppTypography.heading(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: cs.onSurface,

@@ -88,7 +88,7 @@ class _ArchiveAppBar extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             'Archived',
-            style: AppTypography.plusJakartaSans(
+            style: AppTypography.heading(
               fontSize: 22,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.4,
@@ -249,7 +249,7 @@ class _EmptyArchive extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             'No archived notes',
-            style: AppTypography.plusJakartaSans(
+            style: AppTypography.heading(
               fontSize: 18,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.3,

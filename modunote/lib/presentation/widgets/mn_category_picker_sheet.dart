@@ -114,7 +114,7 @@ class _MNCategoryPickerSheetState
                     children: [
                       Text(
                         'Move to category',
-                        style: AppTypography.plusJakartaSans(
+                        style: AppTypography.heading(
                           fontSize: 19,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.3,
@@ -327,7 +327,7 @@ class _MNCategoryPickerSheetState
             Expanded(
               child: Text(
                 'None',
-                style: AppTypography.plusJakartaSans(
+                style: AppTypography.heading(
                   fontSize: 14.5,
                   fontWeight:
                       isSelected ? FontWeight.w700 : FontWeight.w600,
@@ -415,7 +415,7 @@ class _MNCategoryPickerSheetState
             Expanded(
               child: Text(
                 category.name,
-                style: AppTypography.plusJakartaSans(
+                style: AppTypography.heading(
                   fontSize: 14.5,
                   fontWeight:
                       isSelected ? FontWeight.w700 : FontWeight.w600,
@@ -477,7 +477,7 @@ class _MNCategoryPickerSheetState
             Expanded(
               child: Text(
                 'New category',
-                style: AppTypography.plusJakartaSans(
+                style: AppTypography.heading(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                   color: onSurface,
@@ -521,7 +521,7 @@ class _MNCategoryPickerSheetState
       builder: (ctx) => AlertDialog(
         title: Text(
           'New category',
-          style: AppTypography.plusJakartaSans(
+          style: AppTypography.heading(
             fontSize: 17,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.2,

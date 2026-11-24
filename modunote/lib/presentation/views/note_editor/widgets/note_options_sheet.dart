@@ -58,7 +58,7 @@ class NoteOptionsSheet extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
             child: Text(
               note.title.isEmpty ? 'Untitled' : note.title,
-              style: AppTypography.plusJakartaSans(
+              style: AppTypography.heading(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: onSurface,

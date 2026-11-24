@@ -61,7 +61,7 @@ class RecordingOverlay extends StatelessWidget {
                   children: [
                     Text(
                       'Recording',
-                      style: AppTypography.plusJakartaSans(
+                      style: AppTypography.heading(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: recordRed,

@@ -92,7 +92,7 @@ class RagTagsCard extends ConsumerWidget {
               const SizedBox(width: 10),
               Text(
                 'Ask your notes — scope',
-                style: AppTypography.plusJakartaSans(
+                style: AppTypography.heading(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: onSurface,
@@ -316,7 +316,7 @@ class _TagPickerSheet extends ConsumerWidget {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   'Add tags to the scope',
-                  style: AppTypography.plusJakartaSans(
+                  style: AppTypography.heading(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: onSurface,

@@ -18,7 +18,7 @@ class SettingsAppBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
       child: Text(
         'Settings',
-        style: AppTypography.plusJakartaSans(
+        style: AppTypography.heading(
           fontSize: 24,
           fontWeight: FontWeight.w800,
           letterSpacing: -0.5,

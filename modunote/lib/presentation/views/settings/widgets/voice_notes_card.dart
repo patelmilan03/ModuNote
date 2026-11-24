@@ -46,7 +46,7 @@ class VoiceNotesCard extends StatelessWidget {
               children: [
                 Text(
                   'Confirm before deleting voice notes',
-                  style: AppTypography.plusJakartaSans(
+                  style: AppTypography.heading(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: onSurface,

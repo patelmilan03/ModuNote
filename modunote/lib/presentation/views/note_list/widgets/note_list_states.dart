@@ -100,7 +100,7 @@ class ErrorBody extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             'Could not load notes',
-            style: AppTypography.plusJakartaSans(
+            style: AppTypography.heading(
               fontSize: 17,
               fontWeight: FontWeight.w700,
               color: cs.onSurface,
@@ -162,7 +162,7 @@ class FilteredEmptyState extends ConsumerWidget {
                 const SizedBox(height: 16),
                 Text(
                   'No notes in $label',
-                  style: AppTypography.plusJakartaSans(
+                  style: AppTypography.heading(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                     letterSpacing: -0.3,
@@ -218,7 +218,7 @@ class EmptyState extends StatelessWidget {
                 const SizedBox(height: 16),
                 Text(
                   'No notes yet',
-                  style: AppTypography.plusJakartaSans(
+                  style: AppTypography.heading(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                     letterSpacing: -0.3,

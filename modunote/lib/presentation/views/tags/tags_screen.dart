@@ -92,7 +92,7 @@ class TagsScreen extends ConsumerWidget {
           children: [
             Text(
               'No tags yet',
-              style: AppTypography.plusJakartaSans(
+              style: AppTypography.heading(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.3,
@@ -155,7 +155,7 @@ class TagsScreen extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         title: Text(
           'New tag',
-          style: AppTypography.plusJakartaSans(
+          style: AppTypography.heading(
             fontSize: 17,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.2,
@@ -202,7 +202,7 @@ class TagsScreen extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         title: Text(
           'Delete "#${tag.name}"?',
-          style: AppTypography.plusJakartaSans(
+          style: AppTypography.heading(
             fontSize: 17,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.2,
@@ -282,7 +282,7 @@ class _TagsAppBar extends StatelessWidget {
               children: [
                 Text(
                   'Tags',
-                  style: AppTypography.plusJakartaSans(
+                  style: AppTypography.heading(
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.5,
@@ -377,7 +377,7 @@ class _TagRow extends StatelessWidget {
               child: Center(
                 child: Text(
                   '#',
-                  style: AppTypography.plusJakartaSans(
+                  style: AppTypography.heading(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                     color: chipText,
@@ -394,7 +394,7 @@ class _TagRow extends StatelessWidget {
                 children: [
                   Text(
                     tag.name,
-                    style: AppTypography.plusJakartaSans(
+                    style: AppTypography.heading(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -0.1,

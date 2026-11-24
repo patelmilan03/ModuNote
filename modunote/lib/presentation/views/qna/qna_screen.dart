@@ -106,7 +106,7 @@ class _Header extends ConsumerWidget {
           Expanded(
             child: Text(
               'Ask your notes',
-              style: AppTypography.plusJakartaSans(
+              style: AppTypography.heading(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.4,
@@ -456,7 +456,7 @@ class _QnaEmptyState extends StatelessWidget {
             Text(
               'Ask anything about your notes',
               textAlign: TextAlign.center,
-              style: AppTypography.plusJakartaSans(
+              style: AppTypography.heading(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.3,
