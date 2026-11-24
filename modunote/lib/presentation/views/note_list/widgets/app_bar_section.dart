@@ -24,8 +24,18 @@ class AppBarSection extends StatelessWidget {
   ];
 
   static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   @override
@@ -70,7 +80,10 @@ class AppBarSection extends StatelessWidget {
             ),
           ),
           // Tappable account avatar — opens Settings.
-          ProfileAvatar(onTap: () => context.push(AppRoutes.settings)),
+          ProfileAvatar(
+            heroTag: ProfileAvatar.settingsHeroTag,
+            onTap: () => context.push(AppRoutes.settings),
+          ),
         ],
       ),
     );
@@ -82,10 +95,17 @@ class AppBarSection extends StatelessWidget {
 /// person icon for an anonymous session. [onTap] runs on tap (Home → Settings;
 /// the Settings account card → [showAccountSheet]).
 class ProfileAvatar extends StatelessWidget {
-  const ProfileAvatar({super.key, this.onTap, this.size = 44});
+  const ProfileAvatar({super.key, this.onTap, this.size = 44, this.heroTag});
+
+  /// Shared by the Home avatar and the Settings account card so the avatar
+  /// flies between them.
+  static const String settingsHeroTag = 'profile-avatar';
 
   final VoidCallback? onTap;
   final double size;
+
+  /// When set, the avatar is wrapped in a [Hero] with this tag.
+  final Object? heroTag;
 
   @override
   Widget build(BuildContext context) {
@@ -97,14 +117,17 @@ class ProfileAvatar extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       initialData: FirebaseAuth.instance.currentUser,
-      builder: (context, snapshot) =>
-          _tappable(_buildAvatar(context, snapshot.data)),
+      builder:
+          (context, snapshot) =>
+              _tappable(_buildAvatar(context, snapshot.data)),
     );
   }
 
-  Widget _tappable(Widget child) => onTap == null
-      ? child
-      : Semantics(
+  Widget _tappable(Widget avatar) {
+    final child = heroTag == null ? avatar : Hero(tag: heroTag!, child: avatar);
+    return onTap == null
+        ? child
+        : Semantics(
           button: true,
           label: 'Account and settings',
           child: GestureDetector(
@@ -113,6 +136,7 @@ class ProfileAvatar extends StatelessWidget {
             child: child,
           ),
         );
+  }
 
   Widget _buildAvatar(BuildContext context, User? user) {
     final fallback = Container(
@@ -168,7 +192,6 @@ class ProfileAvatar extends StatelessWidget {
     if (email != null && email.isNotEmpty) return email[0].toUpperCase();
     return null;
   }
-
 }
 
 /// Account sheet (moved from the Home avatar to the Settings account card in
@@ -182,12 +205,12 @@ void showAccountSheet(BuildContext context) {
     final isAnon = user?.isAnonymous ?? true;
     final name = user?.displayName?.trim();
     final email = user?.email;
-    final title = (name != null && name.isNotEmpty)
-        ? name
-        : (isAnon ? 'Guest' : (email ?? 'Signed in'));
-    final subtitle = isAnon
-        ? 'Not signed in — sign in to sync & back up'
-        : (email ?? '');
+    final title =
+        (name != null && name.isNotEmpty)
+            ? name
+            : (isAnon ? 'Guest' : (email ?? 'Signed in'));
+    final subtitle =
+        isAnon ? 'Not signed in — sign in to sync & back up' : (email ?? '');
 
     showModalBottomSheet<void>(
       context: context,
@@ -211,9 +234,13 @@ void showAccountSheet(BuildContext context) {
                     color: cs.onSurface,
                   ),
                 ),
-                subtitle: subtitle.isEmpty
-                    ? null
-                    : Text(subtitle, style: AppTypography.inter(fontSize: 12.5)),
+                subtitle:
+                    subtitle.isEmpty
+                        ? null
+                        : Text(
+                          subtitle,
+                          style: AppTypography.inter(fontSize: 12.5),
+                        ),
               ),
               const Divider(height: 1),
               ListTile(

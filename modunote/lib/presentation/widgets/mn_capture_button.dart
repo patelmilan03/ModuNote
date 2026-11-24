@@ -6,11 +6,16 @@ import '../../core/theme/app_typography.dart';
 /// What the capture menu asks the editor to start with.
 enum CaptureKind { text, voice, checklist }
 
+/// Called with the chosen kind and the button's global rect (for the
+/// circle reveal into the editor), or null if it couldn't be measured.
+typedef CaptureCallback = void Function(CaptureKind kind, Rect? origin);
+
 /// Coral capture button that sits beside the dock (Nav A, UI revamp 2026-11).
 ///
 /// Tap → the plus turns into an x, the screen dims (ink 80%) and three
 /// labelled actions rise above the button one after another
-/// (Checklist · Text note · Voice note). Choosing one calls [onCapture];
+/// (Checklist · Text note · Voice note). Choosing one calls [onCapture]
+/// with the button's rect;
 /// tapping the scrim or the x closes the menu.
 ///
 /// The menu is drawn in the Overlay via [OverlayPortal] and pinned to the
@@ -18,7 +23,7 @@ enum CaptureKind { text, voice, checklist }
 class MNCaptureButton extends StatefulWidget {
   const MNCaptureButton({super.key, required this.onCapture});
 
-  final ValueChanged<CaptureKind> onCapture;
+  final CaptureCallback onCapture;
 
   static const double size = 64;
 
@@ -64,7 +69,12 @@ class _MNCaptureButtonState extends State<MNCaptureButton>
 
   Future<void> _pick(CaptureKind kind) async {
     await _close();
-    widget.onCapture(kind);
+    if (!mounted) return;
+    final box = context.findRenderObject();
+    final origin = box is RenderBox && box.hasSize
+        ? box.localToGlobal(Offset.zero) & box.size
+        : null;
+    widget.onCapture(kind, origin);
   }
 
   @override

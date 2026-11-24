@@ -24,6 +24,7 @@ import '../views/archive/archived_notes_screen.dart';
 import '../views/settings/settings_screen.dart';
 import '../widgets/mn_bottom_nav.dart';
 import '../widgets/mn_capture_button.dart';
+import 'route_transitions.dart';
 
 export '../widgets/mn_capture_button.dart' show CaptureKind;
 
@@ -105,47 +106,52 @@ GoRouter router(Ref ref) {
         routes: [
           GoRoute(
             path: AppRoutes.home,
-            builder: (context, state) => const NoteListScreen(),
+            pageBuilder: (context, state) => fadeThroughPage(state, const NoteListScreen()),
           ),
           GoRoute(
             path: AppRoutes.qna,
-            builder: (context, state) => const QnaScreen(),
+            pageBuilder: (context, state) => fadeThroughPage(state, const QnaScreen()),
           ),
           GoRoute(
             path: AppRoutes.search,
-            builder: (context, state) => const SearchScreen(),
+            pageBuilder: (context, state) => fadeThroughPage(state, const SearchScreen()),
           ),
           GoRoute(
             path: AppRoutes.tags,
-            builder: (context, state) => const TagsScreen(),
+            pageBuilder: (context, state) => fadeThroughPage(state, const TagsScreen()),
           ),
         ],
       ),
       GoRoute(
         path: AppRoutes.newNote,
-        builder: (context, state) => NoteEditorScreen(
-          startMode: CaptureKind.values.asNameMap()[
-                  state.uri.queryParameters['start']] ??
-              CaptureKind.text,
+        pageBuilder: (context, state) => revealPage(
+          state,
+          NoteEditorScreen(
+            startMode: CaptureKind.values.asNameMap()[
+                    state.uri.queryParameters['start']] ??
+                CaptureKind.text,
+          ),
         ),
       ),
       // Settings is pushed from the Home avatar (UI revamp — no longer a tab).
       GoRoute(
         path: AppRoutes.settings,
-        builder: (context, state) => const Scaffold(
-          body: SafeArea(child: SettingsScreen()),
+        pageBuilder: (context, state) => sharedAxisPage(
+          state,
+          const Scaffold(body: SafeArea(child: SettingsScreen())),
         ),
       ),
       GoRoute(
         path: AppRoutes.editNote,
-        builder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return NoteEditorScreen(noteId: id);
-        },
+        pageBuilder: (context, state) => revealPage(
+          state,
+          NoteEditorScreen(noteId: state.pathParameters['id']!),
+        ),
       ),
       GoRoute(
         path: AppRoutes.archive,
-        builder: (context, state) => const ArchivedNotesScreen(),
+        pageBuilder: (context, state) =>
+            sharedAxisPage(state, const ArchivedNotesScreen()),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(
@@ -264,7 +270,12 @@ class _AppShellState extends ConsumerState<_AppShell>
               ),
               const SizedBox(width: 10),
               MNCaptureButton(
-                onCapture: (kind) => context.push(AppRoutes.newNoteAs(kind)),
+                onCapture: (kind, origin) => context.push(
+                  AppRoutes.newNoteAs(kind),
+                  extra: origin == null
+                      ? null
+                      : RevealOrigin(origin, circle: true).toExtra(),
+                ),
               ),
             ],
           ),

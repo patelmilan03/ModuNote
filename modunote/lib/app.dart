@@ -26,6 +26,9 @@ class ModuNoteApp extends ConsumerWidget {
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
         themeMode: themeMode,
+        // Light ↔ dark switch: a 300 ms crossfade of every themed colour.
+        themeAnimationDuration: const Duration(milliseconds: 300),
+        themeAnimationCurve: Curves.easeInOut,
         routerConfig: router,
       ),
     );

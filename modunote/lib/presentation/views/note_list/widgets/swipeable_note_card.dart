@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../data/models/note.dart';
 import '../../../router/app_router.dart';
+import '../../../router/route_transitions.dart';
 import '../../../viewmodels/note_list_view_model.dart';
 import '../../../viewmodels/tag_list_view_model.dart';
 import '../../../widgets/mn_note_card.dart';
@@ -115,7 +116,8 @@ class SwipeableNoteCard extends ConsumerWidget {
         note: note,
         tagNames: tagNames,
         tintIndex: tintIndex,
-        onTap: () => context.push(AppRoutes.editNotePath(note.id)),
+        onTap: () => context.push(AppRoutes.editNotePath(note.id),
+            extra: RevealOrigin.of(context)?.toExtra()),
         onLongPress: () => _showActionsSheet(context, ref),
       ),
     );

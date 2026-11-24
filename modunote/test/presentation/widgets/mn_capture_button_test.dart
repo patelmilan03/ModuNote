@@ -6,7 +6,7 @@ import 'package:modunote/presentation/widgets/mn_capture_button.dart';
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
 
-  Widget host(ValueChanged<CaptureKind> onCapture) => MaterialApp(
+  Widget host(CaptureCallback onCapture) => MaterialApp(
         home: Scaffold(
           body: Align(
             alignment: Alignment.bottomRight,
@@ -16,7 +16,7 @@ void main() {
       );
 
   testWidgets('tap opens the three capture actions', (tester) async {
-    await tester.pumpWidget(host((_) {}));
+    await tester.pumpWidget(host((_, __) {}));
     expect(find.text('Checklist'), findsNothing);
 
     await tester.tap(find.bySemanticsLabel('New note'));
@@ -30,7 +30,11 @@ void main() {
   testWidgets('picking an action closes the menu and reports the kind',
       (tester) async {
     CaptureKind? picked;
-    await tester.pumpWidget(host((k) => picked = k));
+    Rect? origin;
+    await tester.pumpWidget(host((k, o) {
+      picked = k;
+      origin = o;
+    }));
 
     await tester.tap(find.bySemanticsLabel('New note'));
     await tester.pumpAndSettle();
@@ -38,6 +42,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(picked, CaptureKind.checklist);
+    expect(origin?.size, const Size.square(MNCaptureButton.size));
     expect(find.text('Checklist'), findsNothing);
   });
 }

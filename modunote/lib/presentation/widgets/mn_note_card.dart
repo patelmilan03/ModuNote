@@ -117,7 +117,11 @@ class MNNoteCard extends StatelessWidget {
             Row(
               children: [
                 if (note.isPinned)
-                  Icon(Icons.push_pin_rounded, size: 15, color: pinColor),
+                  _PinPop(
+                    reduceMotion: MediaQuery.of(context).disableAnimations,
+                    child: Icon(Icons.push_pin_rounded,
+                        size: 15, color: pinColor),
+                  ),
                 const Spacer(),
                 Text(
                   _timestamp(),
@@ -204,6 +208,26 @@ class _TagChip extends StatelessWidget {
           color: chipFg,
         ),
       ),
+    );
+  }
+}
+
+/// Pops the pin in with a small overshoot when a pinned card appears.
+class _PinPop extends StatelessWidget {
+  const _PinPop({required this.reduceMotion, required this.child});
+
+  final bool reduceMotion;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (reduceMotion) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.elasticOut,
+      builder: (_, v, c) => Transform.scale(scale: v, child: c),
+      child: child,
     );
   }
 }

@@ -7,6 +7,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../data/models/note.dart';
 import '../../../data/models/tag.dart';
 import '../../router/app_router.dart';
+import '../../router/route_transitions.dart';
 import '../../viewmodels/search_view_model.dart';
 import '../../viewmodels/tag_list_view_model.dart';
 import '../../../core/extensions/quill_extensions.dart';
@@ -51,7 +52,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       orElse: () => <String, String>{},
     );
     final tintIndex = ref.watch(categoryTintIndexProvider);
-    void open(String id) => context.push(AppRoutes.editNotePath(id));
+    void open(String id, RevealOrigin? origin) =>
+        context.push(AppRoutes.editNotePath(id), extra: origin?.toExtra());
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,7 +207,7 @@ class _ResultList extends StatelessWidget {
   final String query;
   final Map<String, String> tagMap;
   final Map<String, int> tintIndex;
-  final void Function(String id) onNoteTap;
+  final void Function(String id, RevealOrigin? origin) onNoteTap;
 
   @override
   Widget build(BuildContext context) {
@@ -239,7 +241,7 @@ class _ResultList extends StatelessWidget {
                 .whereType<String>()
                 .toList(),
             tintIndex: cat == null ? null : tintIndex[cat],
-            onTap: () => onNoteTap(note.id),
+            onTap: (origin) => onNoteTap(note.id, origin),
           ),
         );
       },
@@ -262,7 +264,7 @@ class _ResultCard extends StatelessWidget {
   final String query;
   final List<String> tagNames;
   final int? tintIndex;
-  final VoidCallback onTap;
+  final ValueChanged<RevealOrigin?> onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -287,7 +289,7 @@ class _ResultCard extends StatelessWidget {
       color: AppColors.cardOf(context),
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
-        onTap: onTap,
+        onTap: () => onTap(RevealOrigin.of(context)),
         borderRadius: BorderRadius.circular(20),
         child: Padding(
           padding: const EdgeInsets.all(14),

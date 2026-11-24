@@ -68,7 +68,8 @@ class _CardBody extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              const ProfileAvatar(size: 52),
+              const ProfileAvatar(
+                  size: 52, heroTag: ProfileAvatar.settingsHeroTag),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(

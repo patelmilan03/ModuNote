@@ -189,12 +189,22 @@ class _SaveBadge extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 7,
-              height: 7,
-              decoration:
-                  BoxDecoration(shape: BoxShape.circle, color: dotColor),
+            // The dot pulses once each time the state label changes.
+            TweenAnimationBuilder<double>(
+              key: ValueKey(label),
+              tween: Tween(
+                  begin: MediaQuery.of(context).disableAnimations ? 1 : 1.9,
+                  end: 1),
+              duration: const Duration(milliseconds: 420),
+              curve: Curves.easeOutBack,
+              builder: (_, s, c) => Transform.scale(scale: s, child: c),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 7,
+                height: 7,
+                decoration:
+                    BoxDecoration(shape: BoxShape.circle, color: dotColor),
+              ),
             ),
             const SizedBox(width: 6),
             Text(

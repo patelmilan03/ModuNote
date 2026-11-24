@@ -377,8 +377,13 @@ class _TagBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = _min + (_max - _min) * (count / maxCount).clamp(0.0, 1.0);
     final fg = Theme.of(context).colorScheme.onSurface;
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    // Staggered pop-in: each bubble starts 40 ms after the previous one
+    // (capped so a long tag list doesn't keep popping for seconds).
+    final delayMs = (tintIndex * 40).clamp(0, 480);
+    final total = 320 + delayMs;
 
-    return Semantics(
+    final bubble = Semantics(
       button: true,
       label: '#${tag.name}, $count notes',
       hint: 'Long press to delete',
@@ -419,6 +424,17 @@ class _TagBubble extends StatelessWidget {
           ),
         ),
       ),
+    );
+    if (reduceMotion) return bubble;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: total),
+      curve: Interval(delayMs / total, 1, curve: Curves.easeOutBack),
+      builder: (_, v, c) => Transform.scale(
+        scale: v,
+        child: Opacity(opacity: v.clamp(0.0, 1.0), child: c),
+      ),
+      child: bubble,
     );
   }
 }
