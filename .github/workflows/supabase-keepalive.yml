@@ -1,0 +1,59 @@
+name: Supabase keep-alive
+
+# MN-73: the free-tier Supabase project pauses after ~7 days with no activity.
+# The Render keep-warm pinger only hits /health, which never touches the DB, so
+# this runs a real query against Supabase once a day.
+#
+# Separate file on purpose: it must not share CI's concurrency / paths settings.
+
+on:
+  schedule:
+    - cron: '17 3 * * *' # daily, 03:17 UTC (off the top-of-hour rush)
+  workflow_dispatch: # manual "Run workflow" button for testing
+
+permissions: {}
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    name: Ping Supabase
+    # Never run on forks (they have no secret and shouldn't ping our project).
+    if: github.repository_owner == 'patelmilan03'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: https://xhyxlxbuqxumalksecqf.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+
+    steps:
+      - name: Query Supabase via PostgREST
+        run: |
+          if [ -z "$SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::error::Repo secret SUPABASE_PUBLISHABLE_KEY is not set (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+
+          # RLS is on for `documents` with no policies, so the publishable (anon)
+          # role gets `[]`. It still runs a real query on the database, which is
+          # what counts as activity. A paused project returns a non-200 instead.
+          status=$(curl --silent --show-error --location \
+            --retry 3 --retry-delay 10 --retry-all-errors --max-time 30 \
+            --output response.json --write-out '%{http_code}' \
+            --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            "$SUPABASE_URL/rest/v1/documents?select=id&limit=1")
+
+          echo "HTTP $status"
+          if [ "$status" != "200" ]; then
+            echo "::error::Supabase ping failed with HTTP $status. If the project is paused, restore it in the Supabase dashboard."
+            head -c 500 response.json || true
+            exit 1
+          fi
+
+          # Body must be a JSON array (empty is fine).
+          case "$(head -c 1 response.json)" in
+            '[') echo "Supabase responded OK." ;;
+            *) echo "::error::Unexpected response body"; head -c 500 response.json; exit 1 ;;
+          esac
