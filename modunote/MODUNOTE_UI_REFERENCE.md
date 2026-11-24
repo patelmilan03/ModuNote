@@ -6,7 +6,7 @@
 
 ---
 
-## 0. UI revamp — "Tangerine Pop" (2026-11, branch `ui-revamp`, MN-72)
+## 0. UI revamp — "Tangerine Pop" (2026-11, branch `ui-revamp`, MN-74)
 
 > **Supersedes §1–§3 wherever they differ.** The older sections below describe the violet design and are kept for history until the revamp merges into `main`.
 > Full spec: design doc https://claude.ai/artifact/Lb1xGCVASMBdmdPJJNyDKr · approved mockup https://claude.ai/artifact/1mQRKvEi8DT2wABw5bhmQG

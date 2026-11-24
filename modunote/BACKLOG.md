@@ -103,7 +103,7 @@ Full executor + human briefs for both chunks are in `NEXT_THREAD.md`.
 | 34 | MN-34 | Startup UX — native splash screen + first-run onboarding carousel | Feature (README P2 · `UI_POLISH_PLAN.md` item 5) | 🤖 | ⬜ |
 | 35 | MN-35 | Phase 12 Stage 3 remainder — Langfuse tracing → RAGAS eval baseline → light guardrails | Feature (README P3 · `PHASE_12_PLAN.md` Stage 3) | 🤝 | ⬜ |
 | 36 | MN-36 | Deployment hardening — tighten backend `ALLOWED_ORIGINS` + scheduled `pg_dump` backup | Feature (README P4 · `PHASE_12_PLAN.md` Stage 4) | 🤝 | ⬜ |
-| 33.5 | MN-72 | **UI revamp** — "Tangerine Pop" palette, Bricolage Grotesque headings, Nav A (ink dock + coral capture button), category-tinted notes, all screens restyled, dark mode, motion (`animations` pkg). Built on branch `ui-revamp` (draft PR into `main`, merge only after Milan's on-device sign-off). Spec: design doc https://claude.ai/artifact/Lb1xGCVASMBdmdPJJNyDKr · mockup https://claude.ai/artifact/1mQRKvEi8DT2wABw5bhmQG | Feature (UI) | 🤝 | 🔵 (built, awaiting device review) |
+| 33.5 | MN-74 | **UI revamp** — "Tangerine Pop" palette, Bricolage Grotesque headings, Nav A (ink dock + coral capture button), category-tinted notes, all screens restyled, dark mode, motion (`animations` pkg). Built on branch `ui-revamp` (draft PR into `main`, merge only after Milan's on-device sign-off). Spec: design doc https://claude.ai/artifact/Lb1xGCVASMBdmdPJJNyDKr · mockup https://claude.ai/artifact/1mQRKvEi8DT2wABw5bhmQG | Feature (UI) | 🤝 | 🔵 (built, awaiting device review) |
 | 37 | MN-37 | Supabase consolidation S1–S4 — auth + data + vectors on one Postgres, RLS-enforced; removes Firebase | Feature (README P5 · `SUPABASE_MIGRATION_PLAN.md`) | 🤝 | ⬜ |
 
 ---

@@ -46,7 +46,7 @@
 
 ## Current Status & Next Phase
 
-### 🎨 UI revamp — branch `ui-revamp` (2026-11-24, MN-72) — built, awaiting device review
+### 🎨 UI revamp — branch `ui-revamp` (2026-11-24, MN-74) — built, awaiting device review
 
 > **This work lives on branch `ui-revamp`, not `main`** (an agreed exception to the "all work lands on `main`" rule — see `CLAUDE.md`). It merges only after Milan approves it on a device, via the draft PR.
 
