@@ -45,4 +45,29 @@ void main() {
     expect(origin?.size, const Size.square(MNCaptureButton.size));
     expect(find.text('Checklist'), findsNothing);
   });
+
+  testWidgets('actions fly out of the button and get pulled back in',
+      (tester) async {
+    await tester.pumpWidget(host((_, __) {}));
+    final button = tester.getCenter(find.bySemanticsLabel('New note'));
+
+    await tester.tap(find.bySemanticsLabel('New note'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    final early = tester.getCenter(find.text('Voice note')).dy;
+
+    await tester.pumpAndSettle();
+    final settled = tester.getCenter(find.text('Voice note')).dy;
+    // Starts down near the button, ends above it.
+    expect(early, greaterThan(settled));
+    expect(settled, lessThan(button.dy));
+
+    // Closing reverses it: mid-way the action is back on its way down.
+    await tester.tap(find.bySemanticsLabel('New note').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.getCenter(find.text('Voice note')).dy, greaterThan(settled));
+    await tester.pumpAndSettle();
+    expect(find.text('Voice note'), findsNothing);
+  });
 }
