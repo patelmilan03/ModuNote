@@ -6,6 +6,46 @@
 
 ---
 
+## 0. UI revamp — "Tangerine Pop" (2026-11, branch `ui-revamp`, MN-72)
+
+> **Supersedes §1–§3 wherever they differ.** The older sections below describe the violet design and are kept for history until the revamp merges into `main`.
+> Full spec: design doc https://claude.ai/artifact/Lb1xGCVASMBdmdPJJNyDKr · approved mockup https://claude.ai/artifact/1mQRKvEi8DT2wABw5bhmQG
+
+### 0.1 Tokens
+
+| Role | Light | Dark |
+|---|---|---|
+| Background | paper `#FBF6EC` | night `#16131F` |
+| Card | `#FFFFFF` | `#221E2F` |
+| Surface container | `#F1EADD` | `#2B2639` |
+| Text / primary | ink `#211B2E` | cream `#F4EEE2` |
+| Muted text | `#6B6478` | `#A39CB0` |
+| Coral accent | `#FF5C3A` | `#FF7A5C` (ink text on coral in both) |
+| Dock | ink `#211B2E` | `#2B2639` + 1 px cream-10% border |
+| Saved green | `#1F9D55` | `#4ADE80` |
+
+Note tints — light: peach `#FFD9C7`, mint `#CDEFD9`, lilac `#DCD3FF`, butter `#FFE9A8`, sky `#CFE6FF`; dark: `#4A2B22`, `#1F3B2F`, `#33294F`, `#4A3E16`, `#1D3550`; stripes: `#FF9A78`, `#4FBF85`, `#8C7CF0`, `#E7C24A`, `#5BA4E6`. A note's tint = its **root category's** index (roots ordered by sortOrder, then createdAt); no category = plain card with a 1 px outline.
+
+Type: Bricolage Grotesque 800 for titles (Home 34, editor title 30, card title 16.5), Inter for body (15 editor, 13 card preview). Radii: cards 22, result cards 20, dock 32, capture button 22, chips 99.
+
+### 0.2 Navigation (Nav A)
+- Floating ink dock (height 64): Notes · Ask · Search · Tags. Inactive = icon only; active = cream pill with ink icon + label (280 ms, easeOutBack).
+- Coral 64 px capture button beside it. Tap → plus rotates to ×, ink 80% scrim, three actions rise staggered 40 ms: Checklist (mint) · Text note (butter) · Voice note (peach). Voice opens the editor already recording; Checklist opens with a first checklist item.
+- Settings lives behind the Home avatar (coral circle).
+
+### 0.3 Screens
+- **Home:** "TUESDAY 24 NOV" eyebrow, "Your notes" 34 px, filter chips (selected = ink), PINNED / RECENT two-column masonry of tinted cards (pin · time, title ≤3 lines, preview ≤3 lines, ≤2 tag chips).
+- **Editor:** tint header block, 30 px bottom radius: back · "Saved" pill (green dot) · more; 30 px title; wrapped chips (folder chip, tag chips, dashed "+ tag"). Body: Bricolage headings, 22 px rounded checkboxes (ink fill when done), quote = coral 4 px rule on ink-5%. Bottom: ink voice pill (cream play · coral scrubber · time · coral mic); formatting toolbar floats as a rounded card above the keyboard.
+- **Ask:** lilac sparkle tile + 30 px title; ink question bubbles, lilac answer bubbles, white citation chips, white pill input with coral send.
+- **Search:** 34 px title, 56 px white pill field, "N RESULTS" label, white cards with a 6 px category-stripe, matched text on butter.
+- **Tags:** 34 px title + ink "+" tile; tag bubbles 64–128 px sized by note count (tints cycle); FOLDERS card listing the category tree with counts.
+- **Settings:** back + 30 px title; ink account card; theme tiles (selected = 2 px coral border); cards with pastel icon tiles.
+
+### 0.4 Motion (`animations` package; all instant under reduced motion)
+Tabs fade-through 300 ms · Settings/Archive shared axis (horizontal) · editor grows from the tapped card (rounded rect, 400 ms) or circle-reveals from the capture button · avatar Hero into Settings · pin pops in · Saved dot pulses on change · checkbox fill scales in · tag bubbles pop in staggered · light/dark crossfade 300 ms.
+
+---
+
 ## 1. Design Tokens
 
 ### 1.1 Colour — Light Theme

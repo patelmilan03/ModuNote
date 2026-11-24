@@ -27,7 +27,8 @@
 | Audio | Record + playback | `flutter_sound` v9 (AAC 32kbps mono 16kHz) |
 | Voice-to-text | On-device | `speech_to_text` v7 |
 | Theme persistence | SharedPreferences | `shared_preferences` ^2.3.0 |
-| Fonts | Google Fonts | Plus Jakarta Sans (headings) + Inter (body) |
+| Fonts | Google Fonts | Bricolage Grotesque (headings, `AppTypography.heading()`) + Inter (body) — UI revamp 2026-11 |
+| Motion | Page + container transitions | `animations` ^2.2.0 — `router/route_transitions.dart` (fade-through tabs, shared axis, card/capture reveal) |
 | UUID | v4 | `uuid` v4 |
 | Remote API client | HTTP wrapper | `http` ^1.2.0 — `RemoteNoteService` |
 | Toasts | App-wide overlay | `toastification` ^3.2.0 — global `rootNavigatorKey` + `core/utils/app_toast.dart` |
@@ -51,7 +52,7 @@ lib/
 │   ├── utils/uuid_generator.dart      # UuidGenerator.generate()
 │   └── theme/
 │       ├── app_colors.dart            # All design tokens (light + dark)
-│       ├── app_typography.dart        # Plus Jakarta Sans + Inter helpers
+│       ├── app_typography.dart        # Bricolage Grotesque (heading) + Inter helpers
 │       └── app_theme.dart             # AppTheme.light() / AppTheme.dark()
 │
 ├── data/
@@ -82,14 +83,14 @@ lib/
     ├── viewmodels/                    # AsyncNotifier classes (Phase 3+)
     ├── views/
     │   ├── note_list/note_list_screen.dart       # Screen + _DataBody only (split 2026-07-08)
-    │   ├── note_list/widgets/             # ask_notes_card, swipeable_note_card, filter_chip_bar, app_bar_section (+_ProfileAvatar), section_header, note_list_states
+    │   ├── note_list/widgets/             # swipeable_note_card, filter_chip_bar, app_bar_section (+ProfileAvatar, showAccountSheet), section_header, note_list_states
     │   ├── note_editor/note_editor_screen.dart   # Screen + state only (split 2026-07-08)
     │   ├── note_editor/widgets/           # Extracted editor widgets: voice_panel, editor_app_bar, recording_overlay, note_options_sheet (+OptionsRow, shared w/ AI sheet), tag_suggest_banner, ai_tools_sheet, tag_input_sheet
     │   ├── search/search_screen.dart
     │   ├── tags/tags_screen.dart
     │   ├── settings/settings_screen.dart          # Screen only (split 2026-07-08)
     │   └── settings/widgets/              # rag_tags_card (+_TagPickerSheet), appearance_card, voice_notes_card, settings_app_bar, archive_card
-    ├── widgets/                       # Shared widgets — mn_note_card.dart, mn_search_field.dart, mn_editor_toolbar.dart, mn_tag_row.dart, mn_category_picker_sheet.dart, mn_bottom_nav.dart (Phase 4+)
+    ├── widgets/                       # Shared widgets — mn_note_card.dart, mn_editor_toolbar.dart, mn_tag_row.dart, mn_category_picker_sheet.dart, mn_bottom_nav.dart, mn_capture_button.dart, mn_empty_badge.dart
     └── router/
         ├── app_router.dart            # GoRouter config, ShellRoute, _AppShell (ConsumerStatefulWidget+WidgetsBindingObserver), routerProvider, ThemeModeNotifier
         └── app_router.g.dart          # Generated — run `dart run build_runner build`
@@ -99,18 +100,22 @@ lib/
 
 ## Design System
 
-**Reference file**: `MODUNOTE_UI_REFERENCE.md` (project root — copy from Claude project)
+**Reference file**: `MODUNOTE_UI_REFERENCE.md` (project root — copy from Claude project). The **UI revamp (2026-11, branch `ui-revamp`)** section at the top of that file supersedes the older token tables below it.
+
+"Tangerine Pop" palette (UI revamp, 2026-11):
 
 | Token | Light | Dark |
 |---|---|---|
-| Primary | `#5B4EFF` | `#B7AFFF` |
-| Accent (FAB, CTA) | `#F59E0B` | `#F59E0B` (unchanged) |
-| Background | `#FEFBFF` | `#1C1B2E` |
-| Card | `#FFFFFF` | `#232238` |
+| Primary (ink / cream) | `#211B2E` | `#F4EEE2` |
+| Accent — coral (capture button, CTA) | `#FF5C3A` | `#FF7A5C` |
+| Background (paper / night) | `#FBF6EC` | `#16131F` |
+| Card | `#FFFFFF` | `#221E2F` |
+| Dock | `#211B2E` | `#2B2639` |
 | Record red | `#E5484D` | `#FF6369` |
 
-Fonts: `Plus Jakarta Sans` (headings, weight 700–800) + `Inter` (body, weight 400–600).
-All raw token values are in `lib/core/theme/app_colors.dart`.
+Note tints (peach, mint, lilac, butter, sky) come from the note's **root category** via `categoryTintIndexProvider`; use `AppColors.tintOf(context, i)`, `accentOf(context)`, `cardOf`, `mutedOf`, `dockOf` rather than picking light/dark constants by hand.
+Fonts: `Bricolage Grotesque` (headings, weight 700–800, `AppTypography.heading()`) + `Inter` (body, weight 400–600).
+All raw token values are in `lib/core/theme/app_colors.dart`. Motion must collapse to instant when `MediaQuery.disableAnimations` is true.
 
 ---
 
@@ -156,16 +161,16 @@ All raw token values are in `lib/core/theme/app_colors.dart`.
 
 | Route | Screen | Shell? |
 |---|---|---|
-| `/` | NoteListScreen | ✅ ShellRoute tab 0 |
-| `/search` | SearchScreen | ✅ ShellRoute tab 1 |
-| `/tags` | TagsScreen | ✅ ShellRoute tab 2 |
-| `/settings` | SettingsScreen | ✅ ShellRoute tab 3 |
-| `/note/new` | NoteEditorScreen (new) | ❌ Full-screen push |
+| `/` | NoteListScreen | ✅ ShellRoute tab 0 (Notes) |
+| `/qna` | QnaScreen (RAG QnA) | ✅ ShellRoute tab 1 (Ask) — UI revamp |
+| `/search` | SearchScreen | ✅ ShellRoute tab 2 |
+| `/tags` | TagsScreen | ✅ ShellRoute tab 3 |
+| `/settings` | SettingsScreen | ❌ Full-screen push from the Home avatar — UI revamp |
+| `/note/new` | NoteEditorScreen (new; `?start=voice\|checklist` from the capture menu) | ❌ Full-screen push |
 | `/note/:id` | NoteEditorScreen (edit) | ❌ Full-screen push |
 | `/archive` | ArchivedNotesScreen | ❌ Full-screen push (from Settings) |
-| `/qna` | QnaScreen (RAG QnA — Phase 12 Stage 2) | ❌ Full-screen push (from Home "Ask your notes" card) |
 
-The four shell tabs share a persistent `MNBottomNav` rendered by `_AppShell` in `app_router.dart`. Tab screens return body content only — no `Scaffold` or `SafeArea`. Note Editor routes are outside the shell and pushed via `context.push`.
+The four shell tabs share a persistent `MNBottomNav` dock plus the separate `MNCaptureButton`, both rendered by `_AppShell` in `app_router.dart`. Pushes to the editor pass `RevealOrigin(...).toExtra()` as GoRouter `extra` so the editor grows from the tapped card / capture button. Tab screens return body content only — no `Scaffold` or `SafeArea`. Note Editor routes are outside the shell and pushed via `context.push`.
 
 ---
 
@@ -248,6 +253,7 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
   - **Still no git state changes.** Do not run `commit` / `push` / `pull` / `reset` / `checkout` / `merge` / `rebase` / `rm --cached` — including any attempt to "sync" a `claude/*` branch onto `main`. Landing work on `main` is achieved purely by *where you write the file*, never by a git operation. Reading git (`status`, `log`, `diff`, `ls-files`, `check-ignore`, `worktree list`) is fine.
   - **Never opt *into* a worktree yourself:** no `git worktree add`, and never pass `isolation: "worktree"` to an `Agent` or `Workflow` call. Parallelise multi-agent work by **exclusive file ownership** — each agent gets a disjoint set of files inside the main tree (see `NEXT_THREAD.md` → "PARALLEL EXECUTION CHARTER"). Being *placed* in a worktree by the harness is fine; *choosing* another one is not.
   - **Concurrency caution:** if several sessions write into the main tree at once, two of them touching one file will clobber each other silently. Prefer disjoint files, and always state which files you touched.
+  - **Exception — branch `ui-revamp` (2026-11-24, MN-72):** Milan explicitly asked for the UI revamp to be built on a separate branch, pushed to the public repo, and merged into `main` only after he approves it on a device (via a draft PR — never merged without him). Work for MN-72 is committed and pushed on `ui-revamp` from a cloud session; this does **not** relax the rule for any other work.
   - **Why:** as of 2026-07-25 the harness had produced **2 worktrees and 10 `claude/*` branches, every one with 0 unique commits** — all the actual work had correctly landed on `main`. That is the desired end state: the branches are harmless noise, and the work is where the developer can see it. Periodic pruning is backlog **MN-70** (developer-run: `git worktree remove <path>` → `git worktree prune` → `git branch -D <claude/*>`; Claude only prints these).
 
 ---
@@ -261,8 +267,10 @@ The pre-generated stub `app_router.g.dart` in Phase 1 must be replaced by runnin
 | `analysis_options.yaml` | Linting rules + custom_lint plugin |
 | `lib/core/theme/app_colors.dart` | Every design token |
 | `lib/core/constants/app_constants.dart` | Magic numbers and string keys |
-| `lib/presentation/widgets/mn_bottom_nav.dart` | Floating pill bottom nav — 4 icon-only tabs with 60 px center gap (FAB notch), active `primaryContainer` pill, `context.go` tab switching |
-| `lib/presentation/router/app_router.dart` | GoRouter config, `ShellRoute`, `_AppShell` (uses `BottomBar` for hide-on-scroll + amber scroll-to-top icon), `_NavFab` (center notch FAB → new note), `ThemeModeNotifier` |
+| `lib/presentation/widgets/mn_bottom_nav.dart` | Floating ink dock (UI revamp) — 4 tabs Notes/Ask/Search/Tags; active tab is a cream pill with icon + label that grows in; `context.go` tab switching |
+| `lib/presentation/widgets/mn_capture_button.dart` | Coral capture button beside the dock — OverlayPortal menu (Voice / Text / Checklist) over an ink scrim; `onCapture(kind, originRect)` |
+| `lib/presentation/router/route_transitions.dart` | `fadeThroughPage` (tabs), `sharedAxisPage` (Settings/Archive), `revealPage` + `RevealOrigin` (editor grows from card / capture button) |
+| `lib/presentation/router/app_router.dart` | GoRouter config, `ShellRoute`, `_AppShell` (uses `BottomBar` for hide-on-scroll + coral scroll-to-top icon; renders dock + capture button), `ThemeModeNotifier` |
 | `lib/data/datasources/local/app_database.dart` | `@DriftDatabase` — 5 tables, 4 DAOs, FTS5, migrations |
 | `lib/data/datasources/local/database_providers.dart` | 6 `keepAlive` providers: `appDatabase`, `syncedNoteRepository` (typed `SyncedNoteRepository`), `noteRepository` (typed `INoteRepository`, delegates to synced), `tagRepository`, `categoryRepository`, `audioRecordRepository` |
 | `lib/data/datasources/file/audio_file_storage.dart` | File I/O for audio recordings (create dir, generate path, delete, size) |

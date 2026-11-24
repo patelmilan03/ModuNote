@@ -46,6 +46,19 @@
 
 ## Current Status & Next Phase
 
+### 🎨 UI revamp — branch `ui-revamp` (2026-11-24, MN-72) — built, awaiting device review
+
+> **This work lives on branch `ui-revamp`, not `main`** (an agreed exception to the "all work lands on `main`" rule — see `CLAUDE.md`). It merges only after Milan approves it on a device, via the draft PR.
+
+- **Look:** "Tangerine Pop" — paper `#FBF6EC` / ink `#211B2E` / coral `#FF5C3A` (dark: night `#16131F`, cream `#F4EEE2`, coral `#FF7A5C`). Headings in **Bricolage Grotesque** (`AppTypography.heading()`, was `plusJakartaSans()`), body Inter. Notes take a pastel **tint from their root category** (`categoryTintIndexProvider`; no category = plain card).
+- **Nav A:** floating ink dock (Notes · Ask · Search · Tags) + separate coral capture button that fans out Voice / Text / Checklist (`/note/new?start=voice|checklist`). **Ask is now a tab** (`/qna`); **Settings moved behind the Home avatar** (pushed `/settings`).
+- **Screens:** Home = date header + two-column masonry (Pinned / Recent), no search field. Editor = tinted header (Saved pill, 30 px title, wrapped chips, dashed "+ tag"), ink voice pill, floating toolbar, rounded checkboxes, coral quote rule. Search = big title, pill field, stripe cards with butter match highlight. Tags = count-sized bubbles (tap filters Home, long-press deletes) + Folders card (`categoryNoteCountsProvider`). Settings / Archive / Login restyled.
+- **Motion** (`animations` ^2.2.0, all instant under reduced motion): tab fade-through, shared-axis for Settings/Archive, editor grows from the tapped card / circle-reveals from the capture button (`router/route_transitions.dart`, origin rect passed as JSON-safe GoRouter `extra`), avatar Hero to Settings, pin pop, Saved-dot pulse, staggered tag bubbles, 300 ms theme crossfade.
+- **Web demo** now seeds 3 folders (YouTube / Instagram / Research) so the tints show (`demo_seeder.dart`; RAG seed unaffected).
+- **Gates:** `flutter analyze` 0, `custom_lint` clean, **82** Flutter tests green (new: capture menu, tint index + folder counts, route transitions).
+- **Previewing on web in a sandbox:** build with `--no-web-resources-cdn` (CanvasKit otherwise loads from gstatic).
+- **Not done / open:** voice pill + recording overlay can't be previewed on web (voice is native-only) → check on device. Search's tag filter chips from the mockup were left out (would be new search behaviour). Settings cards keep their inline controls rather than the mockup's drill-in rows.
+
 **Current state (as of 2026-07-02):** Phase 12 **Stage 1 + Stage 2 COMPLETE** (Groq AI writing assistant + RAG QnA). Since then a large "accounts + security + demo" arc landed: **Google Sign-In + auth-gated router + Firestore cloud backup/restore** of notes/tags/categories (hierarchy preserved), a **profile avatar + sign-out**, **per-user RAG isolation** (Firebase ID-token/JWKS verification — fixed a cross-user data leak), the first **automated test suites** (Flutter + backend pytest), an **audio-recording fix**, dead-code cleanup, and a **login-free web portfolio demo** with a **pre-seeded, read-only RAG dataset**. `flutter analyze` = **0**; Flutter **72 tests** + backend **26 pytest** green; `flutter build web` compiles. Live web demo: **https://modunote-ba654.web.app** (redeployed — the current build with demo notes + "Ask your notes" is live; see the 2026-07-08 live check below: **QnA currently broken — Groq API key expired on Render**).
 
 ### Session recap — 2026-06-29 → 07-02 (accounts + security + web demo)
