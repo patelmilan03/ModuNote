@@ -464,7 +464,7 @@ class _MNCategoryPickerSheetState
               width: 26,
               height: 26,
               decoration: BoxDecoration(
-                color: AppColors.accent,
+                color: AppColors.accentOf(context),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(

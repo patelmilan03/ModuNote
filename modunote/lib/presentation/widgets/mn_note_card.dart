@@ -4,6 +4,36 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/models/note.dart';
 
+/// Short relative time for a note's last edit ("Just now", "3h ago",
+/// "Yesterday", "Nov 2"). Shared by the note card and Search results.
+String noteTimestamp(DateTime updatedAt) {
+  final now = DateTime.now();
+  final diff = now.difference(updatedAt);
+  if (diff.inMinutes < 1) return 'Just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays == 1) return 'Yesterday';
+  if (diff.inDays < 7) return '${diff.inDays}d ago';
+  const mo = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final d = updatedAt;
+  if (d.year == now.year) return '${mo[d.month - 1]} ${d.day}';
+  return '${mo[d.month - 1]} ${d.day}, ${d.year}';
+}
+
+
 /// Purely presentational note card. No providers.
 /// UI revamp: tinted by root category, 22 px radius, sized for the
 /// two-column Home grid (title and preview up to 3 lines, 2 tags).
@@ -30,32 +60,7 @@ class MNNoteCard extends StatelessWidget {
   /// Optional long-press callback (e.g. opens an actions sheet).
   final VoidCallback? onLongPress;
 
-  String _timestamp() {
-    final now = DateTime.now();
-    final diff = now.difference(note.updatedAt);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    const mo = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    final d = note.updatedAt;
-    if (d.year == now.year) return '${mo[d.month - 1]} ${d.day}';
-    return '${mo[d.month - 1]} ${d.day}, ${d.year}';
-  }
+  String _timestamp() => noteTimestamp(note.updatedAt);
 
   // Extracts plain-text preview from Quill Delta JSON.
   String _preview() {

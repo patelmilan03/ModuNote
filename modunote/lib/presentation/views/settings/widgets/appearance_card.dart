@@ -61,7 +61,6 @@ class AppearanceCard extends StatelessWidget {
             children: [
               _ThemeTile(
                 label: 'Light',
-                icon: Icons.light_mode_outlined,
                 isSelected: themeMode == ThemeMode.light,
                 previewType: _PreviewType.light,
                 isDark: isDark,
@@ -70,7 +69,6 @@ class AppearanceCard extends StatelessWidget {
               const SizedBox(width: 8),
               _ThemeTile(
                 label: 'Dark',
-                icon: Icons.dark_mode_outlined,
                 isSelected: themeMode == ThemeMode.dark,
                 previewType: _PreviewType.dark,
                 isDark: isDark,
@@ -79,7 +77,6 @@ class AppearanceCard extends StatelessWidget {
               const SizedBox(width: 8),
               _ThemeTile(
                 label: 'System',
-                icon: Icons.brightness_auto_outlined,
                 isSelected: themeMode == ThemeMode.system,
                 previewType: _PreviewType.system,
                 isDark: isDark,
@@ -100,7 +97,6 @@ enum _PreviewType { light, dark, system }
 class _ThemeTile extends StatelessWidget {
   const _ThemeTile({
     required this.label,
-    required this.icon,
     required this.isSelected,
     required this.previewType,
     required this.isDark,
@@ -108,7 +104,6 @@ class _ThemeTile extends StatelessWidget {
   });
 
   final String label;
-  final IconData icon;
   final bool isSelected;
   final _PreviewType previewType;
   final bool isDark;
@@ -141,17 +136,12 @@ class _ThemeTile extends StatelessWidget {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Icon(
-                    icon,
-                    size: 14,
-                    color: isSelected
-                        ? cs.onPrimaryContainer
-                        : cs.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 4),
                   Expanded(
                     child: Text(
                       label,
+                      maxLines: 1,
+                      overflow: TextOverflow.fade,
+                      softWrap: false,
                       style: AppTypography.heading(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -217,8 +207,8 @@ class _MiniPreview extends StatelessWidget {
               Container(
                 width: 6,
                 height: 6,
-                decoration: const BoxDecoration(
-                  color: AppColors.accent,
+                decoration: BoxDecoration(
+                  color: AppColors.accentOf(context),
                   shape: BoxShape.circle,
                 ),
               ),

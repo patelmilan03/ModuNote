@@ -151,7 +151,7 @@ class _AiToolsSheetState extends ConsumerState<AiToolsSheet> {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Row(
                 children: [
-                  const Icon(Icons.auto_awesome, size: 18, color: AppColors.accent),
+                  Icon(Icons.auto_awesome, size: 18, color: AppColors.accentOf(context)),
                   const SizedBox(width: 8),
                   Text(
                     _action == null ? 'AI assist' : _action!.label,
@@ -338,7 +338,7 @@ class _AiSheetButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: filled ? AppColors.accent : Colors.transparent,
+          color: filled ? AppColors.accentOf(context) : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
           border: filled
               ? null

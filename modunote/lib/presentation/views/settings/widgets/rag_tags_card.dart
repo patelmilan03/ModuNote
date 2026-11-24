@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import 'settings_icon_tile.dart';
 import '../../../../core/utils/app_toast.dart';
 import '../../../../data/models/tag.dart';
 import '../../../viewmodels/rag_reindex_view_model.dart';
@@ -81,17 +82,17 @@ class RagTagsCard extends ConsumerWidget {
       decoration: BoxDecoration(
         color: card,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: outline, width: 0.5),
+        border: Border.all(color: outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.auto_awesome, size: 20, color: muted),
-              const SizedBox(width: 10),
+              const SettingsIconTile(icon: Icons.auto_awesome, tintIndex: 2),
+              const SizedBox(width: 12),
               Text(
-                'Ask your notes — scope',
+                'Ask your notes scope',
                 style: AppTypography.heading(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,

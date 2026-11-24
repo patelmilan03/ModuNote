@@ -9,10 +9,15 @@ import '../../../data/models/tag.dart';
 import '../../router/app_router.dart';
 import '../../viewmodels/search_view_model.dart';
 import '../../viewmodels/tag_list_view_model.dart';
-import '../../widgets/mn_note_card.dart';
+import '../../../core/extensions/quill_extensions.dart';
+import '../../viewmodels/category_tree_view_model.dart';
+import '../../widgets/mn_empty_badge.dart';
+import '../../widgets/mn_note_card.dart' show noteTimestamp;
 import '../../widgets/mn_skeletons.dart';
 
-/// Explore / Search screen — live full-text search against the note repository.
+/// Search tab — live full-text search against the note repository.
+/// UI revamp 2026-11: big title, white pill field, result cards with a
+/// category-coloured stripe and the matched words highlighted in butter.
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
@@ -39,37 +44,66 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cs = Theme.of(context).colorScheme;
     final searchState = ref.watch(searchViewModelProvider);
     final tagsAsync = ref.watch(tagListViewModelProvider);
     final tagMap = tagsAsync.maybeWhen(
       data: (tags) => {for (final Tag t in tags) t.id: t.name},
       orElse: () => <String, String>{},
     );
+    final tintIndex = ref.watch(categoryTintIndexProvider);
+    void open(String id) => context.push(AppRoutes.editNotePath(id));
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
+          child: Text(
+            'Search',
+            style: AppTypography.heading(
+              fontSize: 34,
+              letterSpacing: -0.8,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ),
         _SearchBar(
           controller: _controller,
           focusNode: _focusNode,
-          isDark: isDark,
-          cs: cs,
           onChanged: (q) =>
               ref.read(searchViewModelProvider.notifier).setQuery(q),
-          onBack: () => context.go(AppRoutes.home),
         ),
+        const SizedBox(height: 8),
         Expanded(
           child: searchState.query.isEmpty
-              ? _RecentNotes(
-                  recent: ref.watch(recentNotesProvider),
-                  tagMap: tagMap,
-                  onNoteTap: (id) => context.push(AppRoutes.editNotePath(id)),
-                )
-              : _SearchBody(
-                  state: searchState,
-                  tagMap: tagMap,
-                  onNoteTap: (id) => context.push(AppRoutes.editNotePath(id)),
+              ? ref.watch(recentNotesProvider).when(
+                    data: (notes) => notes.isEmpty
+                        ? const _EmptyPrompt()
+                        : _ResultList(
+                            header: 'Recent',
+                            notes: notes,
+                            query: '',
+                            tagMap: tagMap,
+                            tintIndex: tintIndex,
+                            onNoteTap: open,
+                          ),
+                    loading: () => const MNSkeletonNoteList(),
+                    error: (_, __) => const _EmptyPrompt(),
+                  )
+              : searchState.results.when(
+                  data: (notes) => notes.isEmpty
+                      ? _NoResults(query: searchState.query)
+                      : _ResultList(
+                          header:
+                              '${notes.length} result${notes.length == 1 ? '' : 's'}',
+                          notes: notes,
+                          query: searchState.query,
+                          tagMap: tagMap,
+                          tintIndex: tintIndex,
+                          onNoteTap: open,
+                        ),
+                  loading: () => const MNSkeletonNoteList(),
+                  error: (_, __) => const _SearchError(),
                 ),
         ),
       ],
@@ -78,100 +112,73 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Search bar
+// Search field
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SearchBar extends StatelessWidget {
   const _SearchBar({
     required this.controller,
     required this.focusNode,
-    required this.isDark,
-    required this.cs,
     required this.onChanged,
-    required this.onBack,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
-  final bool isDark;
-  final ColorScheme cs;
   final ValueChanged<String> onChanged;
-  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
-    final muted =
-        isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
+    final cs = Theme.of(context).colorScheme;
+    final muted = AppColors.mutedOf(context);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 20, 8),
+    return Container(
+      height: 56,
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.only(left: 18, right: 8),
+      decoration: BoxDecoration(
+        color: AppColors.cardOf(context),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: cs.outline),
+      ),
       child: Row(
         children: [
-          // Back button
-          GestureDetector(
-            onTap: onBack,
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.transparent,
+          Icon(Icons.search_rounded, size: 22, color: muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              onChanged: onChanged,
+              textInputAction: TextInputAction.search,
+              style: AppTypography.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: cs.onSurface,
               ),
-              child: Icon(Icons.arrow_back, size: 22, color: cs.onSurface),
+              decoration: InputDecoration(
+                hintText: 'Search notes and tags',
+                hintStyle: AppTypography.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  color: muted,
+                ),
+                border: InputBorder.none,
+                isCollapsed: true,
+              ),
             ),
           ),
-          const SizedBox(width: 4),
-          // Editable search field
-          Expanded(
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainer,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: cs.outline, width: 0.5),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.search, size: 20, color: muted),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      focusNode: focusNode,
-                      onChanged: onChanged,
-                      style: AppTypography.inter(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w400,
-                        color: cs.onSurface,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Search notes, tags…',
-                        hintStyle: AppTypography.inter(
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w400,
-                          color: muted,
-                        ),
-                        border: InputBorder.none,
-                        isCollapsed: true,
-                      ),
-                    ),
-                  ),
-                  ValueListenableBuilder(
-                    valueListenable: controller,
-                    builder: (_, value, __) => value.text.isNotEmpty
-                        ? GestureDetector(
-                            onTap: () {
-                              controller.clear();
-                              onChanged('');
-                            },
-                            child: Icon(Icons.close, size: 18, color: muted),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ],
-              ),
-            ),
+          ValueListenableBuilder(
+            valueListenable: controller,
+            builder: (_, value, __) => value.text.isNotEmpty
+                ? IconButton(
+                    tooltip: 'Clear search',
+                    onPressed: () {
+                      controller.clear();
+                      onChanged('');
+                    },
+                    icon: Icon(Icons.close_rounded, size: 20, color: muted),
+                  )
+                : const SizedBox.shrink(),
           ),
         ],
       ),
@@ -180,100 +187,201 @@ class _SearchBar extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Body
+// Results
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _SearchBody extends StatelessWidget {
-  const _SearchBody({
-    required this.state,
+class _ResultList extends StatelessWidget {
+  const _ResultList({
+    required this.header,
+    required this.notes,
+    required this.query,
     required this.tagMap,
+    required this.tintIndex,
     required this.onNoteTap,
   });
 
-  final SearchState state;
+  final String header;
+  final List<Note> notes;
+  final String query;
   final Map<String, String> tagMap;
+  final Map<String, int> tintIndex;
   final void Function(String id) onNoteTap;
-
-  List<String> _tagNames(List<String> ids) =>
-      ids.map((id) => tagMap[id]).whereType<String>().toList();
 
   @override
   Widget build(BuildContext context) {
-    if (state.query.isEmpty) return const _EmptyPrompt();
-
-    return state.results.when(
-      data: (notes) {
-        if (notes.isEmpty) return _NoResults(query: state.query);
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 150),
-          itemCount: notes.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
-          itemBuilder: (_, i) => MNNoteCard(
-            note: notes[i],
-            tagNames: _tagNames(notes[i].tagIds),
-            onTap: () => onNoteTap(notes[i].id),
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 150),
+      itemCount: notes.length + 1,
+      itemBuilder: (_, i) {
+        if (i == 0) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(0, 6, 0, 10),
+            child: Text(
+              header.toUpperCase(),
+              style: AppTypography.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: AppColors.mutedOf(context),
+              ),
+            ),
+          );
+        }
+        final note = notes[i - 1];
+        final cat = note.categoryId;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _ResultCard(
+            note: note,
+            query: query,
+            tagNames: note.tagIds
+                .map((id) => tagMap[id])
+                .whereType<String>()
+                .toList(),
+            tintIndex: cat == null ? null : tintIndex[cat],
+            onTap: () => onNoteTap(note.id),
           ),
         );
       },
-      loading: () => const MNSkeletonNoteList(),
-      error: (_, __) => const _SearchError(),
     );
   }
 }
 
-/// Shown on the Explore screen when there's no query: the most recent notes.
-class _RecentNotes extends StatelessWidget {
-  const _RecentNotes({
-    required this.recent,
-    required this.tagMap,
-    required this.onNoteTap,
+/// White card with a 6 px stripe in the category's colour, the title with
+/// the query highlighted, two lines of preview and a tags · time row.
+class _ResultCard extends StatelessWidget {
+  const _ResultCard({
+    required this.note,
+    required this.query,
+    required this.tagNames,
+    required this.tintIndex,
+    required this.onTap,
   });
 
-  final AsyncValue<List<Note>> recent;
-  final Map<String, String> tagMap;
-  final void Function(String id) onNoteTap;
-
-  List<String> _tagNames(List<String> ids) =>
-      ids.map((id) => tagMap[id]).whereType<String>().toList();
+  final Note note;
+  final String query;
+  final List<String> tagNames;
+  final int? tintIndex;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return recent.when(
-      data: (notes) {
-        if (notes.isEmpty) return const _EmptyPrompt();
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        final muted = isDark
-            ? AppColors.darkOnSurfaceMuted
-            : AppColors.lightOnSurfaceMuted;
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 150),
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10, left: 2),
-              child: Text(
-                'Recent notes',
-                style: AppTypography.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: muted,
-                  letterSpacing: 0.3,
-                ),
-              ),
-            ),
-            for (int i = 0; i < notes.length; i++) ...[
-              if (i > 0) const SizedBox(height: 10),
-              MNNoteCard(
-                note: notes[i],
-                tagNames: _tagNames(notes[i].tagIds),
-                onTap: () => onNoteTap(notes[i].id),
-              ),
-            ],
-          ],
-        );
-      },
-      loading: () => const MNSkeletonNoteList(),
-      error: (_, __) => const _EmptyPrompt(),
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final stripe = tintIndex == null
+        ? cs.outlineVariant
+        : AppColors.tintStripes[tintIndex! % AppColors.tintStripes.length];
+    final preview = plainTextFromDelta(note.content).replaceAll('\n', ' ');
+    final metaStyle = AppTypography.inter(
+      fontSize: 11.5,
+      fontWeight: FontWeight.w500,
+      color: cs.onSurfaceVariant,
     );
+    // Butter highlight; on dark the butter tint is too dark, so use the
+    // butter stripe at low alpha instead.
+    final highlight = isDark
+        ? AppColors.tintStripes[3].withValues(alpha: 0.35)
+        : AppColors.lightTints[3];
+
+    return Material(
+      color: AppColors.cardOf(context),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: 6,
+                  decoration: BoxDecoration(
+                    color: stripe,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text.rich(
+                        _highlighted(
+                          note.title.isEmpty ? 'Untitled' : note.title,
+                          AppTypography.heading(
+                            fontSize: 16.5,
+                            letterSpacing: -0.3,
+                            height: 1.2,
+                            color: cs.onSurface,
+                          ),
+                          highlight,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (preview.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text.rich(
+                          _highlighted(
+                            preview,
+                            AppTypography.inter(
+                              fontSize: 13,
+                              color: cs.onSurfaceVariant,
+                            ).copyWith(height: 1.4),
+                            highlight,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              tagNames.map((t) => '#$t').join(' '),
+                              style: metaStyle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(noteTimestamp(note.updatedAt), style: metaStyle),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Splits [text] on case-insensitive matches of [query] and paints each
+  /// match on a rounded-looking butter background.
+  TextSpan _highlighted(String text, TextStyle style, Color highlight) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return TextSpan(text: text, style: style);
+    final lower = text.toLowerCase();
+    final spans = <TextSpan>[];
+    var start = 0;
+    while (true) {
+      final hit = lower.indexOf(q, start);
+      if (hit < 0) break;
+      if (hit > start) spans.add(TextSpan(text: text.substring(start, hit)));
+      spans.add(TextSpan(
+        text: text.substring(hit, hit + q.length),
+        style: TextStyle(background: Paint()..color = highlight),
+      ));
+      start = hit + q.length;
+    }
+    if (start < text.length) spans.add(TextSpan(text: text.substring(start)));
+    return TextSpan(style: style, children: spans);
   }
 }
 
@@ -282,35 +390,11 @@ class _EmptyPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final muted =
-        isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.search, size: 52, color: muted),
-          const SizedBox(height: 14),
-          Text(
-            'Search your notes',
-            style: AppTypography.heading(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Type to find notes by title or content.',
-            style: AppTypography.inter(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w400,
-              color: muted,
-            ),
-          ),
-        ],
-      ),
+    return const _Message(
+      icon: Icons.search_rounded,
+      tintIndex: 4,
+      title: 'Search your notes',
+      body: 'Type to find notes by title, content or tag.',
     );
   }
 }
@@ -322,36 +406,11 @@ class _NoResults extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final muted =
-        isDark ? AppColors.darkOnSurfaceMuted : AppColors.lightOnSurfaceMuted;
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.search_off, size: 52, color: muted),
-          const SizedBox(height: 14),
-          Text(
-            'No results for "$query"',
-            style: AppTypography.heading(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Try different keywords.',
-            style: AppTypography.inter(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w400,
-              color: muted,
-            ),
-          ),
-        ],
-      ),
+    return _Message(
+      icon: Icons.search_off_rounded,
+      tintIndex: 3,
+      title: 'Nothing matches "$query"',
+      body: 'Try a shorter word or a tag name.',
     );
   }
 }
@@ -361,13 +420,58 @@ class _SearchError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Icon(
-        Icons.error_outline,
-        size: 48,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
+    return const _Message(
+      icon: Icons.error_outline_rounded,
+      tintIndex: 0,
+      title: "Search didn't work",
+      body: 'Try again in a moment.',
     );
   }
 }
 
+class _Message extends StatelessWidget {
+  const _Message({
+    required this.icon,
+    required this.tintIndex,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final int tintIndex;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(32, 0, 32, 120),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            MNEmptyBadge(icon: icon, tintIndex: tintIndex),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: AppTypography.heading(
+                fontSize: 19,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              body,
+              textAlign: TextAlign.center,
+              style: AppTypography.inter(
+                fontSize: 13.5,
+                color: AppColors.mutedOf(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

@@ -71,7 +71,7 @@ class NoteOptionsSheet extends StatelessWidget {
           OptionsRow(
             icon: Icons.auto_awesome,
             label: 'AI assist',
-            color: AppColors.accent,
+            color: AppColors.accentOf(context),
             onTap: onAiAssist,
           ),
           OptionsRow(

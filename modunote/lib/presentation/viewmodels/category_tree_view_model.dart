@@ -87,3 +87,32 @@ Map<String, int> buildCategoryTintIndex(List<Category> cats) {
       if (rootIndex[rootOf(c)] != null) c.id: rootIndex[rootOf(c)]!,
   };
 }
+
+/// Live map of categoryId → number of active notes in it OR any descendant
+/// (matches Home's hierarchical category filter). Feeds the Tags screen's
+/// Folders card.
+@riverpod
+Stream<Map<String, int>> categoryNoteCounts(Ref ref) {
+  final cats = ref.watch(categoryTreeViewModelProvider).valueOrNull ?? const [];
+  return ref
+      .watch(noteRepositoryProvider)
+      .watchAll()
+      .map((notes) => buildCategoryNoteCounts(cats, notes.map((n) => n.categoryId)));
+}
+
+/// Pure helper behind [categoryNoteCounts] — exposed for tests. Each note
+/// counts once for its own category and once for every ancestor.
+Map<String, int> buildCategoryNoteCounts(
+    List<Category> cats, Iterable<String?> noteCategoryIds) {
+  final byId = {for (final c in cats) c.id: c};
+  final counts = <String, int>{};
+  for (final id in noteCategoryIds) {
+    var cur = id == null ? null : byId[id];
+    var guard = 0; // cycle guard — max depth is 5
+    while (cur != null && guard++ < 10) {
+      counts[cur.id] = (counts[cur.id] ?? 0) + 1;
+      cur = cur.parentId == null ? null : byId[cur.parentId];
+    }
+  }
+  return counts;
+}

@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../router/app_router.dart';
 import '../../../viewmodels/note_list_view_model.dart';
-import '../../../widgets/mn_search_field.dart';
+import '../../../widgets/mn_empty_badge.dart';
 import 'app_bar_section.dart';
 import 'filter_chip_bar.dart';
 
@@ -144,21 +142,14 @@ class FilteredEmptyState extends ConsumerWidget {
     return Column(
       children: [
         const AppBarSection(),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: MNSearchField(
-            onTap: () => context.go(AppRoutes.search),
-          ),
-        ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 4),
         const FilterChipBar(),
         Expanded(
           child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.inbox_outlined, size: 56, color: muted),
+                const MNEmptyBadge(icon: Icons.inbox_outlined, tintIndex: 3),
                 const SizedBox(height: 16),
                 Text(
                   'No notes in $label',
@@ -171,7 +162,7 @@ class FilteredEmptyState extends ConsumerWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Tap + to add a note here.',
+                  'Tap the + button to add one here.',
                   style: AppTypography.inter(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w400,
@@ -202,19 +193,13 @@ class EmptyState extends StatelessWidget {
       children: [
         // App bar still visible above empty state
         const AppBarSection(),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: MNSearchField(
-            onTap: () => context.go(AppRoutes.search),
-          ),
-        ),
+        const SizedBox(height: 4),
         Expanded(
           child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.article_outlined, size: 56, color: muted),
+                const MNEmptyBadge(icon: Icons.edit_note_rounded, tintIndex: 0),
                 const SizedBox(height: 16),
                 Text(
                   'No notes yet',

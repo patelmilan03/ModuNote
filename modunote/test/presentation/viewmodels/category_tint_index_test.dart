@@ -39,4 +39,25 @@ void main() {
       expect(buildCategoryTintIndex(const []), isEmpty);
     });
   });
+
+  group('buildCategoryNoteCounts', () {
+    test('a note counts for its folder and every ancestor', () {
+      final counts = buildCategoryNoteCounts(
+        [_c('video'), _c('yt', parent: 'video'), _c('ig', parent: 'video')],
+        ['yt', 'yt', 'ig', 'video', null],
+      );
+      expect(counts['yt'], 2);
+      expect(counts['ig'], 1);
+      expect(counts['video'], 4);
+    });
+
+    test('ignores unknown folder ids and survives a parent cycle', () {
+      final counts = buildCategoryNoteCounts(
+        [_c('a', parent: 'b'), _c('b', parent: 'a')],
+        ['gone', 'a'],
+      );
+      expect(counts.containsKey('gone'), isFalse);
+      expect(counts['a'], greaterThan(0));
+    });
+  });
 }
