@@ -44,6 +44,7 @@ class MNTagRow extends StatelessWidget {
         for (final tagId in tagIds)
           _TagChip(
             label: _resolveName(tagId),
+            tagName: _rawName(tagId),
             onDismiss: () => onRemoveTag(tagId),
             isDark: isDark,
           ),
@@ -56,13 +57,14 @@ class MNTagRow extends StatelessWidget {
     );
   }
 
-  String _resolveName(String tagId) {
-    try {
-      return '#${allTags.firstWhere((t) => t.id == tagId).name}';
-    } catch (_) {
-      return '#$tagId';
+  String _rawName(String tagId) {
+    for (final t in allTags) {
+      if (t.id == tagId) return t.name;
     }
+    return tagId;
   }
+
+  String _resolveName(String tagId) => '#${_rawName(tagId)}';
 }
 
 /// Chip fill on the tinted editor header: white over light tints, a faint
@@ -122,15 +124,17 @@ class _CategoryChip extends StatelessWidget {
   }
 }
 
-/// Dismissible tag chip.
+/// Dismissible tag chip, in the tag's own colour.
 class _TagChip extends StatelessWidget {
   const _TagChip({
     required this.label,
+    required this.tagName,
     required this.onDismiss,
     required this.isDark,
   });
 
   final String label;
+  final String tagName;
   final VoidCallback onDismiss;
   final bool isDark;
 
@@ -142,8 +146,9 @@ class _TagChip extends StatelessWidget {
       height: 32,
       padding: const EdgeInsets.only(left: 12, right: 4),
       decoration: BoxDecoration(
-        color: _chipFill(isDark, strong: false),
+        color: AppColors.tagTintOf(context, tagName),
         borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: AppColors.tagStripeOf(tagName)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
