@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../core/utils/app_toast.dart';
 import '../../core/utils/uuid_generator.dart';
 import '../../data/datasources/local/database_providers.dart';
 import '../../data/models/audio_record.dart';
@@ -39,8 +41,9 @@ class AudioEditorViewModel extends _$AudioEditorViewModel {
     try {
       await ref.read(audioRecordRepositoryProvider).insert(record);
       return record;
-    } catch (e, st) {
-      state = AsyncError(e, st);
+    } catch (e) {
+      // Rethrown: the caller reports it. The clip list is untouched, so keep it.
+      debugPrint('AudioEditorViewModel: saveRecording failed — $e');
       rethrow;
     }
   }
@@ -51,8 +54,8 @@ class AudioEditorViewModel extends _$AudioEditorViewModel {
   Future<void> updateTranscription(String id, String text) async {
     try {
       await ref.read(audioRecordRepositoryProvider).updateTranscription(id, text);
-    } catch (e, st) {
-      state = AsyncError(e, st);
+    } catch (e) {
+      _reportFailure("Couldn't save the transcript.", e);
     }
   }
 
@@ -61,8 +64,15 @@ class AudioEditorViewModel extends _$AudioEditorViewModel {
   Future<void> deleteRecord(String id) async {
     try {
       await ref.read(audioRecordRepositoryProvider).delete(id);
-    } catch (e, st) {
-      state = AsyncError(e, st);
+    } catch (e) {
+      _reportFailure("Couldn't delete the recording.", e);
     }
+  }
+
+  /// A failed write changes nothing, so no stream re-emission would replace an
+  /// error state — keep the clip list and tell the user instead.
+  void _reportFailure(String message, Object error) {
+    debugPrint('AudioEditorViewModel: $message — $error');
+    showErrorToast(message, dedupeKey: 'audio-mutation');
   }
 }

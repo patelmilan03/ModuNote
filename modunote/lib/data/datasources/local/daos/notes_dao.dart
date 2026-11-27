@@ -95,19 +95,25 @@ class NotesDao extends DatabaseAccessor<AppDatabase> with _$NotesDaoMixin {
   /// Full-text searches non-archived notes using the FTS5 [notes_fts] virtual
   /// table (created in [AppDatabase.migration]).
   ///
-  /// [query] is sanitised and a trailing `*` is appended for prefix matching.
-  /// Returns an empty list if [query] is blank after sanitisation.
+  /// [query] is reduced to its word tokens (Unicode letters, marks, digits and
+  /// `_` — everything else is punctuation to FTS5's tokenizer anyway). Each
+  /// token is double-quoted so FTS5 never sees an operator or syntax character
+  /// (`AND`/`OR`/`NOT`/`NEAR`, `^`, `.`, `'`, `{`, …), and the last token gets
+  /// a trailing `*` for prefix matching. Returns an empty list if no word
+  /// tokens remain.
   Future<List<NoteRow>> search(String query) async {
-    final trimmed = query.trim();
-    if (trimmed.isEmpty) return [];
+    final tokens = RegExp(r'[\p{L}\p{M}\p{N}_]+', unicode: true)
+        .allMatches(query)
+        .map((m) => m.group(0)!)
+        .toList();
+    if (tokens.isEmpty) return [];
 
-    // Strip FTS special characters that could break MATCH syntax, then add *
-    // for prefix matching so "tokyo" matches "Tokyo vlog" etc.
-    final sanitised = trimmed
-        .replaceAll(RegExp(r'["\(\)\-\+\*:,]'), ' ')
-        .trim();
-    if (sanitised.isEmpty) return [];
-    final ftsQuery = '$sanitised*';
+    // "tokyo" "vlo"* — prefix match on the word being typed, so "tokyo vlo"
+    // finds "Tokyo vlog".
+    final ftsQuery = [
+      for (var i = 0; i < tokens.length; i++)
+        i == tokens.length - 1 ? '"${tokens[i]}"*' : '"${tokens[i]}"',
+    ].join(' ');
 
     final rows = await customSelect(
       'SELECT n.* FROM notes n '
@@ -157,6 +163,25 @@ class NotesDao extends DatabaseAccessor<AppDatabase> with _$NotesDaoMixin {
   /// Hard-deletes the note with [id]. Returns the number of rows deleted.
   Future<int> deleteNote(String id) async {
     return (delete(notesTable)..where((t) => t.id.equals(id))).go();
+  }
+
+  /// Hard-deletes the note with [id] together with its `audio_records` rows,
+  /// in one transaction, and returns the file paths of the deleted records.
+  ///
+  /// `audio_records` has no foreign key (and `foreign_keys` is off), so the
+  /// rows must be removed explicitly. The caller owns deleting the files on
+  /// disk, which cannot be part of the transaction.
+  Future<List<String>> deleteNoteWithAudioRecords(String id) {
+    return db.transaction(() async {
+      final audio = await (db.select(db.audioRecordsTable)
+            ..where((t) => t.noteId.equals(id)))
+          .get();
+      await (db.delete(db.audioRecordsTable)
+            ..where((t) => t.noteId.equals(id)))
+          .go();
+      await deleteNote(id);
+      return [for (final record in audio) record.filePath];
+    });
   }
 
   /// Sets the pinned state of the note with [id] to [pinned].

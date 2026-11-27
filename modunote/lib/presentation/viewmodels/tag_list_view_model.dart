@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../../core/errors/app_exception.dart';
 import '../../core/extensions/string_extensions.dart';
 import '../../data/datasources/local/database_providers.dart';
 import '../../data/models/tag.dart';
@@ -21,7 +20,7 @@ class TagListViewModel extends _$TagListViewModel {
   Future<Tag> insert(String name) async {
     try {
       return await ref.read(tagRepositoryProvider).insert(name);
-    } on AppException catch (e, st) {
+    } catch (e, st) {
       state = AsyncError(e, st);
       rethrow;
     }
@@ -30,7 +29,7 @@ class TagListViewModel extends _$TagListViewModel {
   Future<void> delete(String id) async {
     try {
       await ref.read(tagRepositoryProvider).delete(id);
-    } on AppException catch (e, st) {
+    } catch (e, st) {
       state = AsyncError(e, st);
     }
   }

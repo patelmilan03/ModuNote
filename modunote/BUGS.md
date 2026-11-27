@@ -1,5 +1,7 @@
 # ModuNote — Known Bugs (permanent record)
 
+> **Status 2026-11-27:** 15 of the 17 bugs are fixed (PRs #39–#52 and #57, see "Fixed" at the bottom) and 2 are closed as not planned (#9, #15). **No bugs from this ledger are open.** The detail sections below are kept as the permanent record.
+
 > Canonical, permanent ledger of open bugs. Source of truth for bug detail — `STATUS.md` and any GitHub issues point here, not the reverse.
 >
 > **Origin:** 2026-07-18 four-agent read-only audit (models ↔ viewmodels ↔ views ↔ services). **16 bugs, 0 blockers.** ALL are **pre-existing** — none introduced by the 2026-07-18 screen-split refactor (the refactored widget code was audited clean). Severities are the post-verification calibration (two agent "HIGH"s downgraded because they degrade gracefully).
@@ -131,4 +133,26 @@
 ---
 
 ## Fixed
-_(none yet — move items here with the fixing commit/date as they land)_
+Fixed 2026-11-27, one PR per bug (GitHub issue numbers differ from bug numbers). The audio, mic, bottom-sheet and editor fixes have no automated tests and still need an on-device check.
+
+| Bug | Backlog | Issue | PR | Note |
+|---|---|---|---|---|
+| 1 | MN-10 | #19 | #39 | `dispose()` always closes the audio service; `init()` shares one future |
+| 2 | MN-14 | #20 | #45 | `deleteTag` runs in a transaction and re-syncs `tagIds` |
+| 3 | MN-12 | #7 | #40 | Not reproducible on Riverpod 2.6.1; PR makes `copyWithPrevious` explicit and adds regression tests |
+| 4 | MN-13 | #8 | #52 | Failed pin/archive/delete/move shows an error toast from the view-model; list state is left alone |
+| 5 | MN-17 | #9 | #42 | `useRootNavigator: true` on the actions sheet |
+| 6 | MN-15 | #21 | #49 | `mounted` guards in `_onMicTap` / `_stopRecording` |
+| 7 | MN-16 | #10 | #41 | `_alive` flag (Riverpod 2.6.1 has no `ref.mounted`); null `findById` no longer blanks the VM |
+| 8 | MN-18 | #11 | #43 | Depth guard fixed; depth-5 nodes allowed |
+| 10 | MN-20 | #22 | #44 | FTS query built from letter/number tokens; empty token list returns `[]` |
+| 11 | MN-21 | #13 | #51 | VMs catch non-`AppException` errors too |
+| 12 | MN-22 | #14 | #46 | `mounted` guards after awaits in `_performAutoSave` / `_onBack` |
+| 13 | MN-23 | #15 | #48 | Recorder stopped and file deleted if dictation fails to start |
+| 14 | MN-24 | #16 | #50 | `onProgress` subscription stored and cancelled |
+| 16 | MN-26 | #18 | #47 | Debounce cancelled and pending save flushed before archive |
+| 17 | MN-11 | not filed | #57 | `LocalNoteRepository.delete` removes the note and its audio rows in one transaction, then deletes the files (best effort). Notes deleted before this fix may still have orphaned files |
+
+**Closed as not planned (2026-11-27):**
+- **Bug 9 (MN-19, issue #12) — obsolete.** Backgrounding the app now calls `CloudSyncService.backupToCloud()` (in `app_router.dart`), which pushes every note regardless of `syncStatus`; `syncAllPending()` has no callers.
+- **Bug 15 (MN-25, issue #17) — won't fix.** Real in the code but practically unreachable (both providers are `keepAlive`, prefs read takes milliseconds). Reopen if it shows up in practice.

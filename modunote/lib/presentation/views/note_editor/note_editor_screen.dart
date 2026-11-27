@@ -112,9 +112,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _quillController?.dispose();
     _editorFocusNode.dispose();
     _editorScrollController.dispose();
-    if (_audioInitialized) {
-      _audioService.dispose();
-    }
+    // VoicePanel.initState also opens the shared service (init() is idempotent),
+    // so always release it — _audioInitialized only tracks the mic-tap path.
+    // dispose() is a no-op when the service was never initialised.
+    _audioService.dispose();
     _sttService.dispose();
     super.dispose();
   }
@@ -223,6 +224,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     } catch (_) {
       return;
     }
+
+    // The editor may have been popped (system back) during the save await;
+    // reading a provider through a disposed ref is invalid.
+    if (!mounted) return;
 
     // save() catches AppException internally and sets AsyncError without
     // rethrowing — check state explicitly so failures keep _isDirty = true.
@@ -510,6 +515,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       return;
     }
 
+    // The editor may have been left (system back) during the awaits above;
+    // dispose() has already run, so don't start a recorder nothing can stop.
+    if (!mounted) return;
+
     _currentRecordingPath = filePath;
     _sttService.resetText();
 
@@ -526,17 +535,32 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       return;
     }
 
-    // Start live speech-to-text simultaneously.
-    await _sttService.startListening(
-      onResult: (text) {
-        if (mounted) setState(() => _liveTranscript = text);
-      },
-    );
+    // Start live speech-to-text simultaneously and subscribe to amplitude for
+    // the waveform. The recorder is already running at this point: if either
+    // step throws, stop it again — otherwise it keeps recording with no overlay
+    // or stop button, and the next mic tap would start a second recorder.
+    try {
+      await _sttService.startListening(
+        onResult: (text) {
+          if (mounted) setState(() => _liveTranscript = text);
+        },
+      );
 
-    // Subscribe to amplitude for waveform animation.
-    _amplitudeSubscription = _audioService.amplitudeStream.listen((amp) {
-      if (mounted) setState(() => _currentAmplitude = amp);
-    });
+      // Left the screen while dictation was starting: dispose() can no longer
+      // cancel a subscription/timer created now, so undo the start instead.
+      if (!mounted) {
+        await _abortRecordingStart(filePath);
+        return;
+      }
+
+      _amplitudeSubscription = _audioService.amplitudeStream.listen((amp) {
+        if (mounted) setState(() => _currentAmplitude = amp);
+      });
+    } catch (e) {
+      await _abortRecordingStart(filePath);
+      if (mounted) _showSnackBar('Recording failed to start: $e');
+      return;
+    }
 
     setState(() {
       _isRecording = true;
@@ -549,6 +573,24 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         Timer.periodic(const Duration(seconds: 1), (_) {
       setState(() => _recordSeconds++);
     });
+  }
+
+  /// Undoes a partially started recording (recorder running, but dictation or
+  /// the amplitude subscription failed): stops everything, drops the empty
+  /// clip file and forgets the recording path. Best-effort — never throws.
+  Future<void> _abortRecordingStart(String filePath) async {
+    await _amplitudeSubscription?.cancel();
+    _amplitudeSubscription = null;
+    try {
+      await _sttService.stopListening();
+    } catch (_) {}
+    try {
+      await _audioService.stopRecording();
+    } catch (_) {}
+    try {
+      await _audioStorage.deleteFile(filePath);
+    } catch (_) {}
+    _currentRecordingPath = null;
   }
 
   Future<void> _stopRecording() async {
@@ -566,10 +608,12 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     // On-device live STT result first.
     var transcript = _sttService.accumulatedText.trim();
 
-    setState(() {
-      _isRecording = false;
-      _currentAmplitude = 0.0;
-    });
+    if (mounted) {
+      setState(() {
+        _isRecording = false;
+        _currentAmplitude = 0.0;
+      });
+    }
 
     final recordingPath = _currentRecordingPath;
     _currentRecordingPath = null;
@@ -657,11 +701,22 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         },
         onArchive: () async {
           Navigator.of(context).pop();
+          // A pending debounced autosave would write the note back with
+          // isArchived: false if it fired while archive() is awaiting. Stop the
+          // timer, but flush unsaved edits first so cancelling can't lose them.
+          _debounce?.cancel();
+          if (_isDirty) await _performAutoSave();
+          if (!mounted) return;
           try {
-            await ref
-                .read(noteEditorViewModelProvider(noteId: widget.noteId)
-                    .notifier)
-                .archive(note.id);
+            final vmProvider =
+                noteEditorViewModelProvider(noteId: widget.noteId);
+            await ref.read(vmProvider.notifier).archive(note.id);
+            // archive() reports failure via state, not by throwing. Only on
+            // success keep the local copy in step, so nothing saves it back as
+            // un-archived.
+            if (mounted && !ref.read(vmProvider).hasError) {
+              _currentNote = _currentNote?.copyWith(isArchived: true);
+            }
           } catch (_) {}
           if (mounted) context.pop();
         },
@@ -728,6 +783,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           .syncNote(_currentNote!.id);
       if (mounted) setState(() => _syncStatus = newStatus);
     }
+    // The editor may have been popped (system back) during the awaits above;
+    // the steps below read providers through `ref`, which is invalid once the
+    // widget is disposed.
+    if (!mounted) return;
     // RAG index/deindex (Stage 2) — fire-and-forget, never blocks close.
     if (_currentNote != null) _scheduleRagSync(_currentNote!);
     // Auto-clean tags no longer attached to any note (+ prune them from scope).

@@ -50,15 +50,15 @@ Full executor + human briefs for both chunks are in `NEXT_THREAD.md`.
 
 ## TIER 2 — Bug Batch A (highest-value code fixes; after Chunk A)
 
-> Full repro + fix for every bug is in **`BUGS.md`** (canonical). Fix order per that file: MN-10 → MN-12 → MN-13 → MN-11 → MN-15/16. GitHub issues: bugs 1–16 = **#7–#22**; **bug 17 (MN-26) is NOT filed** (see MN-42).
+> Full repro + fix for every bug is in **`BUGS.md`** (canonical). Fix order per that file: MN-10 → MN-12 → MN-13 → MN-11 → MN-15/16. GitHub issues: bugs 1–16 = **#7–#22** (all closed by 2026-11-27; bug→issue: 3→#7, 4→#8, 5→#9, 7→#10, 8→#11, 9→#12, 11→#13, 12→#14, 13→#15, 14→#16, 15→#17, 16→#18, 1→#19, 2→#20, 6→#21, 10→#22); **bug 17 (MN-26) is NOT filed** (see MN-42).
 
 | Rank | ID | Item | Category (prev label) | Owner | Status |
 |---|---|---|---|---|---|
-| 10 | MN-10 | Audio session leaked on nearly every note view (idempotent dispose) | Bug #1 · MED-HIGH | 🤖 | ⬜ |
+| 10 | MN-10 | Audio session leaked on nearly every note view (idempotent dispose) | Bug #1 · MED-HIGH | 🤖 | ✅ Done (PR #39, 2026-11-27) |
 | 10.5 | MN-69 | Cloud restore fails after `applicationId` change (`com.example` → `dev.milanpatel`) — sign-in works but existing notes not restored | Bug · MED-HIGH | 🤝 | ⬜ |
-| 11 | MN-11 | Deleting a note orphans audio records + leaks audio files on disk | Bug #17 · MEDIUM | 🤖 | ⬜ |
-| 12 | MN-12 | `NoteEditorViewModel.save()` drops note value → concurrent edit lost | Bug #3 · MEDIUM | 🤖 | ⬜ |
-| 13 | MN-13 | Mutation errors clobber stream-backed list (whole list vanishes) | Bug #4 · MEDIUM | 🤖 | ⬜ |
+| 11 | MN-11 | Deleting a note orphans audio records + leaks audio files on disk | Bug #17 · MEDIUM | 🤖 | ✅ Done (PR #57, 2026-11-27) |
+| 12 | MN-12 | `NoteEditorViewModel.save()` drops note value → concurrent edit lost | Bug #3 · MEDIUM | 🤖 | ✅ Done (PR #40, tests only — not reproducible on Riverpod 2.6.1, 2026-11-27) |
+| 13 | MN-13 | Mutation errors clobber stream-backed list (whole list vanishes) | Bug #4 · MEDIUM | 🤖 | ✅ Done (PR #52, 2026-11-27) |
 
 ---
 
@@ -66,19 +66,19 @@ Full executor + human briefs for both chunks are in `NEXT_THREAD.md`.
 
 | Rank | ID | Item | Category (prev label) | Owner | Status |
 |---|---|---|---|---|---|
-| 14 | MN-14 | Deleting a tag orphans `note_tags` rows + stale `note.tagIds` (transactional cascade) | Bug #2 · MEDIUM | 🤖 | ⬜ |
-| 15 | MN-15 | `setState` after await without mounted guard (`_onMicTap`/`_stopRecording`) | Bug #6 · MEDIUM | 🤖 | ⬜ |
-| 16 | MN-16 | `addTag`/`removeTag`/`togglePin`: no `ref.mounted` guard + `findById` null → `AsyncData(null)` | Bug #7 · MEDIUM | 🤖 | ⬜ |
-| 17 | MN-17 | Home long-press sheet occluded by floating nav (missing `useRootNavigator`) | Bug #5 · LOW | 🤖 | ⬜ |
-| 18 | MN-18 | Category max nesting off-by-one (caps at 4, docs say 5) | Bug #8 · LOW | 🤖 | ⬜ |
-| 19 | MN-19 | `SyncedNoteRepository.update` doesn't set `pending` → skipped by `syncAllPending` | Bug #9 · LOW | 🤖 | ⬜ |
-| 20 | MN-20 | FTS sanitiser misses `' ^ .` → invalid MATCH → error instead of empty | Bug #10 · LOW | 🤖 | ⬜ |
-| 21 | MN-21 | VM catch clauses only catch `AppException` → non-AppException escapes | Bug #11 · LOW | 🤖 | ⬜ |
-| 22 | MN-22 | `_performAutoSave`/`_onBack`: `ref.read` after await without mounted guard | Bug #12 · LOW | 🤖 | ⬜ |
-| 23 | MN-23 | Partial recording start leak (`startListening` throws after `startRecording`) | Bug #13 · LOW | 🤖 | ⬜ |
-| 24 | MN-24 | `AudioRecordingService.onProgress` subscription never cancelled | Bug #14 · LOW | 🤖 | ⬜ |
-| 25 | MN-25 | RagIndexTags / audio_pref cold-start load race can clobber edits | Bug #15 · LOW | 🤖 | ⬜ |
-| 26 | MN-26 | Debounce not cancelled before archive → narrow un-archive window | Bug #16 · LOW | 🤖 | ⬜ |
+| 14 | MN-14 | Deleting a tag orphans `note_tags` rows + stale `note.tagIds` (transactional cascade) | Bug #2 · MEDIUM | 🤖 | ✅ Done (PR #45, 2026-11-27) |
+| 15 | MN-15 | `setState` after await without mounted guard (`_onMicTap`/`_stopRecording`) | Bug #6 · MEDIUM | 🤖 | ✅ Done (PR #49, 2026-11-27) |
+| 16 | MN-16 | `addTag`/`removeTag`/`togglePin`: no `ref.mounted` guard + `findById` null → `AsyncData(null)` | Bug #7 · MEDIUM | 🤖 | ✅ Done (PR #41, 2026-11-27) |
+| 17 | MN-17 | Home long-press sheet occluded by floating nav (missing `useRootNavigator`) | Bug #5 · LOW | 🤖 | ✅ Done (PR #42, 2026-11-27) |
+| 18 | MN-18 | Category max nesting off-by-one (caps at 4, docs say 5) | Bug #8 · LOW | 🤖 | ✅ Done (PR #43, 2026-11-27) |
+| 19 | MN-19 | `SyncedNoteRepository.update` doesn't set `pending` → skipped by `syncAllPending` | Bug #9 · LOW | 🤖 | 💤 Won't fix (obsolete — issue #12 closed as not planned, 2026-11-27) |
+| 20 | MN-20 | FTS sanitiser misses `' ^ .` → invalid MATCH → error instead of empty | Bug #10 · LOW | 🤖 | ✅ Done (PR #44, 2026-11-27) |
+| 21 | MN-21 | VM catch clauses only catch `AppException` → non-AppException escapes | Bug #11 · LOW | 🤖 | ✅ Done (PR #51, 2026-11-27) |
+| 22 | MN-22 | `_performAutoSave`/`_onBack`: `ref.read` after await without mounted guard | Bug #12 · LOW | 🤖 | ✅ Done (PR #46, 2026-11-27) |
+| 23 | MN-23 | Partial recording start leak (`startListening` throws after `startRecording`) | Bug #13 · LOW | 🤖 | ✅ Done (PR #48, 2026-11-27) |
+| 24 | MN-24 | `AudioRecordingService.onProgress` subscription never cancelled | Bug #14 · LOW | 🤖 | ✅ Done (PR #50, 2026-11-27) |
+| 25 | MN-25 | RagIndexTags / audio_pref cold-start load race can clobber edits | Bug #15 · LOW | 🤖 | 💤 Won't fix (practically unreachable — issue #17 closed as not planned, 2026-11-27) |
+| 26 | MN-26 | Debounce not cancelled before archive → narrow un-archive window | Bug #16 · LOW | 🤖 | ✅ Done (PR #47, 2026-11-27) |
 
 ---
 
@@ -152,6 +152,10 @@ Full executor + human briefs for both chunks are in `NEXT_THREAD.md`.
 
 ## ✅ Done
 _(move rows here with the completion date as they land)_
+
+- 2026-11-27 · Bug sweep — fixed 14 of 16 audited bugs, one PR each (#39–#52): MN-10 #39, MN-12 #40 (not reproducible; regression tests only), MN-13 #52 (error toast from the view-model; list stays on screen), MN-14 #45, MN-15 #49, MN-16 #41, MN-17 #42, MN-18 #43, MN-20 #44, MN-21 #51, MN-22 #46, MN-23 #48, MN-24 #50, MN-26 #47. MN-19 (issue #12, obsolete: app-background now runs `CloudSyncService.backupToCloud()`) and MN-25 (issue #17, won't fix: practically unreachable) closed as not planned. MN-11 (Bug 17, audio leak on note delete) is NOT part of this sweep and is still ⬜. The audio, mic, bottom-sheet and editor fixes have no automated tests and still need an on-device check.
+
+- 2026-11-25 · MN-75 — Tags tab bugs. (1) Tapping a tag bubble only navigated to Home: `NoteFilterNotifier` was auto-dispose, and nothing watches it while the Tags tab is showing, so the filter reset to "All" before Home mounted. Now `keepAlive: true`, so Home opens with that tag's chip selected and the list filtered. (2) Note-card and editor tag chips ignored the tag's colour (they were plain white/grey; Tags-tab bubbles were coloured by *list position*, so a tag's colour changed as counts changed). New `AppColors.tagTintIndex(name)` (stable FNV-1a hash of the tag name → one of the 5 note tints, no schema change) now colours the Tags bubble, note-card chips and editor chips identically, with a thin stripe-colour outline for contrast in light and dark. Tests added (`tag_color_test.dart`, `NoteFilterNotifier` keep-alive test).
 
 - 2026-07-30 · CI fix — Firebase App Distribution step failed with HTTP 400 *"Release notes length exceeds maximum character limit"*. `ci.yml` passed the **entire** commit message (subject + full body) to `--release-notes`, exceeding the 5000-char cap. Now uses the subject line only, truncated to 500 chars, prefixed with build number + short SHA. Worst-case output measured at 524 chars.
 - 2026-07-30 · CI hardening — the commit message reached the shell via `${{ }}` interpolation in **three** steps (Distribute + both "Notify Discord"). GitHub substitutes that text *before* the shell parses, so a commit containing `"`, a backtick, or `$(…)` would break the step or execute on the runner while the keystore + service-account JSON were on disk; the Discord steps' `sed` quote-escaping could never fire for the same reason. All three now pass untrusted text via `env:`, and the two Discord payloads are built with `jq` (correct JSON escaping for quotes/backslashes/newlines) instead of hand-rolled string concatenation. Verified: run bodies extracted verbatim from `ci.yml` and executed against a message containing `"`/backticks/`$(echo PWNED)`/backslash/newlines → both emitted valid JSON, `PWNED` stayed literal. `head_commit` is null on `pull_request`, so the commit field degrades to a plain short SHA.

@@ -1,6 +1,6 @@
 ---
 project: ModuNote
-updated: 2026-11-24
+updated: 2026-11-27
 source: BACKLOG.md (deep, full ranked list — this board holds the active/near-term view)
 ---
 
@@ -12,10 +12,6 @@ source: BACKLOG.md (deep, full ranked list — this board holds the active/near-
 
 ## 🧊 Backlog
 
-- [ ] MN-11 · Deleting a note orphans audio records + leaks audio files  @agent #bug
-- [ ] MN-14 · Deleting a tag orphans `note_tags` rows + stale `note.tagIds`  @agent #bug
-- [ ] MN-15 · `setState` after await without mounted guard (mic/stop recording)  @agent #bug
-- [ ] MN-17→MN-26 · 10 remaining LOW-severity bugs — repro/fix in `BUGS.md`  @agent #bug
 - [ ] MN-27 · Delete 22 dead symbols (verify 0 callers each)  @agent #techdebt
 - [ ] MN-28 · Wire up unused validation constants + `AppConstants` usages  @agent #techdebt
 - [ ] MN-29 · Extract 6-way duplicate bottom-sheet grabber → `MNSheetGrabber`  @agent #cleanup
@@ -42,7 +38,6 @@ source: BACKLOG.md (deep, full ranked list — this board holds the active/near-
 - [ ] MN-03 · Docs truth audit (status docs) + apply approved fixes  @agent #docs
 - [ ] MN-69 · Cloud restore fails after `applicationId` change (notes not restored)  @both #bug
 - [ ] MN-02 · Activate Sentry in prod — set `SENTRY_DSN` in Render + verify  @both #ops
-- [ ] MN-10 · Audio session leaked on nearly every note view (idempotent dispose)  @agent #bug
 - [ ] MN-07 · Untrack `.firebase/hosting.*.cache` (`git rm --cached`)  @milan #cleanup
 - [ ] MN-08 · Untrack `web/drift_worker.js.map` + `.deps` (`git rm --cached`; ignore rules already added)  @both #cleanup
 
@@ -52,13 +47,11 @@ _(nothing in flight)_
 
 ## ⛔ Blocked
 
-- [ ] MN-12 · `NoteEditorViewModel.save()` drops note value → concurrent edit lost — waiting on MN-54 decision  @agent #bug
-- [ ] MN-13 · Mutation errors clobber stream-backed list — waiting on MN-54 decision  @agent #bug
-- [ ] MN-16 · `addTag`/`removeTag`/`togglePin` mounted-guards + null `findById` — waiting on MN-54 decision  @agent #bug
+_(nothing blocked)_
 
 ## ❓ Needs Decision
 
-- [ ] MN-54 · Bug-fix state-mgmt convention: apply across ALL viewmodels + document in `CLAUDE.md`, or only flagged sites? (unblocks MN-12/13/16)  @milan #techdebt
+- [ ] MN-54 · Bug-fix state-mgmt convention: apply across ALL viewmodels + document in `CLAUDE.md`, or only flagged sites? (MN-12/13/16 were fixed site-by-site on 2026-11-27; the convention-wide question is still open)  @milan #techdebt
 - [ ] MN-71 · `SUPABASE_MIGRATION_PLAN.md` is tracked AND gitignored — untrack (private) or drop the ignore line (public)?  @both #docs
 - [ ] MN-50 · `AppColors.darkPinTint` unused → pinned notes may be identical in dark mode. Wire up or delete?  @milan #cleanup
 - [ ] MN-51 · `SyncStatus.conflict` never written/compared. Keep for planned conflict resolution or delete?  @milan #techdebt
@@ -67,6 +60,9 @@ _(nothing in flight)_
 
 ## ✅ Done
 
+- [x] MN-11 · Deleting a note now removes its voice recordings (rows + files); orphans from before the fix are not swept — PR #57 — 2026-11-27  @agent #bug
+- [x] MN-10, MN-12–MN-18, MN-20–MN-24, MN-26 · Bug sweep: 14 bugs fixed, one PR each (#39–#52); MN-12 was not reproducible so #40 only adds regression tests — 2026-11-27  @agent #bug
+- [x] MN-19, MN-25 · Closed as not planned (issues #12 obsolete, #17 practically unreachable) — 2026-11-27  @agent #bug
 - [x] MN-74 · UI revamp (Tangerine Pop, Nav A dock, tints, dark mode, motion) — merged via PR #24 after on-device review — 2026-11-24  @both #feature
 - [x] Supabase `modunote` restored from PAUSED (docs=8, chunks=8, pgvector ok); Groq default model switched to `openai/gpt-oss-120b` in `config.py`/`.env*`/`render.yaml` — 2026-09-11  @agent #ops
 - [x] CI hardening · release-notes 5000-char cap + shell-injection fix in `ci.yml` (3 steps) — 2026-07-31  @agent #devops
