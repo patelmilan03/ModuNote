@@ -1,6 +1,7 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../../core/errors/app_exception.dart';
+import '../../core/utils/app_toast.dart';
 import '../../data/datasources/local/database_providers.dart';
 import '../../data/models/category.dart';
 import '../../data/models/note.dart';
@@ -78,24 +79,31 @@ class NoteListViewModel extends _$NoteListViewModel {
   Future<void> archive(String id) async {
     try {
       await ref.read(noteRepositoryProvider).archive(id);
-    } on AppException catch (e, st) {
-      state = AsyncError(e, st);
+    } catch (e) {
+      _reportFailure("Couldn't archive the note.", e);
     }
   }
 
   Future<void> delete(String id) async {
     try {
       await ref.read(noteRepositoryProvider).delete(id);
-    } on AppException catch (e, st) {
-      state = AsyncError(e, st);
+    } catch (e) {
+      _reportFailure("Couldn't delete the note.", e);
     }
   }
 
   Future<void> togglePin(String id) async {
     try {
       await ref.read(noteRepositoryProvider).togglePin(id);
-    } on AppException catch (e, st) {
-      state = AsyncError(e, st);
+    } catch (e) {
+      _reportFailure("Couldn't pin or unpin the note.", e);
     }
+  }
+
+  /// A failed mutation made no DB change, so no stream re-emission would ever
+  /// replace an error state — keep the list on screen and tell the user.
+  void _reportFailure(String message, Object error) {
+    debugPrint('NoteListViewModel: $message — $error');
+    showErrorToast(message, dedupeKey: 'note-list-mutation');
   }
 }
