@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../../core/errors/app_exception.dart';
 import '../../data/datasources/local/database_providers.dart';
 import '../../data/models/note.dart';
 
@@ -65,7 +64,7 @@ class SearchViewModel extends _$SearchViewModel {
     try {
       final results = await ref.read(noteRepositoryProvider).search(query);
       state = state.copyWith(results: AsyncData(results));
-    } on AppException catch (e, st) {
+    } catch (e, st) {
       state = state.copyWith(results: AsyncError(e, st));
     }
   }

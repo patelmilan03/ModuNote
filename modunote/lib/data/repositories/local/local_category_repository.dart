@@ -208,22 +208,23 @@ class LocalCategoryRepository implements ICategoryRepository {
 
   // ── Private helpers ────────────────────────────────────────────────────────
 
-  /// Walks up the ancestor chain from [parentId] to determine the current
-  /// depth of [parentId], then throws a [ValidationException] if inserting
-  /// a child would exceed [_maxDepth].
+  /// Walks up the ancestor chain from [parentId] to determine the depth of
+  /// [parentId] itself (a root category is depth 1), then throws a
+  /// [ValidationException] if a child of it (depth + 1) would exceed
+  /// [_maxDepth].
   Future<void> _assertDepthAllowed(String parentId) async {
-    int depth = 1; // depth of parentId itself
+    int parentDepth = 0;
     String? current = parentId;
     while (current != null) {
       final row = await _categoriesDao.findById(current);
       if (row == null) break;
-      depth++;
+      parentDepth++;
       current = row.parentId;
-      if (depth >= _maxDepth) {
-        throw const ValidationException(
-          'Maximum category nesting depth ($_maxDepth) reached.',
-        );
-      }
+    }
+    if (parentDepth + 1 > _maxDepth) {
+      throw const ValidationException(
+        'Maximum category nesting depth ($_maxDepth) reached.',
+      );
     }
   }
 
