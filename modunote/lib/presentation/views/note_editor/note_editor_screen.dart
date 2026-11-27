@@ -531,17 +531,25 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       return;
     }
 
-    // Start live speech-to-text simultaneously.
-    await _sttService.startListening(
-      onResult: (text) {
-        if (mounted) setState(() => _liveTranscript = text);
-      },
-    );
+    // Start live speech-to-text simultaneously and subscribe to amplitude for
+    // the waveform. The recorder is already running at this point: if either
+    // step throws, stop it again — otherwise it keeps recording with no overlay
+    // or stop button, and the next mic tap would start a second recorder.
+    try {
+      await _sttService.startListening(
+        onResult: (text) {
+          if (mounted) setState(() => _liveTranscript = text);
+        },
+      );
 
-    // Subscribe to amplitude for waveform animation.
-    _amplitudeSubscription = _audioService.amplitudeStream.listen((amp) {
-      if (mounted) setState(() => _currentAmplitude = amp);
-    });
+      _amplitudeSubscription = _audioService.amplitudeStream.listen((amp) {
+        if (mounted) setState(() => _currentAmplitude = amp);
+      });
+    } catch (e) {
+      await _abortRecordingStart(filePath);
+      if (mounted) _showSnackBar('Recording failed to start: $e');
+      return;
+    }
 
     setState(() {
       _isRecording = true;
@@ -554,6 +562,24 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         Timer.periodic(const Duration(seconds: 1), (_) {
       setState(() => _recordSeconds++);
     });
+  }
+
+  /// Undoes a partially started recording (recorder running, but dictation or
+  /// the amplitude subscription failed): stops everything, drops the empty
+  /// clip file and forgets the recording path. Best-effort — never throws.
+  Future<void> _abortRecordingStart(String filePath) async {
+    await _amplitudeSubscription?.cancel();
+    _amplitudeSubscription = null;
+    try {
+      await _sttService.stopListening();
+    } catch (_) {}
+    try {
+      await _audioService.stopRecording();
+    } catch (_) {}
+    try {
+      await _audioStorage.deleteFile(filePath);
+    } catch (_) {}
+    _currentRecordingPath = null;
   }
 
   Future<void> _stopRecording() async {
