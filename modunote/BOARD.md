@@ -12,7 +12,6 @@ source: BACKLOG.md (deep, full ranked list — this board holds the active/near-
 
 ## 🧊 Backlog
 
-- [ ] MN-11 · Deleting a note orphans audio records + leaks audio files  @agent #bug
 - [ ] MN-27 · Delete 22 dead symbols (verify 0 callers each)  @agent #techdebt
 - [ ] MN-28 · Wire up unused validation constants + `AppConstants` usages  @agent #techdebt
 - [ ] MN-29 · Extract 6-way duplicate bottom-sheet grabber → `MNSheetGrabber`  @agent #cleanup
@@ -61,6 +60,7 @@ _(nothing blocked)_
 
 ## ✅ Done
 
+- [x] MN-11 · Deleting a note now removes its voice recordings (rows + files); orphans from before the fix are not swept — PR #57 — 2026-11-27  @agent #bug
 - [x] MN-10, MN-12–MN-18, MN-20–MN-24, MN-26 · Bug sweep: 14 bugs fixed, one PR each (#39–#52); MN-12 was not reproducible so #40 only adds regression tests — 2026-11-27  @agent #bug
 - [x] MN-19, MN-25 · Closed as not planned (issues #12 obsolete, #17 practically unreachable) — 2026-11-27  @agent #bug
 - [x] MN-74 · UI revamp (Tangerine Pop, Nav A dock, tints, dark mode, motion) — merged via PR #24 after on-device review — 2026-11-24  @both #feature
