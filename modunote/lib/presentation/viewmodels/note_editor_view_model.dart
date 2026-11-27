@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../../core/errors/app_exception.dart';
 import '../../data/datasources/local/database_providers.dart';
 import '../../data/models/note.dart';
 
@@ -12,15 +11,24 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
   // True until the first successful insert; flipped to false after that.
   bool _isNew = false;
 
+  // Riverpod 2 has no `ref.mounted`: track disposal ourselves so async
+  // continuations never write [state] on a disposed notifier.
+  bool _alive = true;
+
   @override
   Future<Note?> build({String? noteId}) async {
     _isNew = noteId == null;
+    _alive = true;
+    ref.onDispose(() => _alive = false);
     if (noteId == null) return null;
     return ref.read(noteRepositoryProvider).findById(noteId);
   }
 
   Future<void> save(Note note) async {
-    state = const AsyncLoading();
+    // Keep the previous note readable while the write is in flight: addTag /
+    // removeTag / setCategory / togglePin bail out on a null valueOrNull, so a
+    // bare AsyncLoading would silently drop an edit that lands mid-save.
+    state = const AsyncLoading<Note?>().copyWithPrevious(state);
     try {
       final repo = ref.read(noteRepositoryProvider);
       if (_isNew) {
@@ -30,9 +38,9 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
         await repo.update(note);
       }
       state = AsyncData(note);
-    } on AppException catch (e, st) {
+    } catch (e, st) {
       debugPrint('NoteEditorViewModel: save failed — $e');
-      state = AsyncError(e, st);
+      if (_alive) state = AsyncError(e, st);
     }
   }
 
@@ -53,10 +61,9 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
     if (current == null) return;
     try {
       await ref.read(tagRepositoryProvider).addTagToNote(current.id, tagId);
-      final updated = await ref.read(noteRepositoryProvider).findById(current.id);
-      state = AsyncData(updated);
-    } on AppException catch (e, st) {
-      state = AsyncError(e, st);
+      await _reload(current.id);
+    } catch (e, st) {
+      if (_alive) state = AsyncError(e, st);
     }
   }
 
@@ -65,10 +72,9 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
     if (current == null) return;
     try {
       await ref.read(tagRepositoryProvider).removeTagFromNote(current.id, tagId);
-      final updated = await ref.read(noteRepositoryProvider).findById(current.id);
-      state = AsyncData(updated);
-    } on AppException catch (e, st) {
-      state = AsyncError(e, st);
+      await _reload(current.id);
+    } catch (e, st) {
+      if (_alive) state = AsyncError(e, st);
     }
   }
 
@@ -95,26 +101,37 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
   Future<void> togglePin(String noteId) async {
     try {
       await ref.read(noteRepositoryProvider).togglePin(noteId);
-      final updated = await ref.read(noteRepositoryProvider).findById(noteId);
-      state = AsyncData(updated);
-    } on AppException catch (e, st) {
-      state = AsyncError(e, st);
+      await _reload(noteId);
+    } catch (e, st) {
+      if (_alive) state = AsyncError(e, st);
     }
+  }
+
+  /// Re-reads [noteId] after a repository mutation and publishes it.
+  ///
+  /// Skips the write when the editor was popped during the await (writing
+  /// [state] on a disposed notifier throws) and when the note no longer exists
+  /// (e.g. deleted concurrently) — publishing `AsyncData(null)` would blank
+  /// the view-model, so the last known note is kept instead.
+  Future<void> _reload(String noteId) async {
+    final updated = await ref.read(noteRepositoryProvider).findById(noteId);
+    if (!_alive || updated == null) return;
+    state = AsyncData(updated);
   }
 
   Future<void> archive(String noteId) async {
     try {
       await ref.read(noteRepositoryProvider).archive(noteId);
-    } on AppException catch (e, st) {
-      state = AsyncError(e, st);
+    } catch (e, st) {
+      if (_alive) state = AsyncError(e, st);
     }
   }
 
   Future<void> delete(String noteId) async {
     try {
       await ref.read(noteRepositoryProvider).delete(noteId);
-    } on AppException catch (e, st) {
-      state = AsyncError(e, st);
+    } catch (e, st) {
+      if (_alive) state = AsyncError(e, st);
     }
   }
 

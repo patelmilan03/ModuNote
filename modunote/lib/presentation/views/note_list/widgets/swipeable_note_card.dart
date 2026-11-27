@@ -31,19 +31,26 @@ class SwipeableNoteCard extends ConsumerWidget {
   void _showActionsSheet(BuildContext context, WidgetRef ref) {
     showModalBottomSheet<void>(
       context: context,
+      // Home lives in the ShellRoute's nested navigator; the floating dock and
+      // capture button are drawn outside it and would cover the sheet's bottom
+      // rows. Show it on the root navigator (like the account sheet and the
+      // RAG picker) so it renders above them.
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _NoteActionsSheet(
+      // Pop with the sheet's own context: `context` belongs to the nested
+      // navigator, so popping it would close the wrong route.
+      builder: (sheetContext) => _NoteActionsSheet(
         note: note,
         onPin: () {
-          Navigator.of(context).pop();
+          Navigator.of(sheetContext).pop();
           ref.read(noteListViewModelProvider.notifier).togglePin(note.id);
         },
         onArchive: () {
-          Navigator.of(context).pop();
+          Navigator.of(sheetContext).pop();
           ref.read(noteListViewModelProvider.notifier).archive(note.id);
         },
         onDelete: () {
-          Navigator.of(context).pop();
+          Navigator.of(sheetContext).pop();
           _confirmDelete(context, ref);
         },
       ),

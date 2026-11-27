@@ -16,7 +16,9 @@ class AudioRecordingService {
       StreamController<double>.broadcast();
 
   bool _initialized = false;
+  Future<void>? _initFuture;
   Stopwatch? _stopwatch;
+  StreamSubscription<RecordingDisposition>? _progressSub;
 
   // ─── Amplitude stream ─────────────────────────────────────────────────────
 
@@ -25,9 +27,15 @@ class AudioRecordingService {
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
 
-  /// Opens the recorder and player. Safe to call multiple times.
-  Future<void> init() async {
-    if (_initialized) return;
+  /// Opens the recorder and player. Safe to call multiple times, including
+  /// concurrently (e.g. VoicePanel and the mic button) — callers share one
+  /// in-flight open.
+  Future<void> init() {
+    if (_initialized) return Future<void>.value();
+    return _initFuture ??= _open().whenComplete(() => _initFuture = null);
+  }
+
+  Future<void> _open() async {
     try {
       await _recorder.openRecorder();
       await _player.openPlayer();
@@ -44,12 +52,23 @@ class AudioRecordingService {
   }
 
   /// Closes recorder and player. Safe to call even if not yet initialised.
+  /// If an [init] is still in flight it is awaited first, so a screen that is
+  /// left right after opening cannot leak the native session.
   Future<void> dispose() async {
+    final pending = _initFuture;
+    if (pending != null) {
+      try {
+        await pending;
+      } on Object {
+        // Open failed — nothing to close.
+      }
+    }
     if (!_initialized) return;
+    _initialized = false;
+    await _cancelProgress();
     _amplitudeCtrl.close();
     await _recorder.closeRecorder();
     await _player.closePlayer();
-    _initialized = false;
   }
 
   // ─── Recording ────────────────────────────────────────────────────────────
@@ -58,6 +77,7 @@ class AudioRecordingService {
   /// Throws [PermissionException] if microphone access is denied by the OS.
   Future<void> startRecording(String filePath) async {
     _assertInitialized();
+    await _cancelProgress(); // never keep a listener from a previous take
     try {
       _stopwatch = Stopwatch()..start();
       await _recorder.startRecorder(
@@ -67,8 +87,9 @@ class AudioRecordingService {
         numChannels: AppConstants.audioNumChannels,
         sampleRate: AppConstants.audioSampleRate,
       );
-      // Forward amplitude to stream.
-      _recorder.onProgress!.listen((event) {
+      // Forward amplitude to stream. Keep the subscription so it can be
+      // cancelled — otherwise every record/stop cycle stacks another listener.
+      _progressSub = _recorder.onProgress!.listen((event) {
         if (_amplitudeCtrl.hasListener) {
           final db = event.decibels ?? -60.0;
           final normalized = ((db + 60.0) / 60.0).clamp(0.0, 1.0);
@@ -89,6 +110,7 @@ class AudioRecordingService {
   /// Stops the current recording and returns elapsed duration in milliseconds.
   Future<int> stopRecording() async {
     _assertInitialized();
+    await _cancelProgress();
     try {
       await _recorder.stopRecorder();
       final ms = _stopwatch?.elapsedMilliseconds ?? 0;
@@ -166,6 +188,12 @@ class AudioRecordingService {
   Stream<PlaybackDisposition>? get playbackStream => _player.onProgress;
 
   // ─── Internal ─────────────────────────────────────────────────────────────
+
+  Future<void> _cancelProgress() async {
+    final sub = _progressSub;
+    _progressSub = null;
+    await sub?.cancel();
+  }
 
   void _assertInitialized() {
     if (!_initialized) {

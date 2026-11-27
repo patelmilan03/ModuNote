@@ -1,7 +1,8 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' show Ref;
 
-import '../../core/errors/app_exception.dart';
+import '../../core/utils/app_toast.dart';
 import '../../data/datasources/local/database_providers.dart';
 import '../../data/models/category.dart';
 
@@ -27,8 +28,10 @@ class CategoryTreeViewModel extends _$CategoryTreeViewModel {
             parentId: parentId,
             sortOrder: sortOrder,
           );
-    } on AppException catch (e, st) {
-      state = AsyncError(e, st);
+    } catch (e) {
+      // Rethrown so the picker can show the specific message (e.g. depth
+      // limit); the category list itself is untouched, so keep it on screen.
+      debugPrint('CategoryTreeViewModel: insert failed — $e');
       rethrow;
     }
   }
@@ -36,17 +39,24 @@ class CategoryTreeViewModel extends _$CategoryTreeViewModel {
   Future<void> move(String id, String? newParentId) async {
     try {
       await ref.read(categoryRepositoryProvider).move(id, newParentId);
-    } on AppException catch (e, st) {
-      state = AsyncError(e, st);
+    } catch (e) {
+      _reportFailure("Couldn't move the folder.", e);
     }
   }
 
   Future<void> delete(String id) async {
     try {
       await ref.read(categoryRepositoryProvider).delete(id);
-    } on AppException catch (e, st) {
-      state = AsyncError(e, st);
+    } catch (e) {
+      _reportFailure("Couldn't delete the folder.", e);
     }
+  }
+
+  /// A failed mutation made no DB change, so the stream would never re-emit to
+  /// replace an error state — keep the folder list and tell the user instead.
+  void _reportFailure(String message, Object error) {
+    debugPrint('CategoryTreeViewModel: $message — $error');
+    showErrorToast(message, dedupeKey: 'category-mutation');
   }
 }
 
