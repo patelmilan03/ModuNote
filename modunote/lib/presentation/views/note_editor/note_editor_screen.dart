@@ -112,9 +112,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _quillController?.dispose();
     _editorFocusNode.dispose();
     _editorScrollController.dispose();
-    if (_audioInitialized) {
-      _audioService.dispose();
-    }
+    // VoicePanel.initState also opens the shared service (init() is idempotent),
+    // so always release it — _audioInitialized only tracks the mic-tap path.
+    // dispose() is a no-op when the service was never initialised.
+    _audioService.dispose();
     _sttService.dispose();
     super.dispose();
   }
