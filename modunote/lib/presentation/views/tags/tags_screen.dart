@@ -143,7 +143,7 @@ class TagsScreen extends ConsumerWidget {
                   tag: sorted[i],
                   count: counts[sorted[i].id] ?? 0,
                   maxCount: maxCount,
-                  tintIndex: i,
+                  order: i,
                   onTap: () {
                     ref
                         .read(noteFilterNotifierProvider.notifier)
@@ -358,7 +358,7 @@ class _TagBubble extends StatelessWidget {
     required this.tag,
     required this.count,
     required this.maxCount,
-    required this.tintIndex,
+    required this.order,
     required this.onTap,
     required this.onLongPress,
   });
@@ -366,7 +366,9 @@ class _TagBubble extends StatelessWidget {
   final Tag tag;
   final int count;
   final int maxCount;
-  final int tintIndex;
+  /// Position in the list — only drives the staggered pop-in delay. The
+  /// bubble colour comes from the tag itself, so it never shifts.
+  final int order;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
@@ -380,7 +382,7 @@ class _TagBubble extends StatelessWidget {
     final reduceMotion = MediaQuery.of(context).disableAnimations;
     // Staggered pop-in: each bubble starts 40 ms after the previous one
     // (capped so a long tag list doesn't keep popping for seconds).
-    final delayMs = (tintIndex * 40).clamp(0, 480);
+    final delayMs = (order * 40).clamp(0, 480);
     final total = 320 + delayMs;
 
     final bubble = Semantics(
@@ -396,7 +398,7 @@ class _TagBubble extends StatelessWidget {
           height: size,
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: AppColors.tintOf(context, tintIndex),
+            color: AppColors.tagTintOf(context, tag.name),
             shape: BoxShape.circle,
           ),
           child: Column(

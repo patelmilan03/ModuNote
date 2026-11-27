@@ -22,7 +22,10 @@ class NoteFilter {
   final String? name;
 }
 
-@riverpod
+/// Kept alive: the Tags tab sets the filter and then navigates to Home, and
+/// nothing watches it in between — an auto-disposed provider would reset to
+/// "all" before Home mounts.
+@Riverpod(keepAlive: true)
 class NoteFilterNotifier extends _$NoteFilterNotifier {
   @override
   NoteFilter build() => const NoteFilter();

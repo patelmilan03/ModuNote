@@ -63,6 +63,24 @@ void main() {
     });
   });
 
+  group('NoteFilterNotifier', () {
+    test('keeps the filter while no screen is watching it', () async {
+      // The Tags tab sets the filter, then navigates to Home. Nothing watches
+      // the filter in between, so it must not auto-dispose back to "all".
+      final container = ProviderContainer(
+        overrides: [noteRepositoryProvider.overrideWithValue(repo)],
+      );
+      addTearDown(container.dispose);
+
+      container.read(noteFilterNotifierProvider.notifier).setTag('t1', 'ideas');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      final filter = container.read(noteFilterNotifierProvider);
+      expect(filter.type, NoteFilterType.tag);
+      expect(filter.id, 't1');
+    });
+  });
+
   group('NoteListViewModel mutations', () {
     test('a failed archive keeps the streamed list on screen', () async {
       when(() => repo.watchAll()).thenAnswer((_) => Stream.value([note('n1')]));

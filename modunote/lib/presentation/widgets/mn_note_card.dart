@@ -91,10 +91,6 @@ class MNNoteCard extends StatelessWidget {
     final pinColor = tint != null && isDark
         ? AppColors.tintStripes[tintIndex! % AppColors.tintStripes.length]
         : AppColors.accentOf(context);
-    final chipBg = tint != null
-        ? Colors.white.withValues(alpha: isDark ? 0.10 : 0.6)
-        : (isDark ? AppColors.darkChipBg : AppColors.lightChipBg);
-    final chipFg = cs.onSurface;
 
     final preview = _preview();
     final shownTags = tagNames.take(2).toList();
@@ -168,7 +164,7 @@ class MNNoteCard extends StatelessWidget {
                 runSpacing: 4,
                 children: [
                   for (final t in shownTags)
-                    _TagChip(label: '#$t', chipBg: chipBg, chipFg: chipFg),
+                    _TagChip(tagName: t),
                 ],
               ),
             ],
@@ -179,16 +175,12 @@ class MNNoteCard extends StatelessWidget {
   }
 }
 
+/// Tag chip in the tag's own colour (same one as its Tags-tab bubble), with
+/// a thin outline so it still reads on a card of the same tint.
 class _TagChip extends StatelessWidget {
-  const _TagChip({
-    required this.label,
-    required this.chipBg,
-    required this.chipFg,
-  });
+  const _TagChip({required this.tagName});
 
-  final String label;
-  final Color chipBg;
-  final Color chipFg;
+  final String tagName;
 
   @override
   Widget build(BuildContext context) {
@@ -196,16 +188,17 @@ class _TagChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color: chipBg,
+        color: AppColors.tagTintOf(context, tagName),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.tagStripeOf(tagName)),
       ),
       child: Text(
-        label,
+        '#$tagName',
         style: AppTypography.inter(
           fontSize: 11,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.1,
-          color: chipFg,
+          color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
     );
