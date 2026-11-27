@@ -20,7 +20,10 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
   }
 
   Future<void> save(Note note) async {
-    state = const AsyncLoading();
+    // Keep the previous note readable while the write is in flight: addTag /
+    // removeTag / setCategory / togglePin bail out on a null valueOrNull, so a
+    // bare AsyncLoading would silently drop an edit that lands mid-save.
+    state = const AsyncLoading<Note?>().copyWithPrevious(state);
     try {
       final repo = ref.read(noteRepositoryProvider);
       if (_isNew) {
