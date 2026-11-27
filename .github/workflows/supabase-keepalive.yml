@@ -43,7 +43,7 @@ jobs:
             --retry 3 --retry-delay 10 --retry-all-errors --max-time 30 \
             --output response.json --write-out '%{http_code}' \
             --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
-            "$SUPABASE_URL/rest/v1/documents?select=id&limit=1")
+            "$SUPABASE_URL/rest/v1/documents?select=note_id&limit=1")
 
           echo "HTTP $status"
           if [ "$status" != "200" ]; then
