@@ -219,7 +219,17 @@ jobs:
         run: |
           CLEAN_API_BASE_URL=$(printf '%s' "$API_BASE_URL" | tr -d '[:space:]')
           echo "API_BASE_URL length: ${#CLEAN_API_BASE_URL} chars"
-          flutter build apk --release --dart-define=API_BASE_URL="$CLEAN_API_BASE_URL" --build-number=${{ github.run_number }}
+          # arm64 only + split-per-abi: the universal APK carried arm64, armv7
+          # and x86_64 native libs (68.2MB). Obfuscation + split-debug-info
+          # strips Dart symbol tables from libapp.so. Keep build/symbols if
+          # you ever need `flutter symbolize` on an obfuscated stack trace.
+          flutter build apk --release \
+            --target-platform android-arm64 \
+            --split-per-abi \
+            --obfuscate --split-debug-info=build/symbols \
+            --dart-define=API_BASE_URL="$CLEAN_API_BASE_URL" \
+            --build-number=${{ github.run_number }}
+          ls -lh build/app/outputs/flutter-apk/
 
       - name: Write service account JSON
         env:
@@ -245,7 +255,7 @@ jobs:
           RELEASE_NOTES="Build #${{ github.run_number }} (${GITHUB_SHA:0:7}) — ${SUBJECT}"
 
           firebase appdistribution:distribute \
-            build/app/outputs/flutter-apk/app-release.apk \
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
             --app "$FIREBASE_ANDROID_APP_ID" \
             --groups milan \
             --release-notes "$RELEASE_NOTES"
