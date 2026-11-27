@@ -224,6 +224,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       return;
     }
 
+    // The editor may have been popped (system back) during the save await;
+    // reading a provider through a disposed ref is invalid.
+    if (!mounted) return;
+
     // save() catches AppException internally and sets AsyncError without
     // rethrowing — check state explicitly so failures keep _isDirty = true.
     final vmState =
@@ -728,6 +732,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           .syncNote(_currentNote!.id);
       if (mounted) setState(() => _syncStatus = newStatus);
     }
+    // The editor may have been popped (system back) during the awaits above;
+    // the steps below read providers through `ref`, which is invalid once the
+    // widget is disposed.
+    if (!mounted) return;
     // RAG index/deindex (Stage 2) — fire-and-forget, never blocks close.
     if (_currentNote != null) _scheduleRagSync(_currentNote!);
     // Auto-clean tags no longer attached to any note (+ prune them from scope).
