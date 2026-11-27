@@ -9,6 +9,10 @@ import 'package:modunote/presentation/viewmodels/note_list_view_model.dart';
 import '../../util/mocks.dart';
 
 void main() {
+  // The view-models report failures through the app-wide toast helper, which
+  // looks up a global navigator key (a no-op when no app is mounted).
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late MockNoteRepository repo;
 
   Note note(String id) => Note(
@@ -60,7 +64,7 @@ void main() {
   });
 
   group('NoteListViewModel mutations', () {
-    test('archive surfaces an AppException as AsyncError', () async {
+    test('a failed archive keeps the streamed list on screen', () async {
       when(() => repo.watchAll()).thenAnswer((_) => Stream.value([note('n1')]));
       when(() => repo.archive(any()))
           .thenThrow(const DatabaseException('archive failed'));
@@ -70,7 +74,29 @@ void main() {
 
       await container.read(noteListViewModelProvider.notifier).archive('n1');
 
-      expect(container.read(noteListViewModelProvider).hasError, isTrue);
+      final state = container.read(noteListViewModelProvider);
+      expect(state.hasError, isFalse,
+          reason: 'a failed mutation made no DB change, so nothing would '
+              're-emit the list after an error state');
+      expect(state.valueOrNull?.map((n) => n.id), ['n1']);
+    });
+
+    test('a failed delete or pin with a raw error also keeps the list',
+        () async {
+      when(() => repo.watchAll()).thenAnswer((_) => Stream.value([note('n1')]));
+      when(() => repo.delete(any())).thenThrow(StateError('boom'));
+      when(() => repo.togglePin(any())).thenThrow(StateError('boom'));
+
+      final container = makeContainer();
+      await container.read(noteListViewModelProvider.future);
+      final vm = container.read(noteListViewModelProvider.notifier);
+
+      await vm.delete('n1');
+      await vm.togglePin('n1');
+
+      final state = container.read(noteListViewModelProvider);
+      expect(state.hasError, isFalse);
+      expect(state.valueOrNull?.map((n) => n.id), ['n1']);
     });
 
     test('togglePin delegates to the repository on the happy path', () async {
