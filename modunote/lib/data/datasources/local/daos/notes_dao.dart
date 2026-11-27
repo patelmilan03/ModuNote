@@ -95,19 +95,25 @@ class NotesDao extends DatabaseAccessor<AppDatabase> with _$NotesDaoMixin {
   /// Full-text searches non-archived notes using the FTS5 [notes_fts] virtual
   /// table (created in [AppDatabase.migration]).
   ///
-  /// [query] is sanitised and a trailing `*` is appended for prefix matching.
-  /// Returns an empty list if [query] is blank after sanitisation.
+  /// [query] is reduced to its word tokens (Unicode letters, marks, digits and
+  /// `_` — everything else is punctuation to FTS5's tokenizer anyway). Each
+  /// token is double-quoted so FTS5 never sees an operator or syntax character
+  /// (`AND`/`OR`/`NOT`/`NEAR`, `^`, `.`, `'`, `{`, …), and the last token gets
+  /// a trailing `*` for prefix matching. Returns an empty list if no word
+  /// tokens remain.
   Future<List<NoteRow>> search(String query) async {
-    final trimmed = query.trim();
-    if (trimmed.isEmpty) return [];
+    final tokens = RegExp(r'[\p{L}\p{M}\p{N}_]+', unicode: true)
+        .allMatches(query)
+        .map((m) => m.group(0)!)
+        .toList();
+    if (tokens.isEmpty) return [];
 
-    // Strip FTS special characters that could break MATCH syntax, then add *
-    // for prefix matching so "tokyo" matches "Tokyo vlog" etc.
-    final sanitised = trimmed
-        .replaceAll(RegExp(r'["\(\)\-\+\*:,]'), ' ')
-        .trim();
-    if (sanitised.isEmpty) return [];
-    final ftsQuery = '$sanitised*';
+    // "tokyo" "vlo"* — prefix match on the word being typed, so "tokyo vlo"
+    // finds "Tokyo vlog".
+    final ftsQuery = [
+      for (var i = 0; i < tokens.length; i++)
+        i == tokens.length - 1 ? '"${tokens[i]}"*' : '"${tokens[i]}"',
+    ].join(' ');
 
     final rows = await customSelect(
       'SELECT n.* FROM notes n '

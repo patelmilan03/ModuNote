@@ -119,6 +119,25 @@ abstract class AppColors {
   static Color dockOf(BuildContext context) =>
       _isDark(context) ? darkDock : lightDock;
 
+  /// Stable tint index (0..4) for a tag, derived from its lowercase name so a
+  /// tag keeps one colour on the Tags tab, note cards and the editor — across
+  /// launches and devices. (FNV-1a; `String.hashCode` isn't stable.)
+  static int tagTintIndex(String tagName) {
+    var h = 0x811c9dc5;
+    for (final u in tagName.toLowerCase().codeUnits) {
+      h = ((h ^ u) * 0x01000193) & 0xFFFFFFFF;
+    }
+    return h % lightTints.length;
+  }
+
+  /// Fill for a tag chip/bubble: the tag's tint in the current theme.
+  static Color tagTintOf(BuildContext context, String tagName) =>
+      tintOf(context, tagTintIndex(tagName));
+
+  /// Outline for a tag chip so it stays visible on a card of the same tint.
+  static Color tagStripeOf(String tagName) =>
+      tintStripes[tagTintIndex(tagName)].withValues(alpha: 0.7);
+
   /// Tint for tint index [i] (wraps) in the current theme.
   static Color tintOf(BuildContext context, int i) =>
       (_isDark(context) ? darkTints : lightTints)[i % lightTints.length];
