@@ -1,8 +1,10 @@
 ﻿import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../../../core/errors/app_exception.dart';
 import '../../models/note.dart';
 import '../../repositories/interfaces/i_note_repository.dart';
+import '../../datasources/file/audio_file_storage.dart';
 import '../../datasources/local/app_database.dart';
 
 /// Local Drift implementation of [INoteRepository].
@@ -14,8 +16,12 @@ import '../../datasources/local/app_database.dart';
 /// [DatabaseException] before surfacing to the ViewModel layer.
 class LocalNoteRepository implements INoteRepository {
   final NotesDao _notesDao;
+  final AudioFileStorage _audioStorage;
 
-  const LocalNoteRepository(this._notesDao);
+  /// [audioStorage] removes the recordings' files when a note is deleted; it
+  /// defaults to the real file storage and is only passed in tests.
+  LocalNoteRepository(this._notesDao, {AudioFileStorage? audioStorage})
+      : _audioStorage = audioStorage ?? AudioFileStorage();
 
   // ── Watch streams ──────────────────────────────────────────────────────────
 
@@ -120,12 +126,26 @@ class LocalNoteRepository implements INoteRepository {
     }
   }
 
+  /// Deletes the note, its audio records and, afterwards, the audio files.
+  ///
+  /// The database rows go first, in one transaction, so a failure there leaves
+  /// the note and its recordings intact. File removal is best effort: a clip
+  /// that cannot be deleted must not make the note undeletable, so a failure is
+  /// logged and the remaining files are still attempted.
   @override
   Future<void> delete(String id) async {
+    final List<String> audioPaths;
     try {
-      await _notesDao.deleteNote(id);
+      audioPaths = await _notesDao.deleteNoteWithAudioRecords(id);
     } on Exception catch (e) {
       throw DatabaseException('Failed to delete note: $id', cause: e);
+    }
+    for (final path in audioPaths) {
+      try {
+        await _audioStorage.deleteFile(path);
+      } on Exception catch (e) {
+        debugPrint('Could not delete audio file $path for note $id: $e');
+      }
     }
   }
 

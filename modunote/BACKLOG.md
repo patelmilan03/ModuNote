@@ -56,7 +56,7 @@ Full executor + human briefs for both chunks are in `NEXT_THREAD.md`.
 |---|---|---|---|---|---|
 | 10 | MN-10 | Audio session leaked on nearly every note view (idempotent dispose) | Bug #1 · MED-HIGH | 🤖 | ✅ Done (PR #39, 2026-11-27) |
 | 10.5 | MN-69 | Cloud restore fails after `applicationId` change (`com.example` → `dev.milanpatel`) — sign-in works but existing notes not restored | Bug · MED-HIGH | 🤝 | ⬜ |
-| 11 | MN-11 | Deleting a note orphans audio records + leaks audio files on disk | Bug #17 · MEDIUM | 🤖 | ⬜ |
+| 11 | MN-11 | Deleting a note orphans audio records + leaks audio files on disk | Bug #17 · MEDIUM | 🤖 | ✅ Done (PR #57, 2026-11-27) |
 | 12 | MN-12 | `NoteEditorViewModel.save()` drops note value → concurrent edit lost | Bug #3 · MEDIUM | 🤖 | ✅ Done (PR #40, tests only — not reproducible on Riverpod 2.6.1, 2026-11-27) |
 | 13 | MN-13 | Mutation errors clobber stream-backed list (whole list vanishes) | Bug #4 · MEDIUM | 🤖 | ✅ Done (PR #52, 2026-11-27) |
 
