@@ -112,9 +112,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _quillController?.dispose();
     _editorFocusNode.dispose();
     _editorScrollController.dispose();
-    if (_audioInitialized) {
-      _audioService.dispose();
-    }
+    // VoicePanel.initState also opens the shared service (init() is idempotent),
+    // so always release it — _audioInitialized only tracks the mic-tap path.
+    // dispose() is a no-op when the service was never initialised.
+    _audioService.dispose();
     _sttService.dispose();
     super.dispose();
   }
@@ -223,6 +224,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     } catch (_) {
       return;
     }
+
+    // The editor may have been popped (system back) during the save await;
+    // reading a provider through a disposed ref is invalid.
+    if (!mounted) return;
 
     // save() catches AppException internally and sets AsyncError without
     // rethrowing — check state explicitly so failures keep _isDirty = true.
@@ -696,11 +701,22 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         },
         onArchive: () async {
           Navigator.of(context).pop();
+          // A pending debounced autosave would write the note back with
+          // isArchived: false if it fired while archive() is awaiting. Stop the
+          // timer, but flush unsaved edits first so cancelling can't lose them.
+          _debounce?.cancel();
+          if (_isDirty) await _performAutoSave();
+          if (!mounted) return;
           try {
-            await ref
-                .read(noteEditorViewModelProvider(noteId: widget.noteId)
-                    .notifier)
-                .archive(note.id);
+            final vmProvider =
+                noteEditorViewModelProvider(noteId: widget.noteId);
+            await ref.read(vmProvider.notifier).archive(note.id);
+            // archive() reports failure via state, not by throwing. Only on
+            // success keep the local copy in step, so nothing saves it back as
+            // un-archived.
+            if (mounted && !ref.read(vmProvider).hasError) {
+              _currentNote = _currentNote?.copyWith(isArchived: true);
+            }
           } catch (_) {}
           if (mounted) context.pop();
         },
@@ -767,6 +783,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           .syncNote(_currentNote!.id);
       if (mounted) setState(() => _syncStatus = newStatus);
     }
+    // The editor may have been popped (system back) during the awaits above;
+    // the steps below read providers through `ref`, which is invalid once the
+    // widget is disposed.
+    if (!mounted) return;
     // RAG index/deindex (Stage 2) — fire-and-forget, never blocks close.
     if (_currentNote != null) _scheduleRagSync(_currentNote!);
     // Auto-clean tags no longer attached to any note (+ prune them from scope).

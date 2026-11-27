@@ -65,9 +65,25 @@ class TagsDao extends DatabaseAccessor<AppDatabase> with _$TagsDaoMixin {
     await into(tagsTable).insert(companion);
   }
 
-  /// Hard-deletes the tag with [id]. Returns the row count (0 or 1).
+  /// Hard-deletes the tag with [id] and every association to it. Returns the
+  /// number of tag rows deleted (0 or 1).
+  ///
+  /// There is no FK / `ON DELETE CASCADE` (the `foreign_keys` PRAGMA is off),
+  /// so the cascade is done here, atomically: remove the [NoteTagsTable] rows,
+  /// re-sync the denormalised [NoteRow.tagIds] of each note that had the tag,
+  /// then delete the tag row.
   Future<int> deleteTag(String id) async {
-    return (delete(tagsTable)..where((t) => t.id.equals(id))).go();
+    return db.transaction(() async {
+      final affectedNoteIds = await (select(noteTagsTable)
+            ..where((t) => t.tagId.equals(id)))
+          .map((r) => r.noteId)
+          .get();
+      await (delete(noteTagsTable)..where((t) => t.tagId.equals(id))).go();
+      for (final noteId in affectedNoteIds.toSet()) {
+        await _syncDenormalisedTagIds(noteId);
+      }
+      return (delete(tagsTable)..where((t) => t.id.equals(id))).go();
+    });
   }
 
   /// Deletes every tag not referenced by any note (orphans) and returns the
