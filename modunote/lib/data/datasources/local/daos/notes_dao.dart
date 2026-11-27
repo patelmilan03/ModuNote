@@ -165,6 +165,25 @@ class NotesDao extends DatabaseAccessor<AppDatabase> with _$NotesDaoMixin {
     return (delete(notesTable)..where((t) => t.id.equals(id))).go();
   }
 
+  /// Hard-deletes the note with [id] together with its `audio_records` rows,
+  /// in one transaction, and returns the file paths of the deleted records.
+  ///
+  /// `audio_records` has no foreign key (and `foreign_keys` is off), so the
+  /// rows must be removed explicitly. The caller owns deleting the files on
+  /// disk, which cannot be part of the transaction.
+  Future<List<String>> deleteNoteWithAudioRecords(String id) {
+    return db.transaction(() async {
+      final audio = await (db.select(db.audioRecordsTable)
+            ..where((t) => t.noteId.equals(id)))
+          .get();
+      await (db.delete(db.audioRecordsTable)
+            ..where((t) => t.noteId.equals(id)))
+          .go();
+      await deleteNote(id);
+      return [for (final record in audio) record.filePath];
+    });
+  }
+
   /// Sets the pinned state of the note with [id] to [pinned].
   Future<void> togglePin(String id, {required bool pinned}) async {
     await (update(notesTable)..where((t) => t.id.equals(id))).write(
