@@ -3,13 +3,19 @@ name: CI/CD
 on:
   push:
     branches: [main]
+    # Docs-only pushes to main don't need a build, and must not ship a new
+    # APK to testers. Pull requests always run the quality gate.
+    paths-ignore:
+      - '**.md'
   pull_request:
     branches: [main]
 
-# Cancel in-flight runs for the same branch/PR
+# A newer push to a PR branch cancels the older run of that PR. Runs on main
+# are queued instead of cancelled: cancelling one aborts a release (APK build +
+# tester distribution) mid-flight whenever another PR is merged right after.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ──────────────────────────────────────────────
@@ -18,6 +24,7 @@ jobs:
   quality:
     name: Quality Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: modunote
@@ -38,7 +45,9 @@ jobs:
           sudo apt-get install -y libsqlite3-dev
 
       - name: Decode firebase_options.dart
-        run: echo "${{ secrets.FIREBASE_OPTIONS_DART_BASE64 }}" | base64 -d > lib/firebase_options.dart
+        env:
+          FIREBASE_OPTIONS_DART_BASE64: ${{ secrets.FIREBASE_OPTIONS_DART_BASE64 }}
+        run: printf '%s' "$FIREBASE_OPTIONS_DART_BASE64" | base64 -d > lib/firebase_options.dart
 
       - name: Install dependencies
         run: flutter pub get
@@ -136,6 +145,7 @@ jobs:
   release:
     name: Release & Distribute
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: quality
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     defaults:
@@ -159,30 +169,43 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
       - name: Set up Node.js (for Firebase CLI)
         uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Decode firebase_options.dart
-        run: echo "${{ secrets.FIREBASE_OPTIONS_DART_BASE64 }}" | base64 -d > lib/firebase_options.dart
+        env:
+          FIREBASE_OPTIONS_DART_BASE64: ${{ secrets.FIREBASE_OPTIONS_DART_BASE64 }}
+        run: printf '%s' "$FIREBASE_OPTIONS_DART_BASE64" | base64 -d > lib/firebase_options.dart
 
+      # Secrets reach the shell as env vars, never pasted into the script text:
+      # a quote or newline in a secret would otherwise break (or inject into)
+      # the command.
       - name: Decode google-services.json
-        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 -d > android/app/google-services.json
 
       - name: Decode keystore
-        run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > /tmp/modunote-release.jks
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/modunote-release.jks
 
       - name: Write key.properties
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          cat > android/key.properties << 'EOF'
-          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          keyAlias=${{ secrets.KEY_ALIAS }}
-          storeFile=/tmp/modunote-release.jks
-          EOF
+          {
+            printf 'storePassword=%s\n' "$KEYSTORE_PASSWORD"
+            printf 'keyPassword=%s\n' "$KEY_PASSWORD"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'storeFile=/tmp/modunote-release.jks\n'
+          } > android/key.properties
 
       - name: Install dependencies
         run: flutter pub get
@@ -209,8 +232,9 @@ jobs:
           ls -lh build/app/outputs/flutter-apk/
 
       - name: Write service account JSON
-        run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}' > /tmp/firebase-sa.json
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > /tmp/firebase-sa.json
 
       - name: Distribute via Firebase App Distribution
         env:
@@ -219,8 +243,10 @@ jobs:
           # commit message containing a quote or backtick would otherwise break
           # (or inject into) the shell.
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
         run: |
-          npm install -g firebase-tools
+          # Pinned so a new firebase-tools release can't break the build.
+          npm install -g firebase-tools@15.37.0
 
           # Firebase App Distribution caps release notes at 5000 chars, and a
           # full commit body easily exceeds that. Use the subject line only,
@@ -230,7 +256,7 @@ jobs:
 
           firebase appdistribution:distribute \
             build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
-            --app "${{ secrets.FIREBASE_ANDROID_APP_ID }}" \
+            --app "$FIREBASE_ANDROID_APP_ID" \
             --groups milan \
             --release-notes "$RELEASE_NOTES"
 
