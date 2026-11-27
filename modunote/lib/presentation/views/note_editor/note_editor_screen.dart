@@ -662,11 +662,22 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         },
         onArchive: () async {
           Navigator.of(context).pop();
+          // A pending debounced autosave would write the note back with
+          // isArchived: false if it fired while archive() is awaiting. Stop the
+          // timer, but flush unsaved edits first so cancelling can't lose them.
+          _debounce?.cancel();
+          if (_isDirty) await _performAutoSave();
+          if (!mounted) return;
           try {
-            await ref
-                .read(noteEditorViewModelProvider(noteId: widget.noteId)
-                    .notifier)
-                .archive(note.id);
+            final vmProvider =
+                noteEditorViewModelProvider(noteId: widget.noteId);
+            await ref.read(vmProvider.notifier).archive(note.id);
+            // archive() reports failure via state, not by throwing. Only on
+            // success keep the local copy in step, so nothing saves it back as
+            // un-archived.
+            if (mounted && !ref.read(vmProvider).hasError) {
+              _currentNote = _currentNote?.copyWith(isArchived: true);
+            }
           } catch (_) {}
           if (mounted) context.pop();
         },
