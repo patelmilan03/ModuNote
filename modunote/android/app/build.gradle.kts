@@ -53,6 +53,14 @@ android {
 
     buildTypes {
         release {
+            // R8 code + resource shrinking. Firebase/Google sign-in pull in a
+            // lot of Java code that is otherwise shipped unstripped.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
