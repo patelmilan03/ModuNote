@@ -515,6 +515,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       return;
     }
 
+    // The editor may have been left (system back) during the awaits above;
+    // dispose() has already run, so don't start a recorder nothing can stop.
+    if (!mounted) return;
+
     _currentRecordingPath = filePath;
     _sttService.resetText();
 
@@ -541,6 +545,13 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           if (mounted) setState(() => _liveTranscript = text);
         },
       );
+
+      // Left the screen while dictation was starting: dispose() can no longer
+      // cancel a subscription/timer created now, so undo the start instead.
+      if (!mounted) {
+        await _abortRecordingStart(filePath);
+        return;
+      }
 
       _amplitudeSubscription = _audioService.amplitudeStream.listen((amp) {
         if (mounted) setState(() => _currentAmplitude = amp);
@@ -597,10 +608,12 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     // On-device live STT result first.
     var transcript = _sttService.accumulatedText.trim();
 
-    setState(() {
-      _isRecording = false;
-      _currentAmplitude = 0.0;
-    });
+    if (mounted) {
+      setState(() {
+        _isRecording = false;
+        _currentAmplitude = 0.0;
+      });
+    }
 
     final recordingPath = _currentRecordingPath;
     _currentRecordingPath = null;
