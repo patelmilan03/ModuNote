@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../../core/errors/app_exception.dart';
 import '../../data/datasources/local/database_providers.dart';
 import '../../data/models/note.dart';
 
@@ -36,9 +35,9 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
         await repo.update(note);
       }
       state = AsyncData(note);
-    } on AppException catch (e, st) {
+    } catch (e, st) {
       debugPrint('NoteEditorViewModel: save failed — $e');
-      state = AsyncError(e, st);
+      if (_alive) state = AsyncError(e, st);
     }
   }
 
@@ -60,7 +59,7 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
     try {
       await ref.read(tagRepositoryProvider).addTagToNote(current.id, tagId);
       await _reload(current.id);
-    } on AppException catch (e, st) {
+    } catch (e, st) {
       if (_alive) state = AsyncError(e, st);
     }
   }
@@ -71,7 +70,7 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
     try {
       await ref.read(tagRepositoryProvider).removeTagFromNote(current.id, tagId);
       await _reload(current.id);
-    } on AppException catch (e, st) {
+    } catch (e, st) {
       if (_alive) state = AsyncError(e, st);
     }
   }
@@ -100,7 +99,7 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
     try {
       await ref.read(noteRepositoryProvider).togglePin(noteId);
       await _reload(noteId);
-    } on AppException catch (e, st) {
+    } catch (e, st) {
       if (_alive) state = AsyncError(e, st);
     }
   }
@@ -120,7 +119,7 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
   Future<void> archive(String noteId) async {
     try {
       await ref.read(noteRepositoryProvider).archive(noteId);
-    } on AppException catch (e, st) {
+    } catch (e, st) {
       if (_alive) state = AsyncError(e, st);
     }
   }
@@ -128,7 +127,7 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
   Future<void> delete(String noteId) async {
     try {
       await ref.read(noteRepositoryProvider).delete(noteId);
-    } on AppException catch (e, st) {
+    } catch (e, st) {
       if (_alive) state = AsyncError(e, st);
     }
   }
