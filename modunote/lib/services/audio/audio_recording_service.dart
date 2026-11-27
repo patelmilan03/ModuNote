@@ -16,6 +16,7 @@ class AudioRecordingService {
       StreamController<double>.broadcast();
 
   bool _initialized = false;
+  Future<void>? _initFuture;
   Stopwatch? _stopwatch;
 
   // ─── Amplitude stream ─────────────────────────────────────────────────────
@@ -25,9 +26,15 @@ class AudioRecordingService {
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
 
-  /// Opens the recorder and player. Safe to call multiple times.
-  Future<void> init() async {
-    if (_initialized) return;
+  /// Opens the recorder and player. Safe to call multiple times, including
+  /// concurrently (e.g. VoicePanel and the mic button) — callers share one
+  /// in-flight open.
+  Future<void> init() {
+    if (_initialized) return Future<void>.value();
+    return _initFuture ??= _open().whenComplete(() => _initFuture = null);
+  }
+
+  Future<void> _open() async {
     try {
       await _recorder.openRecorder();
       await _player.openPlayer();
@@ -44,12 +51,22 @@ class AudioRecordingService {
   }
 
   /// Closes recorder and player. Safe to call even if not yet initialised.
+  /// If an [init] is still in flight it is awaited first, so a screen that is
+  /// left right after opening cannot leak the native session.
   Future<void> dispose() async {
+    final pending = _initFuture;
+    if (pending != null) {
+      try {
+        await pending;
+      } on Object {
+        // Open failed — nothing to close.
+      }
+    }
     if (!_initialized) return;
+    _initialized = false;
     _amplitudeCtrl.close();
     await _recorder.closeRecorder();
     await _player.closePlayer();
-    _initialized = false;
   }
 
   // ─── Recording ────────────────────────────────────────────────────────────
