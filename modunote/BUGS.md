@@ -1,6 +1,6 @@
 # ModuNote — Known Bugs (permanent record)
 
-> **Status 2026-11-27:** 14 of the 17 bugs are fixed (PRs #39–#52, see "Fixed" at the bottom), 2 are closed as not planned (#9, #15), and **only #17 (audio leak on note delete, MN-11) is still open**. The detail sections below are kept as the permanent record.
+> **Status 2026-11-27:** 15 of the 17 bugs are fixed (PRs #39–#52 and #57, see "Fixed" at the bottom) and 2 are closed as not planned (#9, #15). **No bugs from this ledger are open.** The detail sections below are kept as the permanent record.
 
 > Canonical, permanent ledger of open bugs. Source of truth for bug detail — `STATUS.md` and any GitHub issues point here, not the reverse.
 >
@@ -151,6 +151,7 @@ Fixed 2026-11-27, one PR per bug (GitHub issue numbers differ from bug numbers).
 | 13 | MN-23 | #15 | #48 | Recorder stopped and file deleted if dictation fails to start |
 | 14 | MN-24 | #16 | #50 | `onProgress` subscription stored and cancelled |
 | 16 | MN-26 | #18 | #47 | Debounce cancelled and pending save flushed before archive |
+| 17 | MN-11 | not filed | #57 | `LocalNoteRepository.delete` removes the note and its audio rows in one transaction, then deletes the files (best effort). Notes deleted before this fix may still have orphaned files |
 
 **Closed as not planned (2026-11-27):**
 - **Bug 9 (MN-19, issue #12) — obsolete.** Backgrounding the app now calls `CloudSyncService.backupToCloud()` (in `app_router.dart`), which pushes every note regardless of `syncStatus`; `syncAllPending()` has no callers.
