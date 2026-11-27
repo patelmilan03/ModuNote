@@ -120,7 +120,7 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
     try {
       await ref.read(noteRepositoryProvider).archive(noteId);
     } catch (e, st) {
-      state = AsyncError(e, st);
+      if (_alive) state = AsyncError(e, st);
     }
   }
 
@@ -128,7 +128,7 @@ class NoteEditorViewModel extends _$NoteEditorViewModel {
     try {
       await ref.read(noteRepositoryProvider).delete(noteId);
     } catch (e, st) {
-      state = AsyncError(e, st);
+      if (_alive) state = AsyncError(e, st);
     }
   }
 
